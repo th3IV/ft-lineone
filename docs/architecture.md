@@ -6,7 +6,7 @@ FT. THE LINE ONE está compuesto por **4 microservicios** que trabajan de forma 
 
 | Microservicio | Tecnología | Rol |
 |---|---|---|
-| **Backend API** | FastAPI (Python) | Orquestación, usuarios, productos, recomendaciones |
+| **Backend API** | FastAPI (Python) | Orquestación, usuarios, productos, recomendaciones, pipeline de scraping y VTON |
 | **Frontend Web** | React + TailwindCSS | Interfaz de usuario B2C |
 | **Scrapers** | Python + BeautifulSoup | Extracción de productos desde retailers |
 | **VTON Service** | Diffusion Models + PyTorch | Virtual Try-On con IA generativa |
@@ -60,7 +60,7 @@ BaseScraper (abstract)
 
 Cada scraper hereda de `BaseScraper` e implementa los métodos abstractos `fetch_products()`, `parse_product()` y `normalize_data()`.
 
-### Orquestador
+### Orquestador (backend)
 
 ```
 PipelineOrchestrator
@@ -69,30 +69,58 @@ PipelineOrchestrator
 └── PublicationManager    — controla la publicación de productos (draft → published)
 ```
 
-### Servicios
+### Servicios (backend)
 
 ```
-UserService          — registro, autenticación, perfil, medidas
-ProductService       — CRUD de productos, búsqueda, filtros
-RecommendationService — recomendaciones vía LLM + embeddings
-VTONService          — integración con el modelo de diffusion
+UserService              — registro, autenticación, perfil, medidas
+ProductService           — CRUD de productos, búsqueda, filtros
+RecommendationService    — recomendaciones vía LLM + embeddings
+VTONService              — integración con el modelo de diffusion
+```
+
+### Clientes de infraestructura
+
+```
+LLMClient    — wrapper sobre LangChain + GPT-4
+VTONClient   — comunicación HTTP con el servicio VTON
+ScraperClient— comunicación HTTP con el servicio de scrapers
+```
+
+### Modelos de dominio
+
+```
+User         — usuario con email, password hash, medidas corporales, preferencias
+Product      — producto con metadata de tienda, precio, categoría, tallas, colores
+VTONResult   — resultado de try-on virtual con estado (pending/processing/completed/failed)
 ```
 
 ## Clean Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                       API Layer                         │
+│                    API Layer (api/v1/routes/)            │
 │              FastAPI Routers + Middleware                │
+│              auth, users, products,                      │
+│              recommendations, vton                       │
 ├─────────────────────────────────────────────────────────┤
-│                   Application Layer                     │
-│              Services, Use Cases, DTOs                  │
+│                Application Layer (application/)          │
+│    ┌───────────────────┐  ┌──────────────────────────┐  │
+│    │     Services      │  │      Orchestrator        │  │
+│    │ UserService, etc. │  │ PipelineOrchestrator,    │  │
+│    │                   │  │ ScrapingCoordinator,     │  │
+│    │                   │  │ VTONCoordinator,         │  │
+│    │                   │  │ PublicationManager       │  │
+│    └───────────────────┘  └──────────────────────────┘  │
 ├─────────────────────────────────────────────────────────┤
-│                   Domain Layer                          │
-│              Entities, Value Objects, Interfaces        │
+│                   Domain Layer (domain/)                 │
+│              Models: User, Product, VTONResult           │
 ├─────────────────────────────────────────────────────────┤
-│                Infrastructure Layer                     │
-│         DB Repositories, S3 Client, LLM Client          │
+│             Infrastructure Layer (infrastructure/)       │
+│    ┌─────────────────────┐  ┌────────────────────────┐  │
+│    │  Persistence        │  │  External Services     │  │
+│    │  postgres/models.py │  │  LLMClient, VTONClient,│  │
+│    │  repositories/      │  │  ScraperClient         │  │
+│    └─────────────────────┘  └────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -116,6 +144,24 @@ El `LLMClient` es un wrapper sobre LangChain que se conecta a GPT-4 para:
 - Recomendaciones personalizadas por preferencias
 - Validación y limpieza de datos scrapeados
 - Generación de descripciones y tags
+
+## Comunicación entre servicios
+
+```
+┌──────────────┐      HTTP/JSON       ┌──────────────┐
+│   Backend    │◄─────────────────────►│   VTON App   │
+│   (FastAPI)  │                       │  (PyTorch)   │
+│   :8000      │                       │  :8002       │
+└──────┬───────┘                       └──────────────┘
+       │
+       │  HTTP/JSON
+       ▼
+┌──────────────┐
+│   Scrapers   │
+│  (FastAPI)   │
+│  :8001       │
+└──────────────┘
+```
 
 ## Infraestructura AWS
 

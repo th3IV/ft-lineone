@@ -1,6 +1,5 @@
 import json
 
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.domain.models.product import Product
@@ -10,13 +9,18 @@ from app.core.config import settings
 
 class LLMClient:
     def __init__(self):
-        self._llm = ChatOpenAI(
-            model="gpt-4",
-            temperature=0.3,
-            api_key=settings.OPENAI_API_KEY,
-        )
+        self._available = bool(settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "demo-key")
+        if self._available:
+            from langchain_openai import ChatOpenAI
+            self._llm = ChatOpenAI(
+                model="gpt-4",
+                temperature=0.3,
+                api_key=settings.OPENAI_API_KEY,
+            )
 
     async def get_recommendations(self, user: User, products: list[Product]) -> list[Product]:
+        if not self._available:
+            return products[:5]
         user_context = (
             f"User preferences: {', '.join(user.preferences) if user.preferences else 'none'}. "
             f"Body measurements: {user.body_measurements}"
@@ -43,6 +47,8 @@ class LLMClient:
         return products[:5]
 
     async def validate_product_data(self, product: dict) -> dict:
+        if not self._available:
+            return {"valid": True, "reason": "Validation skipped (no API key)"}
         prompt = ChatPromptTemplate.from_messages([
             (
                 "system",
@@ -59,6 +65,8 @@ class LLMClient:
             return {"valid": True, "reason": "Validation skipped"}
 
     async def generate_description(self, product: dict) -> str:
+        if not self._available:
+            return product.get("name", "Product description unavailable")
         prompt = ChatPromptTemplate.from_messages([
             (
                 "system",
@@ -72,6 +80,8 @@ class LLMClient:
         return response.content.strip()
 
     async def analyze(self, context: str) -> str:
+        if not self._available:
+            return "yes (LLM unavailable - auto-approved)"
         prompt = ChatPromptTemplate.from_messages([
             (
                 "system",

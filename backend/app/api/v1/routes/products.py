@@ -5,7 +5,10 @@ from fastapi import APIRouter, HTTPException, Query
 from app.application.services.product_service import ProductService
 
 router = APIRouter(prefix="/products", tags=["products"])
-product_service = ProductService()
+
+
+def get_product_service():
+    return ProductService()
 
 
 @router.get("")
@@ -13,7 +16,8 @@ async def list_products(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ):
-    products, total = await product_service.get_catalog(page=page, per_page=per_page)
+    svc = get_product_service()
+    products, total = await svc.get_catalog(page=page, per_page=per_page)
     return {
         "products": [p.model_dump() for p in products],
         "total": total,
@@ -29,7 +33,8 @@ async def search_products(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ):
-    products, total = await product_service.search(query=q, page=page, per_page=per_page)
+    svc = get_product_service()
+    products, total = await svc.search(query=q, page=page, per_page=per_page)
     return {
         "products": [p.model_dump() for p in products],
         "total": total,
@@ -45,7 +50,8 @@ async def products_by_store(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ):
-    products, total = await product_service.get_by_store(
+    svc = get_product_service()
+    products, total = await svc.get_by_store(
         store=store, page=page, per_page=per_page
     )
     return {
@@ -60,7 +66,8 @@ async def products_by_store(
 
 @router.get("/{product_id}")
 async def get_product(product_id: str):
-    product = await product_service.get_by_id(product_id)
+    svc = get_product_service()
+    product = await svc.get_by_id(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product.model_dump()

@@ -4,7 +4,10 @@ from app.application.services.vton_service import VTONService
 from app.core.security import verify_token
 
 router = APIRouter(prefix="/vton", tags=["vton"])
-vton_service = VTONService()
+
+
+def get_vton_service():
+    return VTONService()
 
 
 async def get_current_user(authorization: str = Depends(lambda: None)) -> str:
@@ -24,9 +27,10 @@ async def try_on(
     user_image: UploadFile = File(...),
     user_id: str = Depends(get_current_user),
 ):
+    svc = get_vton_service()
     image_url = f"uploads/{user_id}/{user_image.filename}"
     try:
-        result = await vton_service.request_try_on(user_id, product_id, image_url)
+        result = await svc.request_try_on(user_id, product_id, image_url)
         return {
             "vton_id": result.id,
             "status": result.status.value,
@@ -38,7 +42,8 @@ async def try_on(
 
 @router.get("/result/{vton_id}")
 async def get_vton_result(vton_id: str, user_id: str = Depends(get_current_user)):
-    result = await vton_service.get_result(vton_id)
+    svc = get_vton_service()
+    result = await svc.get_result(vton_id)
     if not result:
         raise HTTPException(status_code=404, detail="VTON result not found")
     return {

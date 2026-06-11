@@ -1,13 +1,11 @@
 from datetime import datetime, timezone
-from math import ceil
-from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.domain.models.product import Product
-from app.infrastructure.persistence.postgres.models import ProductModel
+from app.infrastructure.persistence.postgres.models import Base, ProductModel
 
 
 class ProductRepository:
@@ -19,14 +17,19 @@ class ProductRepository:
             return self._session
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-        engine = create_async_engine(settings.DATABASE_URL.replace("psycopg2", "asyncpg"))
+        url = settings.DATABASE_URL
+        if "postgresql" in url:
+            url = url.replace("psycopg2", "asyncpg")
+        engine = create_async_engine(url)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
         session_maker = async_sessionmaker(engine, expire_on_commit=False)
         return session_maker()
 
     async def create(self, product: Product) -> Product:
         session = await self._get_session()
         model = ProductModel(
-            id=UUID(product.id) if product.id else None,
+            id=product.id,
             external_id=product.external_id,
             store=product.store,
             name=product.name,
@@ -47,7 +50,7 @@ class ProductRepository:
     async def find_by_id(self, product_id: str) -> Product | None:
         session = await self._get_session()
         result = await session.execute(
-            select(ProductModel).where(ProductModel.id == UUID(product_id))
+            select(ProductModel).where(ProductModel.id == product_id)
         )
         model = result.scalar_one_or_none()
         return self._to_domain(model) if model else None
@@ -94,7 +97,7 @@ class ProductRepository:
     async def update(self, product: Product) -> Product:
         session = await self._get_session()
         result = await session.execute(
-            select(ProductModel).where(ProductModel.id == UUID(product.id))
+            select(ProductModel).where(ProductModel.id == product.id)
         )
         model = result.scalar_one_or_none()
         if not model:
@@ -114,7 +117,7 @@ class ProductRepository:
     async def delete(self, product_id: str) -> bool:
         session = await self._get_session()
         result = await session.execute(
-            select(ProductModel).where(ProductModel.id == UUID(product_id))
+            select(ProductModel).where(ProductModel.id == product_id)
         )
         model = result.scalar_one_or_none()
         if not model:

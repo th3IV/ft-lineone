@@ -5,7 +5,10 @@ from app.application.services.user_service import UserService
 from app.core.security import create_access_token, create_refresh_token, verify_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-user_service = UserService()
+
+
+def get_user_service():
+    return UserService()
 
 
 class RegisterRequest(BaseModel):
@@ -26,7 +29,8 @@ class RefreshRequest(BaseModel):
 @router.post("/register")
 async def register(body: RegisterRequest):
     try:
-        user = await user_service.register(body.name, body.email, body.password)
+        svc = get_user_service()
+        user = await svc.register(body.name, body.email, body.password)
         access_token = create_access_token({"sub": user.id})
         refresh_token = create_refresh_token({"sub": user.id})
         return {
@@ -41,7 +45,8 @@ async def register(body: RegisterRequest):
 @router.post("/login")
 async def login(body: LoginRequest):
     try:
-        user = await user_service.login(body.email, body.password)
+        svc = get_user_service()
+        user = await svc.login(body.email, body.password)
         access_token = create_access_token({"sub": user.id})
         refresh_token = create_refresh_token({"sub": user.id})
         return {

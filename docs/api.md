@@ -17,20 +17,22 @@ Registro de nuevo usuario.
 **Request body:**
 ```json
 {
-  "email": "usuario@ejemplo.com",
-  "password": "MiPassword123!",
   "name": "María García",
-  "phone": "+56912345678"
+  "email": "usuario@ejemplo.com",
+  "password": "MiPassword123!"
 }
 ```
 
 **Response (201):**
 ```json
 {
-  "id": "uuid",
-  "email": "usuario@ejemplo.com",
-  "name": "María García",
-  "created_at": "2026-06-10T12:00:00Z"
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": "uuid",
+    "name": "María García",
+    "email": "usuario@ejemplo.com"
+  }
 }
 ```
 
@@ -51,8 +53,11 @@ Inicio de sesión.
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",
   "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "bearer",
-  "expires_in": 3600
+  "user": {
+    "id": "uuid",
+    "name": "María García",
+    "email": "usuario@ejemplo.com"
+  }
 }
 ```
 
@@ -71,9 +76,7 @@ Renueva el token de acceso usando el refresh token.
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "bearer",
-  "expires_in": 3600
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
 }
 ```
 
@@ -91,8 +94,7 @@ Obtiene el perfil del usuario autenticado.
   "id": "uuid",
   "email": "usuario@ejemplo.com",
   "name": "María García",
-  "phone": "+56912345678",
-  "measurements": {
+  "body_measurements": {
     "height": 165,
     "weight": 60,
     "bust": 90,
@@ -100,11 +102,7 @@ Obtiene el perfil del usuario autenticado.
     "hips": 96,
     "shoulder_width": 40
   },
-  "preferences": {
-    "categories": ["vestidos", "blusas"],
-    "stores": ["falabella", "ripley"],
-    "sizes": ["M"]
-  },
+  "preferences": ["vestidos", "blusas"],
   "created_at": "2026-06-10T12:00:00Z"
 }
 ```
@@ -118,20 +116,7 @@ Actualiza las medidas corporales del usuario.
 **Request body:**
 ```json
 {
-  "height": 165,
-  "weight": 60,
-  "bust": 90,
-  "waist": 68,
-  "hips": 96,
-  "shoulder_width": 40
-}
-```
-
-**Response (200):**
-```json
-{
-  "message": "Medidas actualizadas correctamente",
-  "measurements": {
+  "body_measurements": {
     "height": 165,
     "weight": 60,
     "bust": 90,
@@ -139,6 +124,34 @@ Actualiza las medidas corporales del usuario.
     "hips": 96,
     "shoulder_width": 40
   }
+}
+```
+
+**Response (200):**
+```json
+{
+  "body_measurements": {
+    "height": 165,
+    "weight": 60,
+    "bust": 90,
+    "waist": 68,
+    "hips": 96,
+    "shoulder_width": 40
+  }
+}
+```
+
+### GET /users/me/history
+
+Obtiene el historial de interacciones del usuario autenticado.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response (200):**
+```json
+{
+  "user_id": "uuid",
+  "history": []
 }
 ```
 
@@ -151,9 +164,9 @@ Lista paginada de productos con filtros.
 **Query parameters:**
 
 | Parámetro | Tipo | Default | Descripción |
-|---|---|---|---|
+|---|---|---|---|---|
 | page | int | 1 | Número de página |
-| limit | int | 20 | Productos por página (max 100) |
+| per_page | int | 20 | Productos por página (max 100) |
 | store | string | — | Filtrar por tienda (falabella, ripley, etc.) |
 | category | string | — | Filtrar por categoría |
 | min_price | float | — | Precio mínimo |
@@ -162,29 +175,24 @@ Lista paginada de productos con filtros.
 **Response (200):**
 ```json
 {
-  "items": [
+  "products": [
     {
       "id": "uuid",
       "name": "Vestido Floral Verano",
-      "brand": "Maui",
       "store": "falabella",
       "price": 29990,
-      "original_price": 49990,
-      "discount": 40,
       "category": "vestidos",
       "image_url": "https://s3.amazonaws.com/ft-lineone/products/vestido.jpg",
-      "product_url": "https://falabella.cl/producto/123",
       "description": "Vestido largo estampado floral, manga corta...",
       "sizes": ["XS", "S", "M", "L", "XL"],
       "colors": ["azul", "blanco"],
-      "in_stock": true,
       "created_at": "2026-06-10T12:00:00Z"
     }
   ],
   "total": 150,
   "page": 1,
-  "limit": 20,
-  "pages": 8
+  "per_page": 20,
+  "total_pages": 8
 }
 ```
 
@@ -197,22 +205,13 @@ Obtiene un producto por su ID.
 {
   "id": "uuid",
   "name": "Vestido Floral Verano",
-  "brand": "Maui",
   "store": "falabella",
   "price": 29990,
-  "original_price": 49990,
-  "discount": 40,
   "category": "vestidos",
-  "images": [
-    "https://s3.amazonaws.com/ft-lineone/products/vestido-1.jpg",
-    "https://s3.amazonaws.com/ft-lineone/products/vestido-2.jpg"
-  ],
+  "image_url": "https://s3.amazonaws.com/ft-lineone/products/vestido.jpg",
   "description": "Vestido largo estampado floral, manga corta...",
   "sizes": ["XS", "S", "M", "L", "XL"],
   "colors": ["azul", "blanco"],
-  "materials": ["100% poliéster"],
-  "care_instructions": ["Lavar a máquina max 30°", "No usar blanqueador"],
-  "in_stock": true,
   "created_at": "2026-06-10T12:00:00Z"
 }
 ```
@@ -224,16 +223,15 @@ Búsqueda textual de productos.
 **Query parameters:**
 
 | Parámetro | Tipo | Default | Descripción |
-|---|---|---|---|
+|---|---|---|---|---|
 | q | string | — | Término de búsqueda |
 | page | int | 1 | Número de página |
-| limit | int | 20 | Productos por página |
+| per_page | int | 20 | Productos por página |
 
 **Response (200):**
 ```json
 {
-  "query": "vestido floral",
-  "items": [
+  "products": [
     {
       "id": "uuid",
       "name": "Vestido Floral Verano",
@@ -242,7 +240,9 @@ Búsqueda textual de productos.
     }
   ],
   "total": 15,
-  "page": 1
+  "page": 1,
+  "per_page": 20,
+  "total_pages": 1
 }
 ```
 
@@ -259,11 +259,21 @@ Lista productos filtrados por tienda.
 **Query parameters:**
 
 | Parámetro | Tipo | Default | Descripción |
-|---|---|---|---|
+|---|---|---|---|---|
 | page | int | 1 | Número de página |
-| limit | int | 20 | Productos por página |
+| per_page | int | 20 | Productos por página |
 
-**Response (200):** Misma estructura que `GET /products`.
+**Response (200):**
+```json
+{
+  "store": "falabella",
+  "products": [...],
+  "total": 150,
+  "page": 1,
+  "per_page": 20,
+  "total_pages": 8
+}
+```
 
 ## Recomendaciones
 
@@ -276,20 +286,21 @@ Obtiene recomendaciones personalizadas basadas en preferencias e historial del u
 **Response (200):**
 ```json
 {
+  "user_id": "uuid",
   "recommendations": [
     {
-      "product": {
-        "id": "uuid",
-        "name": "Vestido Floral Verano",
-        "store": "falabella",
-        "price": 29990,
-        "image_url": "https://s3.amazonaws.com/ft-lineone/products/vestido.jpg"
-      },
-      "reason": "Este vestido floral combina perfectamente con tu estilo veraniego. La silueta en A favorece tu tipo de cuerpo."
+      "id": "uuid",
+      "name": "Vestido Floral Verano",
+      "store": "falabella",
+      "price": 29990,
+      "image_url": "https://s3.amazonaws.com/ft-lineone/products/vestido.jpg",
+      "category": "vestidos",
+      "sizes": ["XS", "S", "M", "L", "XL"],
+      "colors": ["azul", "blanco"],
+      "created_at": "2026-06-10T12:00:00Z"
     }
   ],
-  "generated_at": "2026-06-10T12:00:00Z",
-  "model": "gpt-4"
+  "count": 1
 }
 ```
 
@@ -305,16 +316,15 @@ Procesa una foto del usuario con una prenda seleccionada.
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| image | file | Foto del usuario (JPEG, PNG, max 10MB) |
+| user_image | file | Foto del usuario (JPEG, PNG, max 10MB) |
 | product_id | string | ID del producto a probar |
 
 **Response (200):**
 ```json
 {
-  "result_id": "uuid",
+  "vton_id": "uuid",
   "status": "processing",
-  "estimated_time": 15,
-  "message": "Tu prueba virtual está siendo procesada"
+  "input_image_url": "https://s3.amazonaws.com/ft-lineone/vton/user-123-input.jpg"
 }
 ```
 
@@ -329,15 +339,9 @@ Obtiene el resultado del Virtual Try-On.
 {
   "id": "uuid",
   "status": "completed",
-  "original_image_url": "https://s3.amazonaws.com/ft-lineone/vton/user-123-input.jpg",
-  "result_image_url": "https://s3.amazonaws.com/ft-lineone/vton/user-123-output.jpg",
-  "product": {
-    "id": "uuid",
-    "name": "Vestido Floral Verano",
-    "store": "falabella"
-  },
-  "created_at": "2026-06-10T12:00:00Z",
-  "processing_time": 12.5
+  "input_image_url": "https://s3.amazonaws.com/ft-lineone/vton/user-123-input.jpg",
+  "output_image_url": "https://s3.amazonaws.com/ft-lineone/vton/user-123-output.jpg",
+  "created_at": "2026-06-10T12:00:00Z"
 }
 ```
 

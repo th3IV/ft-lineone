@@ -34,48 +34,44 @@ ft-lineone/
 ├── backend/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── v1/
-│   │   │   │   ├── auth.py
-│   │   │   │   ├── users.py
-│   │   │   │   ├── products.py
-│   │   │   │   ├── recommendations.py
-│   │   │   │   └── vton.py
-│   │   │   └── __init__.py
+│   │   │   └── v1/
+│   │   │       └── routes/
+│   │   │           ├── auth.py
+│   │   │           ├── users.py
+│   │   │           ├── products.py
+│   │   │           ├── recommendations.py
+│   │   │           └── vton.py
 │   │   ├── core/
 │   │   │   ├── config.py
-│   │   │   ├── security.py
-│   │   │   └── database.py
+│   │   │   └── security.py
 │   │   ├── domain/
-│   │   │   ├── models/
-│   │   │   │   ├── user.py
-│   │   │   │   └── product.py
-│   │   │   └── schemas/
-│   │   │       ├── auth.py
+│   │   │   └── models/
 │   │   │       ├── user.py
 │   │   │       ├── product.py
-│   │   │       └── vton.py
+│   │   │       └── vton_result.py
 │   │   ├── application/
 │   │   │   ├── services/
 │   │   │   │   ├── user_service.py
 │   │   │   │   ├── product_service.py
 │   │   │   │   ├── recommendation_service.py
 │   │   │   │   └── vton_service.py
-│   │   │   └── interfaces/
-│   │   │       ├── scraper_client.py
-│   │   │       └── llm_client.py
+│   │   │   └── orchestrator/
+│   │   │       ├── pipeline_orchestrator.py
+│   │   │       ├── scraping_coordinator.py
+│   │   │       ├── vton_coordinator.py
+│   │   │       └── publication_manager.py
 │   │   ├── infrastructure/
-│   │   │   ├── repositories/
-│   │   │   │   ├── user_repository.py
-│   │   │   │   └── product_repository.py
-│   │   │   ├── clients/
-│   │   │   │   ├── s3_client.py
-│   │   │   │   ├── scraper_client.py
-│   │   │   │   └── llm_client.py
-│   │   │   └── database/
-│   │   │       ├── session.py
-│   │   │       └── models.py
+│   │   │   ├── persistence/
+│   │   │   │   └── postgres/
+│   │   │   │       ├── models.py
+│   │   │   │       └── repositories/
+│   │   │   │           ├── user_repository.py
+│   │   │   │           └── product_repository.py
+│   │   │   └── external_services/
+│   │   │       ├── llm_client.py
+│   │   │       ├── vton_client.py
+│   │   │       └── scraper_client.py
 │   │   └── main.py
-│   ├── alembic/
 │   ├── tests/
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -92,36 +88,39 @@ ft-lineone/
 │   ├── package.json
 │   └── Dockerfile
 ├── scrapers/
-│   ├── base_scraper.py
-│   ├── falabella.py
-│   ├── ripley.py
-│   ├── paris.py
-│   ├── maui.py
-│   ├── zara.py
-│   ├── orchestrator.py
+│   ├── scrapers/
+│   │   ├── base_scraper.py
+│   │   ├── falabella.py
+│   │   ├── ripley.py
+│   │   ├── paris.py
+│   │   ├── maui.py
+│   │   └── zara.py
+│   ├── models/
+│   │   └── product_dto.py
+│   ├── pipeline/
+│   │   └── orchestrator.py
+│   ├── tests/
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── vton/
-│   ├── models/
-│   ├── services/
-│   ├── app.py
+│   ├── app/
+│   │   ├── api/
+│   │   ├── services/
+│   │   ├── models/
+│   │   └── main.py
+│   ├── tests/
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── infra/
-│   ├── terraform/
-│   │   ├── modules/
-│   │   │   ├── vpc/
-│   │   │   ├── eks/
-│   │   │   ├── rds/
-│   │   │   └── s3/
-│   │   └── environments/
-│   │       ├── dev/
-│   │       └── prod/
-│   ├── kubernetes/
-│   │   ├── backend-deployment.yaml
-│   │   ├── frontend-deployment.yaml
-│   │   └── ingress.yaml
-│   └── scripts/
+│   └── terraform/
+│       ├── modules/
+│       │   ├── vpc/
+│       │   ├── eks/
+│       │   ├── rds/
+│       │   └── s3/
+│       └── environments/
+│           ├── dev/
+│           └── prod/
 ├── docs/
 │   ├── architecture.md
 │   └── api.md
@@ -201,12 +200,13 @@ python app.py
 ## API Endpoints
 
 | Método | Ruta | Descripción | Auth |
-|---|---|---|---|
+|---|---|---|---|---|
 | POST | /api/v1/auth/register | Registro de usuario | No |
 | POST | /api/v1/auth/login | Inicio de sesión | No |
 | POST | /api/v1/auth/refresh | Renovar token | No |
 | GET | /api/v1/users/me | Perfil del usuario | Sí |
-| PUT | /api/v1/users/me/measurements | Actualizar medidas | Sí |
+| PUT | /api/v1/users/me/measurements | Actualizar medidas corporales | Sí |
+| GET | /api/v1/users/me/history | Historial de interacciones | Sí |
 | GET | /api/v1/products | Listar productos | No |
 | GET | /api/v1/products/{id} | Detalle del producto | No |
 | GET | /api/v1/products/search | Buscar productos | No |

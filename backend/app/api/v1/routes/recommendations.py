@@ -5,8 +5,14 @@ from app.application.services.user_service import UserService
 from app.core.security import verify_token
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
-recommendation_service = RecommendationService()
-user_service = UserService()
+
+
+def get_recommendation_service():
+    return RecommendationService()
+
+
+def get_user_service():
+    return UserService()
 
 
 async def get_current_user(authorization: str = Depends(lambda: None)) -> str:
@@ -26,8 +32,10 @@ async def get_recommendations(
     user_id: str = Depends(get_current_user),
 ):
     try:
-        user = await user_service.get_profile(user_id)
-        products = await recommendation_service.get_recommendations(user, limit=limit)
+        svc = get_recommendation_service()
+        user_svc = get_user_service()
+        user = await user_svc.get_profile(user_id)
+        products = await svc.get_recommendations(user, limit=limit)
         return {
             "user_id": user_id,
             "recommendations": [p.model_dump() for p in products],

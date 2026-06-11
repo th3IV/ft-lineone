@@ -1,12 +1,11 @@
 from datetime import datetime, timezone
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.domain.models.user import User
-from app.infrastructure.persistence.postgres.models import UserModel
+from app.infrastructure.persistence.postgres.models import Base, UserModel
 
 
 class UserRepository:
@@ -18,14 +17,19 @@ class UserRepository:
             return self._session
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-        engine = create_async_engine(settings.DATABASE_URL.replace("psycopg2", "asyncpg"))
+        url = settings.DATABASE_URL
+        if "postgresql" in url:
+            url = url.replace("psycopg2", "asyncpg")
+        engine = create_async_engine(url)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
         session_maker = async_sessionmaker(engine, expire_on_commit=False)
         return session_maker()
 
     async def create(self, user: User) -> User:
         session = await self._get_session()
         model = UserModel(
-            id=UUID(user.id),
+            id=user.id,
             name=user.name,
             email=user.email,
             password_hash=user.password_hash,
@@ -48,7 +52,7 @@ class UserRepository:
     async def find_by_id(self, user_id: str) -> User | None:
         session = await self._get_session()
         result = await session.execute(
-            select(UserModel).where(UserModel.id == UUID(user_id))
+            select(UserModel).where(UserModel.id == user_id)
         )
         model = result.scalar_one_or_none()
         return self._to_domain(model) if model else None
@@ -56,7 +60,7 @@ class UserRepository:
     async def update(self, user: User) -> User:
         session = await self._get_session()
         result = await session.execute(
-            select(UserModel).where(UserModel.id == UUID(user.id))
+            select(UserModel).where(UserModel.id == user.id)
         )
         model = result.scalar_one_or_none()
         if not model:

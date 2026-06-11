@@ -5,7 +5,10 @@ from app.application.services.user_service import UserService
 from app.core.security import verify_token
 
 router = APIRouter(prefix="/users", tags=["users"])
-user_service = UserService()
+
+
+def get_user_service():
+    return UserService()
 
 
 async def get_current_user(authorization: str = Depends(lambda: None)) -> str:
@@ -26,7 +29,8 @@ class MeasurementsRequest(BaseModel):
 @router.get("/me")
 async def get_me(user_id: str = Depends(get_current_user)):
     try:
-        user = await user_service.get_profile(user_id)
+        svc = get_user_service()
+        user = await svc.get_profile(user_id)
         return {
             "id": user.id,
             "name": user.name,
@@ -45,7 +49,8 @@ async def update_measurements(
     user_id: str = Depends(get_current_user),
 ):
     try:
-        user = await user_service.update_measurements(user_id, body.body_measurements)
+        svc = get_user_service()
+        user = await svc.update_measurements(user_id, body.body_measurements)
         return {"body_measurements": user.body_measurements}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
