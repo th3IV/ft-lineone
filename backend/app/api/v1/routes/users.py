@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from app.application.services.user_service import UserService
@@ -11,11 +11,8 @@ def get_user_service():
     return UserService()
 
 
-async def get_current_user(authorization: str = Depends(lambda: None)) -> str:
-    from fastapi import Header
-
-    auth_header = Header(default="")
-    token = auth_header.replace("Bearer ", "")
+async def get_current_user(authorization: str = Header("")) -> str:
+    token = authorization.replace("Bearer ", "")
     payload = verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")

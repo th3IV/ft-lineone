@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File, Form
 
 from app.application.services.vton_service import VTONService
 from app.core.security import verify_token
@@ -10,11 +10,8 @@ def get_vton_service():
     return VTONService()
 
 
-async def get_current_user(authorization: str = Depends(lambda: None)) -> str:
-    from fastapi import Header
-
-    auth_header = Header(default="")
-    token = auth_header.replace("Bearer ", "")
+async def get_current_user(authorization: str = Header("")) -> str:
+    token = authorization.replace("Bearer ", "")
     payload = verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
