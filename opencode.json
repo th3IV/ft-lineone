@@ -2,5 +2,15 @@
   "$schema": "https://opencode.ai/config.json",
   "skills": {
     "paths": [".opencode/skills"]
+  },
+  "model": "ollama/dolphin3-tools",
+  "provider": {
+    "ollama": {
+      "api": "openai",
+      "options": {
+        "apiKey": "ollama",
+        "baseURL": "http://localhost:11434/v1"
+      }
+    }
   }
 }
