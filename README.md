@@ -2,30 +2,69 @@
 
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?logo=tailwindcss&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-2-EE4C2C?logo=pytorch&logoColor=white)
-![AWS](https://img.shields.io/badge/AWS-EKS-FF9900?logo=amazonaws&logoColor=white)
-![Terraform](https://img.shields.io/badge/Terraform-1.10-844FBA?logo=terraform&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3-06B6D4?logo=tailwindcss&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?logo=mongodb&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-GPT4-1C3C3C?logo=langchain&logoColor=white)
+![Render](https://img.shields.io/badge/Render-Deploy-46E3B7?logo=render&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## Descripción
 
 **FT. THE LINE ONE** es una plataforma **B2C de Fashion Tech** que integra **Web Scraping**, **Inteligencia Artificial (LLMs)** y **Virtual Try-On (VTON)** para ofrecer una experiencia de compra de moda inteligente y personalizada.
 
-La plataforma extrae productos en tiempo real desde los principales retailers de Chile (Falabella, Ripley, Paris, Maui, Zara), los procesa con IA, y permite a los usuarios probarse virtualmente la ropa antes de comprar.
+La plataforma extrae productos en tiempo real desde los principales retailers de Chile, los procesa con IA, y permite a los usuarios probarse virtualmente la ropa antes de comprar.
+
+---
 
 ## Arquitectura
 
-Monorepo estructurado en 4 microservicios:
+Monorepo estructurado en **4 microservicios** que se comunican vía HTTP/JSON:
 
-- **backend/** — API REST con FastAPI, PostgreSQL, autenticación JWT
-- **frontend/** — Aplicación React con TailwindCSS
-- **scrapers/** — Módulos de scraping con BeautifulSoup
-- **vton/** — Servicio de Virtual Try-On con modelos de difusión (PyTorch)
-- **infra/** — Infraestructura como código con Terraform + AWS
-- **docs/** — Documentación técnica
+```
+Frontend React (TailwindCSS + Redux)
+    ├── HTTP/JSON ──► Backend API (FastAPI)
+    │                     ├── PostgreSQL (datos estructurados)
+    │                     ├── MongoDB (datos no estructurados / scraping)
+    │                     ├── Cloudflare R2 (imágenes)
+    │                     └── Scrapers (BeautifulSoup)
+    │                           ├── Falabella
+    │                           ├── Ripley
+    │                           ├── Paris
+    │                           ├── Maui
+    │                           ├── Zara
+    │                           └── etc.
+    └── HTTP/JSON ──► VTON Service (FastAPI + Replicate)
+                          └── Cloudflare R2 (output)
+```
+
+**Flujo principal:**
+1. **Scrapers** extraen productos desde los retailers → los envían al backend
+2. **Backend** los procesa, normaliza, valida con LLM y almacena (PostgreSQL + MongoDB)
+3. **Usuario** navega en el Frontend → solicita productos desde la API
+4. **Usuario** sube su foto + selecciona producto → Backend envía al servicio **VTON**
+5. **VTON** procesa con IDM-VTON (Replicate API) → resultado se guarda en R2 → se muestra en Frontend
+6. **LLM (GPT-4)** genera recomendaciones personalizadas basadas en preferencias e historial
+
+---
+
+## Tech Stack
+
+| Capa | Tecnología | Versión |
+|---|---|---|
+| **Backend** | FastAPI + Python | 3.12+ / 0.115 |
+| **Frontend** | React + JavaScript + TailwindCSS | 18 / 3 |
+| **Scrapers** | Python + BeautifulSoup + requests | 4.x |
+| **VTON** | FastAPI + Replicate API (IDM-VTON) | — |
+| **Base de Datos** | PostgreSQL + MongoDB | 16 / 7 |
+| **Almacenamiento** | Cloudflare R2 (S3-compatible) | — |
+| **IA** | LangChain + GPT-4 + Replicate | — |
+| **Autenticación** | JWT (access + refresh tokens) + bcrypt | — |
+| **Cache / Queue** | Redis + Celery | 7 / 5.4 |
+| **Despliegue** | Render + GitHub Actions | — |
+
+---
 
 ## Estructura del Proyecto
 
@@ -33,114 +72,123 @@ Monorepo estructurado en 4 microservicios:
 ft-lineone/
 ├── backend/
 │   ├── app/
-│   │   ├── api/
-│   │   │   └── v1/
-│   │   │       └── routes/
-│   │   │           ├── auth.py
-│   │   │           ├── users.py
-│   │   │           ├── products.py
-│   │   │           ├── recommendations.py
-│   │   │           └── vton.py
-│   │   ├── core/
-│   │   │   ├── config.py
-│   │   │   └── security.py
-│   │   ├── domain/
-│   │   │   └── models/
-│   │   │       ├── user.py
-│   │   │       ├── product.py
-│   │   │       └── vton_result.py
+│   │   ├── api/v1/routes/        # FastAPI endpoints
+│   │   │   ├── auth.py
+│   │   │   ├── users.py
+│   │   │   ├── products.py
+│   │   │   ├── recommendations.py
+│   │   │   └── vton.py
+│   │   ├── core/                  # Config, seguridad
+│   │   ├── domain/models/         # User, Product, VTONResult, Account, Session
 │   │   ├── application/
-│   │   │   ├── services/
-│   │   │   │   ├── user_service.py
-│   │   │   │   ├── product_service.py
-│   │   │   │   ├── recommendation_service.py
-│   │   │   │   └── vton_service.py
-│   │   │   └── orchestrator/
-│   │   │       ├── pipeline_orchestrator.py
-│   │   │       ├── scraping_coordinator.py
-│   │   │       ├── vton_coordinator.py
-│   │   │       └── publication_manager.py
+│   │   │   ├── services/          # Lógica de negocio
+│   │   │   └── orchestrator/      # Pipelines multi-paso
 │   │   ├── infrastructure/
-│   │   │   ├── persistence/
-│   │   │   │   └── postgres/
-│   │   │   │       ├── models.py
-│   │   │   │       └── repositories/
-│   │   │   │           ├── user_repository.py
-│   │   │   │           └── product_repository.py
-│   │   │   └── external_services/
-│   │   │       ├── llm_client.py
-│   │   │       ├── vton_client.py
-│   │   │       └── scraper_client.py
+│   │   │   ├── persistence/       # PostgreSQL (SQLAlchemy) + MongoDB (Motor)
+│   │   │   └── external_services/ # LLMClient, VTONClient, ScraperClient
 │   │   └── main.py
 │   ├── tests/
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
-│   ├── public/
 │   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── hooks/
-│   │   ├── services/
-│   │   ├── utils/
+│   │   ├── components/            # Navbar, ProductCard, ProductGrid, VirtualMirror, StyleQuiz
+│   │   ├── pages/                 # Home, Catalog, ProductDetail, VirtualTryOn, Profile
+│   │   ├── services/              # api.js, auth.js, vton.js
+│   │   ├── store/                 # Redux Toolkit (user, products, recommendations)
+│   │   ├── hooks/                 # useAuth
 │   │   ├── App.jsx
-│   │   └── index.jsx
+│   │   └── index.js
 │   ├── package.json
 │   └── Dockerfile
 ├── scrapers/
-│   ├── scrapers/
-│   │   ├── base_scraper.py
-│   │   ├── falabella.py
-│   │   ├── ripley.py
-│   │   ├── paris.py
-│   │   ├── maui.py
-│   │   └── zara.py
-│   ├── models/
-│   │   └── product_dto.py
-│   ├── pipeline/
-│   │   └── orchestrator.py
-│   ├── tests/
+│   ├── scrapers/                  # BaseScraper + Falabella, Ripley, Paris, Maui, Zara
+│   ├── models/                    # ProductDTO
+│   ├── pipeline/                  # DataNormalizer, ImageProcessor, Publisher
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── vton/
 │   ├── app/
-│   │   ├── api/
-│   │   ├── services/
-│   │   ├── models/
+│   │   ├── api/routes.py          # Endpoints de Virtual Try-On
+│   │   ├── services/              # TryOnService, ReplicateClient, S3Connector, ImageProcessor
 │   │   └── main.py
-│   ├── tests/
 │   ├── requirements.txt
 │   └── Dockerfile
-├── infra/
-│   └── terraform/
-│       ├── modules/
-│       │   ├── vpc/
-│       │   ├── eks/
-│       │   ├── rds/
-│       │   └── s3/
-│       └── environments/
-│           ├── dev/
-│           └── prod/
+├── infra/                         # (reservado para Terraform AWS)
 ├── docs/
 │   ├── architecture.md
 │   └── api.md
+├── .github/workflows/deploy.yml   # CI/CD a Render
+├── render.yaml                    # Configuración de despliegue
 ├── .env.example
-├── .gitignore
-└── README.md
+└── .gitignore
 ```
 
-## Tech Stack
+---
 
-| Capa | Tecnología | Versión |
+## Servicios
+
+### Backend API (`:8000`)
+
+API REST con FastAPI, arquitectura hexagonal (puertos y adaptadores).
+
+| Endpoint | Método | Descripción | Auth |
+|---|---|---|---|
+| `/health` | GET | Health check | No |
+| `/auth/register` | POST | Registro de usuario | No |
+| `/auth/login` | POST | Inicio de sesión | No |
+| `/auth/refresh` | POST | Renovar token | No |
+| `/users/me` | GET | Perfil del usuario | Sí |
+| `/users/me/measurements` | PUT | Actualizar medidas corporales | Sí |
+| `/users/me/history` | GET | Historial de interacciones | Sí |
+| `/products` | GET | Listar productos (paginado) | No |
+| `/products/{id}` | GET | Detalle del producto | No |
+| `/products/search` | GET | Buscar productos | No |
+| `/products/store/{store}` | GET | Productos por tienda | No |
+| `/recommendations` | GET | Recomendaciones IA | Sí |
+| `/vton/try-on` | POST | Virtual Try-On | Sí |
+| `/vton/result/{id}` | GET | Resultado VTON | Sí |
+
+### Frontend (`:3000`)
+
+Aplicación React 18 con:
+- **Redux Toolkit** — 3 slices (user, products, recommendations)
+- **React Router v6** — 5 páginas (Home, Catalog, ProductDetail, VirtualTryOn, Profile)
+- **TailwindCSS v3** — Diseño responsivo
+- **Axios** — Cliente HTTP con interceptores JWT
+- **react-dropzone** — Subida de fotos para VTON
+- **react-hot-toast** — Notificaciones
+
+### Scrapers
+
+Módulos de scraping para零售商 chilenos con BeautifulSoup + requests. Cada scraper hereda de `BaseScraper` e incluye fallback con datos mock para desarrollo.
+
+| Scraper | Tienda | URL Base |
 |---|---|---|
-| **Backend** | FastAPI + Python | 3.12+ / 0.115 |
-| **Frontend** | React + JavaScript + TailwindCSS | 19 / 4 |
-| **Scrapers** | Python + BeautifulSoup | 4.x |
-| **VTON** | Diffusion Models + PyTorch | 2.x |
-| **Infraestructura** | AWS (EKS, RDS, S3) + Terraform | 1.10 |
-| **IA** | LangChain + GPT-4 | — |
-| **Base de Datos** | PostgreSQL + Redis | 16 / 7 |
-| **Autenticación** | JWT + bcrypt | — |
+| `FalabellaScraper` | Falabella | falabella.com |
+| `RipleyScraper` | Ripley | ripley.com |
+| `ParisScraper` | Paris | paris.cl |
+| `MauiScraper` | Maui | maui.cl |
+| `ZaraScraper` | Zara | zara.com |
+| — | *y más en el futuro* | — |
+
+Pipeline de procesamiento: `DataNormalizer` (estandariza categorías, tallas, colores, moneda) → `ImageProcessor` (redimensiona, watermarks, thumbnails) → `Publisher` (envía al backend).
+
+### VTON Service (`:8001`)
+
+Microservicio de Virtual Try-On que:
+1. Recibe la foto del usuario + ID del producto
+2. Sube la foto a Cloudflare R2
+3. Llama a Replicate API con el modelo **IDM-VTON** (`cuuupid/idm-vton`)
+4. Retorna la URL del resultado generado
+
+Endpoints:
+- `POST /try-on` — Solicitar try-on (multipart: user_image + product_id + user_id)
+- `GET /try-on/{job_id}/status` — Estado del proceso
+- `GET /try-on/{job_id}/result` — Resultado final
+- `POST /try-on/{job_id}/retry` — Reintentar si falló
+
+---
 
 ## Getting Started
 
@@ -148,23 +196,15 @@ ft-lineone/
 
 - Python 3.12+
 - Node.js 18+
-- Docker (opcional, para contenedores)
-- PostgreSQL 16 (o Docker para BD local)
-
-### Clonar el repositorio
-
-```bash
-git clone https://github.com/tu-org/ft-lineone.git
-cd ft-lineone
-```
+- PostgreSQL 16 (o Docker)
+- MongoDB 7 (o Docker)
 
 ### Backend
 
 ```bash
 cd backend
 python -m venv venv
-# Windows: .\venv\Scripts\activate
-# Linux/Mac: source venv/bin/activate
+.\venv\Scripts\activate    # Windows
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
@@ -177,7 +217,7 @@ npm install
 npm start
 ```
 
-La aplicación se abrirá en `http://localhost:3000`.
+Abrir en `http://localhost:3000`.
 
 ### Scrapers
 
@@ -185,7 +225,7 @@ La aplicación se abrirá en `http://localhost:3000`.
 cd scrapers
 python -m venv venv
 pip install -r requirements.txt
-python orchestrator.py
+python -m scrapers
 ```
 
 ### VTON
@@ -194,26 +234,10 @@ python orchestrator.py
 cd vton
 python -m venv venv
 pip install -r requirements.txt
-python app.py
+uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
-## API Endpoints
-
-| Método | Ruta | Descripción | Auth |
-|---|---|---|---|---|
-| POST | /api/v1/auth/register | Registro de usuario | No |
-| POST | /api/v1/auth/login | Inicio de sesión | No |
-| POST | /api/v1/auth/refresh | Renovar token | No |
-| GET | /api/v1/users/me | Perfil del usuario | Sí |
-| PUT | /api/v1/users/me/measurements | Actualizar medidas corporales | Sí |
-| GET | /api/v1/users/me/history | Historial de interacciones | Sí |
-| GET | /api/v1/products | Listar productos | No |
-| GET | /api/v1/products/{id} | Detalle del producto | No |
-| GET | /api/v1/products/search | Buscar productos | No |
-| GET | /api/v1/products/store/{store} | Productos por tienda | No |
-| GET | /api/v1/recommendations | Recomendaciones IA | Sí |
-| POST | /api/v1/vton/try-on | Virtual Try-On | Sí |
-| GET | /api/v1/vton/result/{id} | Resultado VTON | Sí |
+---
 
 ## Variables de Entorno
 
@@ -223,8 +247,72 @@ Copiar `.env.example` a `.env` y configurar:
 cp .env.example .env
 ```
 
-Las variables requeridas están documentadas en [.env.example](.env.example).
+| Variable | Descripción |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `MONGODB_URL` | MongoDB connection string |
+| `JWT_SECRET` | Clave secreta para JWT |
+| `R2_ACCOUNT_ID` | Cloudflare R2 account ID |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret key |
+| `R2_BUCKET` | Bucket name (ft-lineone-media) |
+| `R2_PUBLIC_URL` | URL pública de R2 |
+| `REPLICATE_API_TOKEN` | Token de Replicate API |
+| `REPLICATE_MODEL` | Modelo VTON (cuuupid/idm-vton) |
+| `OPENAI_API_KEY` | OpenAI API key para LLM |
+| `REACT_APP_API_URL` | URL base de la API (frontend) |
+
+---
+
+## Deployment
+
+### Render (actual)
+
+Configuración declarativa en `render.yaml` con 4 servicios:
+- **ft-lineone-backend** — Web service Python (Free)
+- **ft-lineone-scrapers** — Web service Python (Free)
+- **ft-lineone-vton** — Web service Python (Free)
+- **ft-lineone-frontend** — Static site
+
+Base de datos: PostgreSQL + Redis (Free).
+
+### CI/CD
+
+GitHub Actions en `.github/workflows/deploy.yml` — despliegue automático a Render al hacer push a `main`.
+
+---
+
+## Estrategia de Infraestructura
+
+| demo / desarrollo (gratuito) | producción (AWS) |
+|---|---|
+| **Render** (web services, PostgreSQL, Redis) | **EKS** (Kubernetes) + **RDS** (PostgreSQL) + **ElastiCache** (Redis) |
+| **Cloudflare R2** (almacenamiento S3-compatible) | **S3** |
+| **Replicate API** (IDM-VTON free credits) | **SageMaker** / **EC2 GPU** (modelo propio) |
+| **GitHub Actions** | **CodePipeline** + **CodeBuild** |
+| — | **API Gateway** (rate limiting, WAF) |
+| — | **Lambda** (cron jobs serverless) |
+
+> Iniciamos con servicios gratuitos para validar el producto sin costo. Al escalar, migramos a AWS para disponibilidad, escalabilidad horizontal y control total de infraestructura.
+
+---
+
+## Roadmap
+
+- [x] Scrapers para retailers chilenos
+- [x] Backend con autenticación JWT y arquitectura hexagonal
+- [x] Virtual Try-On con Replicate API
+- [x] Frontend con catálogo, búsqueda y perfil de usuario
+- [x] Despliegue automatizado en Render
+- [ ] Pasarela de pago (Webpay / Mercado Pago)
+- [ ] Perfil de estilo con IA (cuestionario + recomendaciones)
+- [ ] Prueba virtual mejorada (múltiples prendas, outfits completos)
+- [ ] App móvil (React Native)
+- [ ] Migración a AWS para escalabilidad horizontal
+- [ ] Modelo VTON propio en SageMaker / EC2 GPU
+
+---
 
 ## Licencia
 
-Distribuido bajo licencia MIT. Ver [LICENSE](LICENSE) para más información.
+Distribuido bajo licencia MIT.
