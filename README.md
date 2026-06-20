@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3-06B6D4?logo=tailwindcss&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3-06B6D4?logo=tailwindcss&logoColor=tailwindcss)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?logo=mongodb&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-GPT4-1C3C3C?logo=langchain&logoColor=white)
@@ -161,7 +161,7 @@ Aplicación React 18 con:
 
 ### Scrapers
 
-Módulos de scraping para零售商 chilenos con BeautifulSoup + requests. Cada scraper hereda de `BaseScraper` e incluye fallback con datos mock para desarrollo.
+Módulos de scraping para retailers chilenos con BeautifulSoup + requests. Cada scraper hereda de `BaseScraper` e incluye fallback con datos mock para desarrollo.
 
 | Scraper | Tienda | URL Base |
 |---|---|---|
@@ -282,18 +282,20 @@ GitHub Actions en `.github/workflows/deploy.yml` — despliegue automático a Re
 
 ---
 
-## Estrategia de Infraestructura
+## Estrategia de Infraestructura y Escalabilidad
 
-| demo / desarrollo (gratuito) | producción (AWS) |
-|---|---|
-| **Render** (web services, PostgreSQL, Redis) | **EKS** (Kubernetes) + **RDS** (PostgreSQL) + **ElastiCache** (Redis) |
-| **Cloudflare R2** (almacenamiento S3-compatible) | **S3** |
-| **Replicate API** (IDM-VTON free credits) | **SageMaker** / **EC2 GPU** (modelo propio) |
-| **GitHub Actions** | **CodePipeline** + **CodeBuild** |
-| — | **API Gateway** (rate limiting, WAF) |
-| — | **Lambda** (cron jobs serverless) |
+Para la fase de validación y pruebas de integración, se utilizarán servicios en sus capas gratuitas (*Free Tier*) con el objetivo de garantizar un entorno de testing robusto sin incurrir en costes operativos significativos. 
 
-> Iniciamos con servicios gratuitos para validar el producto sin costo. Al escalar, migramos a AWS para disponibilidad, escalabilidad horizontal y control total de infraestructura.
+Una vez que el proyecto alcance métricas de sostenibilidad, ya sea por tracción financiera o reconocimiento de usuarios, se ejecutará el plan de migración hacia la infraestructura de grado empresarial definida en `docs/architecture.md`. La transición hacia **AWS** permitirá garantizar la alta disponibilidad y la escalabilidad horizontal necesaria para el crecimiento del servicio.
+
+| Capa Actual (Free/Demo) | Objetivo en Producción (AWS) | Beneficio de la Migración |
+|---|---|---|
+| **Render** (web services, PostgreSQL, Redis) | **AWS EKS** (Kubernetes) + **RDS** (PostgreSQL) + **ElastiCache** (Redis) | Orquestación de contenedores y auto-scaling |
+| **Cloudflare R2** (almacenamiento S3-compatible) | **AWS S3** | Almacenamiento de objetos de alta durabilidad |
+| **Replicate API** (IDM-VTON free credits) | **AWS SageMaker** / **EC2 GPU** (modelo propio) | Control total de la inferencia de modelos de difusión |
+| **GitHub Actions** | **AWS CodePipeline** + **CodeBuild** | CI/CD enterprise-grade |
+| — | **AWS API Gateway** | Gestión de tráfico y seguridad de la API |
+| — | **AWS Lambda** | Procesamiento asíncrono y tareas programadas (cron) |
 
 ---
 
