@@ -15,9 +15,20 @@ class ImageProcessor:
 
     def upload_to_s3(self, image_bytes: bytes, key: str) -> str:
         import boto3
-        s3 = boto3.client("s3")
-        s3.put_object(Bucket="ft-lineone-images", Key=key, Body=image_bytes)
-        return f"https://ft-lineone-images.s3.amazonaws.com/{key}"
+        import os
+        r2_account_id = os.getenv("R2_ACCOUNT_ID")
+        r2_access_key = os.getenv("R2_ACCESS_KEY_ID")
+        r2_secret_key = os.getenv("R2_SECRET_ACCESS_KEY")
+        bucket = os.getenv("R2_BUCKET", "ft-lineone-images")
+        
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=r2_access_key,
+            aws_secret_access_key=r2_secret_key,
+            endpoint_url=f"https://{r2_account_id}.r2.cloudflarestorage.com"
+        )
+        s3.put_object(Bucket=bucket, Key=key, Body=image_bytes)
+        return f"{os.getenv('R2_PUBLIC_URL')}/{bucket}/{key}"
 
     def generate_thumbnail(self, image_bytes: bytes) -> bytes:
         image = Image.open(BytesIO(image_bytes))

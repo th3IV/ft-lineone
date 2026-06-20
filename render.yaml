@@ -1,0 +1,88 @@
+services:
+  # Backend API
+  - type: web
+    name: ft-lineone-backend
+    runtime: python
+    region: ohio
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    envVars:
+      - fromGroup: ft-lineone-common
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ft-lineone-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: ft-lineone-redis
+          type: redis
+          property: connectionString
+
+  # Scrapers
+  - type: web
+    name: ft-lineone-scrapers
+    runtime: python
+    region: ohio
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m scrapers
+    envVars:
+      - fromGroup: ft-lineone-common
+
+  # VTON (proxy to Replicate)
+  - type: web
+    name: ft-lineone-vton
+    runtime: python
+    region: ohio
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port 8001
+    envVars:
+      - fromGroup: ft-lineone-common
+      - key: REPLICATE_API_TOKEN
+        sync: false
+
+  # Frontend (Static Site)
+  - type: static
+    name: ft-lineone-frontend
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    pullRequestPreviewsEnabled: true
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://ft-lineone-backend.onrender.com/api/v1
+
+databases:
+  - name: ft-lineone-db
+    region: ohio
+    plan: free
+    databaseType: postgres
+    ipAllowList: []
+
+redis:
+  - name: ft-lineone-redis
+    region: ohio
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+envVarGroups:
+  - name: ft-lineone-common
+    envVars:
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: ft-lineone-media
+      - key: R2_ENDPOINT
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: REPLICATE_MODEL
+        value: cuuupid/idm-vton

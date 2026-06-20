@@ -2,23 +2,18 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
-from io import BytesIO
 from typing import Any
 
-from PIL import Image
-
-from app.models.diffusion_model import DiffusionModel
-from app.services.image_processor import ImageProcessor
+from app.services.replicate_client import ReplicateClient
 from app.services.s3_connector import S3Connector
 
 logger = logging.getLogger(__name__)
 
 
 class TryOnService:
-    def __init__(self):
-        self.model = DiffusionModel()
-        self.processor = ImageProcessor()
-        self.s3 = S3Connector()
+    def __init__(self, s3_connector: S3Connector, replicate_client: ReplicateClient):
+        self.s3 = s3_connector
+        self.replicate = replicate_client
         self._jobs: dict[str, dict[str, Any]] = {}
 
     async def process_try_on(
@@ -36,34 +31,18 @@ class TryOnService:
 
         try:
             self._jobs[job_id]["progress"] = 10
-
-            user_image = Image.open(BytesIO(user_image_bytes)).convert("RGB")
-            clothing_bytes = await asyncio.to_thread(
-                self.s3.download_image, product_image_url
-            )
-            clothing_image = Image.open(BytesIO(clothing_bytes)).convert("RGB")
-
+            
+            # 1. Upload user image to R2 to get a public URL for Replicate
+            user_key = f"vton/users/{job_id}_user.png"
+            user_url = await asyncio.to_thread(self.s3.upload_image, user_image_bytes, user_key)
+            
             self._jobs[job_id]["progress"] = 30
-
-            user_image, clothing_image = self.processor.align_pose(
-                user_image, clothing_image
-            )
-
-            self._jobs[job_id]["progress"] = 50
-
-            result_image = await asyncio.to_thread(
-                self.model.generate_try_on, user_image, clothing_image
-            )
-
-            self._jobs[job_id]["progress"] = 80
-
-            result_bytes = self.processor.encode_image(result_image, "PNG")
-
-            result_key = f"results/{job_id}/output.png"
+            
+            # 2. Call Replicate API
             result_url = await asyncio.to_thread(
-                self.s3.upload_image, result_bytes, result_key
+                self.replicate.generate_try_on, user_url, product_image_url
             )
-
+            
             self._jobs[job_id].update(
                 {
                     "status": "completed",

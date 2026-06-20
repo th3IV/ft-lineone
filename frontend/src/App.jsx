@@ -6,6 +6,7 @@ import ProductDetail from "./pages/ProductDetail";
 import VirtualTryOn from "./pages/VirtualTryOn";
 import Profile from "./pages/Profile";
 
+
 function App() {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -15,8 +16,9 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/product/:id" element={<ProductDetail />} />
-          <Route path="/virtual-try-on" element={<VirtualTryOn />} />
-          <Route path="/profile" element={<Profile />} />
+           <Route path="/virtual-try-on" element={<VirtualTryOn />} />
+           <Route path="/profile" element={<Profile />} />
+
           <Route path="/login" element={<Home />} />
           <Route path="/register" element={<Home />} />
         </Routes>

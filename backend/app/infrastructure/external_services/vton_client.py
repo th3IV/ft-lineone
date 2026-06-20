@@ -6,13 +6,13 @@ from app.domain.models.vton_result import VTONResult, VTONStatus
 
 
 class VTONClient:
-    def __init__(self, base_url: str = "http://vton:8002"):
+    def __init__(self, base_url: str = "http://vton:8001"):
         self._base_url = base_url
 
     async def request_try_on(self, user_image_url: str, product_image_url: str) -> VTONResult:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self._base_url}/vton/try-on",
+                f"{self._base_url}/try-on",
                 json={
                     "user_image_url": user_image_url,
                     "product_image_url": product_image_url,
@@ -33,7 +33,7 @@ class VTONClient:
     async def get_result(self, job_id: str) -> VTONResult | None:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self._base_url}/vton/result/{job_id}",
+                f"{self._base_url}/try-on/{job_id}/result",
                 timeout=30.0,
             )
             if response.status_code == 404:

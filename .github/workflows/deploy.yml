@@ -1,0 +1,23 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trigger Render Deploy - Backend
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
+
+      - name: Trigger Render Deploy - VTON
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_VTON }}
+
+      - name: Trigger Render Deploy - Scrapers
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_SCRAPERS }}
+
+      - name: Trigger Render Deploy - Frontend
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}

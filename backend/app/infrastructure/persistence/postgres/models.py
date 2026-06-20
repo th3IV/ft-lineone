@@ -1,13 +1,11 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Column, DateTime, Float, String, Text
+from sqlalchemy import JSON, Column, DateTime, Float, String, Text, ForeignKey
 from sqlalchemy.orm import DeclarativeBase
-
 
 class Base(DeclarativeBase):
     pass
-
 
 class UserModel(Base):
     __tablename__ = "users"
@@ -25,6 +23,30 @@ class UserModel(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+class AccountModel(Base):
+    __tablename__ = "accounts"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    account_type = Column(String(50), default="free")
+    status = Column(String(50), default="active")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+class SessionModel(Base):
+    __tablename__ = "sessions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    token = Column(String(512), nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime, nullable=False)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(Text, nullable=True)
 
 class ProductModel(Base):
     __tablename__ = "products"
@@ -41,7 +63,6 @@ class ProductModel(Base):
     sizes = Column(JSON, default=list)
     colors = Column(JSON, default=list)
     scraped_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
 
 class VTONResultModel(Base):
     __tablename__ = "vton_results"

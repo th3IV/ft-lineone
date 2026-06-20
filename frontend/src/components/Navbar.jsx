@@ -17,10 +17,11 @@ function Navbar() {
             <Link to="/catalog" className="text-gray-600 hover:text-gray-900 transition-colors">
               Catalog
             </Link>
-            <Link to="/virtual-try-on" className="text-gray-600 hover:text-gray-900 transition-colors">
-              Virtual Try-On
-            </Link>
-            {isAuthenticated ? (
+             <Link to="/virtual-try-on" className="text-gray-600 hover:text-gray-900 transition-colors">
+               Virtual Try-On
+             </Link>
+             {isAuthenticated ? (
+
               <Link to="/profile" className="text-gray-600 hover:text-gray-900 transition-colors">
                 Profile
               </Link>
@@ -50,10 +51,11 @@ function Navbar() {
             <Link to="/catalog" className="block px-3 py-2 text-gray-600 hover:text-gray-900" onClick={() => setIsOpen(false)}>
               Catalog
             </Link>
-            <Link to="/virtual-try-on" className="block px-3 py-2 text-gray-600 hover:text-gray-900" onClick={() => setIsOpen(false)}>
-              Virtual Try-On
-            </Link>
-            {isAuthenticated ? (
+             <Link to="/virtual-try-on" className="block px-3 py-2 text-gray-600 hover:text-gray-900" onClick={() => setIsOpen(false)}>
+               Virtual Try-On
+             </Link>
+             {isAuthenticated ? (
+
               <Link to="/profile" className="block px-3 py-2 text-gray-600 hover:text-gray-900" onClick={() => setIsOpen(false)}>
                 Profile
               </Link>
