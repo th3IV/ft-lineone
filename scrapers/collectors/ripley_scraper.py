@@ -3,29 +3,29 @@ from typing import List
 import requests
 from bs4 import BeautifulSoup
 
-from scrapers.base_scraper import BaseScraper
-from models.product_dto import ProductDTO
+from scrapers.collectors.base_scraper import BaseScraper
+from scrapers.models.product_dto import ProductDTO
 
 
-class ZaraScraper(BaseScraper):
+class RipleyScraper(BaseScraper):
 
     def __init__(self):
-        super().__init__("zara", "https://www.zara.com")
+        super().__init__("ripley", "https://www.ripley.com")
 
     def scrape(self, category: str, max_items: int) -> List[ProductDTO]:
         products = []
-        url = f"{self.base_url}/cl/{category}"
+        url = f"{self.base_url}/categoria/{category}"
         headers = {"User-Agent": "Mozilla/5.0"}
 
         try:
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "lxml")
-            items = soup.select(".product-grid-item") or soup.select(".product-card") or soup.select("[data-articleid]")
+            items = soup.select(".product-card") or soup.select(".catalog-product-item") or soup.select("[data-product]")
             for item in items[:max_items]:
                 try:
                     html = str(item)
-                    product = self.parse_product(html)
+                    product = self.parse_product(html, category)
                     products.append(product)
                 except Exception:
                     continue
@@ -34,20 +34,17 @@ class ZaraScraper(BaseScraper):
 
         return products
 
-    def parse_product(self, html: str) -> ProductDTO:
+    def parse_product(self, html: str, category: str = "") -> ProductDTO:
         soup = BeautifulSoup(html, "lxml")
 
         try:
-            name = soup.select_one("[data-name]")["data-name"]
-        except (AttributeError, KeyError, TypeError):
-            try:
-                name = soup.select_one(".product-name").get_text(strip=True)
-            except AttributeError:
-                name = ""
+            name = soup.select_one(".product-name").get_text(strip=True)
+        except AttributeError:
+            name = ""
 
         try:
             price = self.normalize_price(
-                soup.select_one(".price-current").get_text(strip=True)
+                soup.select_one(".product-price .price").get_text(strip=True)
             )
         except (AttributeError, ValueError):
             try:
@@ -56,18 +53,15 @@ class ZaraScraper(BaseScraper):
                 price = 0.0
 
         try:
-            product_id = soup.select_one("[data-articleid]")["data-articleid"]
+            product_id = soup.select_one("[data-sku]")["data-sku"]
         except (AttributeError, KeyError, TypeError):
-            try:
-                product_id = soup.select_one("[data-product-id]")["data-product-id"]
-            except (AttributeError, KeyError, TypeError):
-                product_id = ""
+            product_id = ""
 
         try:
-            image = soup.select_one(".product-image source")["srcset"]
+            image = soup.select_one(".product-image img")["src"]
         except (AttributeError, KeyError, TypeError):
             try:
-                image = soup.select_one("img")["src"]
+                image = soup.select_one("img[data-original]")["data-original"]
             except (AttributeError, KeyError, TypeError):
                 image = ""
 
@@ -79,7 +73,8 @@ class ZaraScraper(BaseScraper):
         try:
             sizes = [
                 s.get_text(strip=True)
-                for s in soup.select(".size-selector button:not(.disabled)")
+                for s in soup.select(".size-selector option")
+                if s.get_text(strip=True)
             ]
         except Exception:
             sizes = []
@@ -87,14 +82,14 @@ class ZaraScraper(BaseScraper):
         try:
             colors = [
                 c.get_text(strip=True)
-                for c in soup.select(".color-selector span")
+                for c in soup.select(".color-selector .color-name")
             ]
         except Exception:
             colors = []
 
         try:
-            availability = bool(
-                soup.select_one(".add-to-cart:not(.disabled)")
+            availability = "disabled" not in (
+                soup.select_one(".add-to-cart").get("class", [])
             )
         except AttributeError:
             availability = True
@@ -118,39 +113,39 @@ class ZaraScraper(BaseScraper):
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
         mock_products = [
             {
-                "external_id": "ZAR-001",
-                "name": "Blazer Oversize Mujer",
-                "description": "Blazer corte oversize",
-                "price": 79990.0,
-                "image": "https://zara.com/img/blazer1.jpg",
+                "external_id": "RIP-001",
+                "name": "Polera Ripley Basic",
+                "description": "Polera algodón peinado",
+                "price": 12990.0,
+                "image": "https://ripley.cl/img/polera1.jpg",
             },
             {
-                "external_id": "ZAR-002",
-                "name": "Camisa Lino Hombre",
-                "description": "Camisa manga larga lino",
-                "price": 45990.0,
-                "image": "https://zara.com/img/camisa1.jpg",
+                "external_id": "RIP-002",
+                "name": "Pantalón Cargo Hombre",
+                "description": "Pantalón cargo holgado",
+                "price": 29990.0,
+                "image": "https://ripley.cl/img/cargo1.jpg",
             },
             {
-                "external_id": "ZAR-003",
-                "name": "Vestido Noche Corto",
-                "description": "Vestido corto brillos",
+                "external_id": "RIP-003",
+                "name": "Parka Invierno Mujer",
+                "description": "Parka acolchada con capucha",
                 "price": 69990.0,
-                "image": "https://zara.com/img/vestido1.jpg",
+                "image": "https://ripley.cl/img/parka1.jpg",
             },
             {
-                "external_id": "ZAR-004",
-                "name": "Jeans Rectos Mujer",
-                "description": "Jeans tiro alto recto",
-                "price": 39990.0,
-                "image": "https://zara.com/img/jeans2.jpg",
+                "external_id": "RIP-004",
+                "name": "Zapatos Casual Cuero",
+                "description": "Zapatos vestir cuero",
+                "price": 45990.0,
+                "image": "https://ripley.cl/img/zapato1.jpg",
             },
             {
-                "external_id": "ZAR-005",
-                "name": "Chaleco Acolchado",
-                "description": "Chaleco acolchado reversible",
-                "price": 54990.0,
-                "image": "https://zara.com/img/chaleco1.jpg",
+                "external_id": "RIP-005",
+                "name": "Short Deportivo Mujer",
+                "description": "Short running licra",
+                "price": 18990.0,
+                "image": "https://ripley.cl/img/short1.jpg",
             },
         ]
         return [
@@ -164,8 +159,8 @@ class ZaraScraper(BaseScraper):
                 original_url=f"{self.base_url}/product/{p['external_id']}",
                 image_urls=[p["image"]],
                 category=category,
-                sizes=["XS", "S", "M", "L", "XL"],
-                colors=["Beige", "Negro", "Blanco"],
+                sizes=["S", "M", "L", "XL"],
+                colors=["Negro", "Gris", "Azul Marino"],
                 availability=True,
             )
             for p in mock_products[:max_items]

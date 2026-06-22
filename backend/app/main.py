@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1.routes import auth, products, recommendations, users, vton
+from app.api.v1.routes import auth, products, recommendations, scrapers, users, vton
 
 app = FastAPI(
     title="FT LineOne Backend",
@@ -21,6 +21,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(products.router)
 app.include_router(recommendations.router)
+app.include_router(scrapers.router)
 app.include_router(vton.router)
 
 

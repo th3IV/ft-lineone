@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -20,16 +20,14 @@ class Settings(BaseSettings):
     
     JWT_SECRET: str = "change-me-in-production"
     JWT_ALGORITHM: str = "HS256"
+    REDIS_URL: str = "redis://localhost:6379/0"
     OPENAI_API_KEY: str = ""
 
     @property
-
     def is_sqlite(self) -> bool:
         return "sqlite" in self.DATABASE_URL
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 settings = Settings()

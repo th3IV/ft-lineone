@@ -55,6 +55,7 @@ class ProductModel(Base):
     external_id = Column(String(255), nullable=False, index=True)
     store = Column(String(100), nullable=False, index=True)
     name = Column(String(500), nullable=False)
+    normalized_name = Column(String(500), default="", index=True)
     description = Column(Text, default="")
     price = Column(Float, nullable=False)
     currency = Column(String(10), default="USD")
@@ -63,6 +64,18 @@ class ProductModel(Base):
     sizes = Column(JSON, default=list)
     colors = Column(JSON, default=list)
     scraped_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class PriceHistoryModel(Base):
+    __tablename__ = "price_history"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    product_id = Column(String(36), ForeignKey("products.id"), nullable=False, index=True)
+    external_id = Column(String(255), default="")
+    store = Column(String(100), nullable=False)
+    price = Column(Float, nullable=False)
+    currency = Column(String(10), default="USD")
+    scraped_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 
 class VTONResultModel(Base):
     __tablename__ = "vton_results"

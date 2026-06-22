@@ -3,29 +3,29 @@ from typing import List
 import requests
 from bs4 import BeautifulSoup
 
-from scrapers.base_scraper import BaseScraper
-from models.product_dto import ProductDTO
+from scrapers.collectors.base_scraper import BaseScraper
+from scrapers.models.product_dto import ProductDTO
 
 
-class FalabellaScraper(BaseScraper):
+class MauiScraper(BaseScraper):
 
     def __init__(self):
-        super().__init__("falabella", "https://www.falabella.com")
+        super().__init__("maui", "https://www.maui.cl")
 
     def scrape(self, category: str, max_items: int) -> List[ProductDTO]:
         products = []
-        url = f"{self.base_url}/falabella-cl/category/{category}"
+        url = f"{self.base_url}/categoria/{category}"
         headers = {"User-Agent": "Mozilla/5.0"}
 
         try:
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "lxml")
-            items = soup.select("[data-pod]") or soup.select(".pod-item") or soup.select(".js-product")
+            items = soup.select(".product") or soup.select(".item") or soup.select("[data-product-code]")
             for item in items[:max_items]:
                 try:
                     html = str(item)
-                    product = self.parse_product(html)
+                    product = self.parse_product(html, category)
                     products.append(product)
                 except Exception:
                     continue
@@ -34,46 +34,52 @@ class FalabellaScraper(BaseScraper):
 
         return products
 
-    def parse_product(self, html: str) -> ProductDTO:
+    def parse_product(self, html: str, category: str = "") -> ProductDTO:
         soup = BeautifulSoup(html, "lxml")
 
         try:
-            name = soup.select_one("[data-product-name]")["data-product-name"]
-        except (AttributeError, KeyError, TypeError):
-            name = ""
+            name = soup.select_one(".productName").get_text(strip=True)
+        except AttributeError:
+            try:
+                name = soup.select_one("[itemprop='name']").get_text(strip=True)
+            except AttributeError:
+                name = ""
 
         try:
             price = self.normalize_price(
-                soup.select_one(".prices-0 span")["data-price"]
+                soup.select_one(".productPrice").get_text(strip=True)
             )
-        except (AttributeError, KeyError, TypeError):
+        except (AttributeError, ValueError):
             try:
-                price = float(soup.select_one(".price")["data-price"])
+                price = float(soup.select_one("[data-price]")["data-price"])
             except (AttributeError, KeyError, TypeError):
                 price = 0.0
 
         try:
-            product_id = soup.select_one("[data-product-id]")["data-product-id"]
-        except (AttributeError, KeyError, TypeError):
-            product_id = ""
-
-        try:
-            image = soup.select_one("img[data-src]")["data-src"]
+            product_id = soup.select_one("[data-code]")["data-code"]
         except (AttributeError, KeyError, TypeError):
             try:
-                image = soup.select_one("img")["src"]
+                product_id = soup.select_one(".sku").get_text(strip=True)
+            except AttributeError:
+                product_id = ""
+
+        try:
+            image = soup.select_one(".productImage img")["src"]
+        except (AttributeError, KeyError, TypeError):
+            try:
+                image = soup.select_one("img[data-src]")["data-src"]
             except (AttributeError, KeyError, TypeError):
                 image = ""
 
         try:
-            description = soup.select_one("[data-description]").get_text(strip=True)
+            description = soup.select_one(".productDescription").get_text(strip=True)
         except AttributeError:
             description = ""
 
         try:
             sizes = [
                 s.get_text(strip=True)
-                for s in soup.select("[data-size]")
+                for s in soup.select(".sizeList li")
             ]
         except Exception:
             sizes = []
@@ -81,14 +87,14 @@ class FalabellaScraper(BaseScraper):
         try:
             colors = [
                 c.get_text(strip=True)
-                for c in soup.select("[data-color]")
+                for c in soup.select(".colorSwatch span")
             ]
         except Exception:
             colors = []
 
         try:
-            availability = "out-of-stock" not in (
-                soup.select_one("[data-stock]").get("class", [])
+            availability = (
+                "out" not in soup.select_one(".stockStatus").get_text(strip=True).lower()
             )
         except AttributeError:
             availability = True
@@ -112,39 +118,39 @@ class FalabellaScraper(BaseScraper):
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
         mock_products = [
             {
-                "external_id": "FAL-001",
-                "name": "Zapatillas Deportivas Falabella",
-                "description": "Zapatillas running confort",
-                "price": 39990.0,
-                "image": "https://falabella.com/img/shoe1.jpg",
+                "external_id": "MAU-001",
+                "name": "Lentes Sol Aviador",
+                "description": "Lentes polarizados clásicos",
+                "price": 45990.0,
+                "image": "https://maui.cl/img/lentes1.jpg",
             },
             {
-                "external_id": "FAL-002",
-                "name": "Chaqueta Impermeable Hombre",
-                "description": "Chaqueta cortavientos",
-                "price": 59990.0,
-                "image": "https://falabella.com/img/jacket1.jpg",
-            },
-            {
-                "external_id": "FAL-003",
-                "name": "Jeans Slim Fit Mujer",
-                "description": "Jeans elastizados",
-                "price": 24990.0,
-                "image": "https://falabella.com/img/jeans1.jpg",
-            },
-            {
-                "external_id": "FAL-004",
-                "name": "Polera Algodón Premium",
-                "description": "Polera cuello redondo",
-                "price": 14990.0,
-                "image": "https://falabella.com/img/tshirt1.jpg",
-            },
-            {
-                "external_id": "FAL-005",
-                "name": "Vestido Estampado Floral",
-                "description": "Vestido largo floreado",
+                "external_id": "MAU-002",
+                "name": "Mochila Urbana 30L",
+                "description": "Mochila impermeable",
                 "price": 34990.0,
-                "image": "https://falabella.com/img/dress1.jpg",
+                "image": "https://maui.cl/img/mochila1.jpg",
+            },
+            {
+                "external_id": "MAU-003",
+                "name": "Reloj Deportivo Digital",
+                "description": "Reloj cronógrafo resistente",
+                "price": 25990.0,
+                "image": "https://maui.cl/img/reloj1.jpg",
+            },
+            {
+                "external_id": "MAU-004",
+                "name": "Cinturón Cuero Hombre",
+                "description": "Cinturón cuero 3cm",
+                "price": 15990.0,
+                "image": "https://maui.cl/img/cinturon1.jpg",
+            },
+            {
+                "external_id": "MAU-005",
+                "name": "Gorra Trucker",
+                "description": "Gorra malla ajustable",
+                "price": 9990.0,
+                "image": "https://maui.cl/img/gorra1.jpg",
             },
         ]
         return [
@@ -158,8 +164,8 @@ class FalabellaScraper(BaseScraper):
                 original_url=f"{self.base_url}/product/{p['external_id']}",
                 image_urls=[p["image"]],
                 category=category,
-                sizes=["S", "M", "L", "XL"],
-                colors=["Negro", "Blanco", "Azul"],
+                sizes=["Único"],
+                colors=["Negro", "Grafito"],
                 availability=True,
             )
             for p in mock_products[:max_items]

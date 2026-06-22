@@ -29,4 +29,9 @@ api.interceptors.response.use(
   }
 );
 
+export async function getPriceComparison(productId) {
+  const { data } = await api.get(`/v1/products/${productId}/compare`);
+  return data;
+}
+
 export default api;

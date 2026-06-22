@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import List
 
 
@@ -16,3 +16,6 @@ class ProductDTO:
     sizes: List[str] = field(default_factory=list)
     colors: List[str] = field(default_factory=list)
     availability: bool = True
+
+    def to_dict(self) -> dict:
+        return asdict(self)

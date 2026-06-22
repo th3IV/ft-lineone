@@ -71,3 +71,9 @@ async def get_product(product_id: str):
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product.model_dump()
+
+
+@router.get("/{product_id}/compare")
+async def compare_prices(product_id: str):
+    svc = get_product_service()
+    return await svc.get_price_comparison(product_id)

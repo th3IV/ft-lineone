@@ -4,8 +4,8 @@ import Home from "./pages/Home";
 import Catalog from "./pages/Catalog";
 import ProductDetail from "./pages/ProductDetail";
 import VirtualTryOn from "./pages/VirtualTryOn";
+import OutfitBuilder from "./pages/OutfitBuilder";
 import Profile from "./pages/Profile";
-
 
 function App() {
   return (
@@ -16,9 +16,9 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/product/:id" element={<ProductDetail />} />
-           <Route path="/virtual-try-on" element={<VirtualTryOn />} />
-           <Route path="/profile" element={<Profile />} />
-
+          <Route path="/virtual-try-on" element={<VirtualTryOn />} />
+          <Route path="/outfit-builder" element={<OutfitBuilder />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="/login" element={<Home />} />
           <Route path="/register" element={<Home />} />
         </Routes>

@@ -3,29 +3,29 @@ from typing import List
 import requests
 from bs4 import BeautifulSoup
 
-from scrapers.base_scraper import BaseScraper
-from models.product_dto import ProductDTO
+from scrapers.collectors.base_scraper import BaseScraper
+from scrapers.models.product_dto import ProductDTO
 
 
-class ParisScraper(BaseScraper):
+class ZaraScraper(BaseScraper):
 
     def __init__(self):
-        super().__init__("paris", "https://www.paris.cl")
+        super().__init__("zara", "https://www.zara.com")
 
     def scrape(self, category: str, max_items: int) -> List[ProductDTO]:
         products = []
-        url = f"{self.base_url}/catalogo/{category}"
+        url = f"{self.base_url}/cl/{category}"
         headers = {"User-Agent": "Mozilla/5.0"}
 
         try:
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "lxml")
-            items = soup.select(".producto") or soup.select(".product-item") or soup.select("[data-product-id]")
+            items = soup.select(".product-grid-item") or soup.select(".product-card") or soup.select("[data-articleid]")
             for item in items[:max_items]:
                 try:
                     html = str(item)
-                    product = self.parse_product(html)
+                    product = self.parse_product(html, category)
                     products.append(product)
                 except Exception:
                     continue
@@ -34,37 +34,40 @@ class ParisScraper(BaseScraper):
 
         return products
 
-    def parse_product(self, html: str) -> ProductDTO:
+    def parse_product(self, html: str, category: str = "") -> ProductDTO:
         soup = BeautifulSoup(html, "lxml")
 
         try:
-            name = soup.select_one(".product-title a").get_text(strip=True)
-        except AttributeError:
+            name = soup.select_one("[data-name]")["data-name"]
+        except (AttributeError, KeyError, TypeError):
             try:
-                name = soup.select_one("h2").get_text(strip=True)
+                name = soup.select_one(".product-name").get_text(strip=True)
             except AttributeError:
                 name = ""
 
         try:
             price = self.normalize_price(
-                soup.select_one(".product-price .price").get_text(strip=True)
+                soup.select_one(".price-current").get_text(strip=True)
             )
         except (AttributeError, ValueError):
             try:
-                price = float(soup.select_one("[data-price-value]")["data-price-value"])
+                price = float(soup.select_one("[data-price]")["data-price"])
             except (AttributeError, KeyError, TypeError):
                 price = 0.0
 
         try:
-            product_id = soup.select_one("[data-id]")["data-id"]
-        except (AttributeError, KeyError, TypeError):
-            product_id = ""
-
-        try:
-            image = soup.select_one(".product-image a img")["src"]
+            product_id = soup.select_one("[data-articleid]")["data-articleid"]
         except (AttributeError, KeyError, TypeError):
             try:
-                image = soup.select_one("img.product-img")["src"]
+                product_id = soup.select_one("[data-product-id]")["data-product-id"]
+            except (AttributeError, KeyError, TypeError):
+                product_id = ""
+
+        try:
+            image = soup.select_one(".product-image source")["srcset"]
+        except (AttributeError, KeyError, TypeError):
+            try:
+                image = soup.select_one("img")["src"]
             except (AttributeError, KeyError, TypeError):
                 image = ""
 
@@ -76,7 +79,7 @@ class ParisScraper(BaseScraper):
         try:
             sizes = [
                 s.get_text(strip=True)
-                for s in soup.select(".size-variant")
+                for s in soup.select(".size-selector button:not(.disabled)")
             ]
         except Exception:
             sizes = []
@@ -84,14 +87,14 @@ class ParisScraper(BaseScraper):
         try:
             colors = [
                 c.get_text(strip=True)
-                for c in soup.select(".color-variant")
+                for c in soup.select(".color-selector span")
             ]
         except Exception:
             colors = []
 
         try:
-            availability = "disabled" not in (
-                soup.select_one(".buy-button").get("class", [])
+            availability = bool(
+                soup.select_one(".add-to-cart:not(.disabled)")
             )
         except AttributeError:
             availability = True
@@ -115,39 +118,39 @@ class ParisScraper(BaseScraper):
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
         mock_products = [
             {
-                "external_id": "PAR-001",
-                "name": "Chamarra Paris Cuero",
-                "description": "Chamarra cuero genuino",
-                "price": 89990.0,
-                "image": "https://paris.cl/img/chamarra1.jpg",
+                "external_id": "ZAR-001",
+                "name": "Blazer Oversize Mujer",
+                "description": "Blazer corte oversize",
+                "price": 79990.0,
+                "image": "https://zara.com/img/blazer1.jpg",
             },
             {
-                "external_id": "PAR-002",
-                "name": "Blusa Seda Mujer",
-                "description": "Blusa manga larga seda",
-                "price": 34990.0,
-                "image": "https://paris.cl/img/blusa1.jpg",
+                "external_id": "ZAR-002",
+                "name": "Camisa Lino Hombre",
+                "description": "Camisa manga larga lino",
+                "price": 45990.0,
+                "image": "https://zara.com/img/camisa1.jpg",
             },
             {
-                "external_id": "PAR-003",
-                "name": "Buzo Oversize Hombre",
-                "description": "Buzo capucha polar",
-                "price": 22990.0,
-                "image": "https://paris.cl/img/buzo1.jpg",
+                "external_id": "ZAR-003",
+                "name": "Vestido Noche Corto",
+                "description": "Vestido corto brillos",
+                "price": 69990.0,
+                "image": "https://zara.com/img/vestido1.jpg",
             },
             {
-                "external_id": "PAR-004",
-                "name": "Falda Plisada Mujer",
-                "description": "Falda plisada midi",
-                "price": 19990.0,
-                "image": "https://paris.cl/img/falda1.jpg",
+                "external_id": "ZAR-004",
+                "name": "Jeans Rectos Mujer",
+                "description": "Jeans tiro alto recto",
+                "price": 39990.0,
+                "image": "https://zara.com/img/jeans2.jpg",
             },
             {
-                "external_id": "PAR-005",
-                "name": "Calcetines Deportivos Pack",
-                "description": "Pack 6 pares calcetines",
-                "price": 9990.0,
-                "image": "https://paris.cl/img/calcetines1.jpg",
+                "external_id": "ZAR-005",
+                "name": "Chaleco Acolchado",
+                "description": "Chaleco acolchado reversible",
+                "price": 54990.0,
+                "image": "https://zara.com/img/chaleco1.jpg",
             },
         ]
         return [
@@ -161,8 +164,8 @@ class ParisScraper(BaseScraper):
                 original_url=f"{self.base_url}/product/{p['external_id']}",
                 image_urls=[p["image"]],
                 category=category,
-                sizes=["S", "M", "L", "XL"],
-                colors=["Negro", "Café", "Beige"],
+                sizes=["XS", "S", "M", "L", "XL"],
+                colors=["Beige", "Negro", "Blanco"],
                 availability=True,
             )
             for p in mock_products[:max_items]

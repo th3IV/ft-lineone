@@ -3,7 +3,7 @@ from typing import List
 import re
 import requests
 
-from models.product_dto import ProductDTO
+from scrapers.models.product_dto import ProductDTO
 
 
 class BaseScraper(ABC):

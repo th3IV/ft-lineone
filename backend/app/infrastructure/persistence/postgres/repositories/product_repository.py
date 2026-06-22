@@ -26,6 +26,31 @@ class ProductRepository:
         session_maker = async_sessionmaker(engine, expire_on_commit=False)
         return session_maker()
 
+    async def upsert(self, product: Product) -> Product:
+        session = await self._get_session()
+        result = await session.execute(
+            select(ProductModel).where(
+                ProductModel.external_id == product.external_id,
+                ProductModel.store == product.store,
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.name = product.name
+            existing.normalized_name = product.normalized_name
+            existing.description = product.description
+            existing.price = product.price
+            existing.currency = product.currency
+            existing.image_url = product.image_url
+            existing.category = product.category
+            existing.sizes = product.sizes
+            existing.colors = product.colors
+            existing.scraped_at = product.scraped_at
+            await session.commit()
+            await session.refresh(existing)
+            return self._to_domain(existing)
+        return await self.create(product)
+
     async def create(self, product: Product) -> Product:
         session = await self._get_session()
         model = ProductModel(
@@ -33,6 +58,7 @@ class ProductRepository:
             external_id=product.external_id,
             store=product.store,
             name=product.name,
+            normalized_name=product.normalized_name,
             description=product.description,
             price=product.price,
             currency=product.currency,
@@ -126,12 +152,21 @@ class ProductRepository:
         await session.commit()
         return True
 
+    async def find_by_normalized_name(self, normalized_name: str, exclude_store: str | None = None) -> list[Product]:
+        session = await self._get_session()
+        query = select(ProductModel).where(ProductModel.normalized_name == normalized_name)
+        if exclude_store:
+            query = query.where(ProductModel.store != exclude_store)
+        result = await session.execute(query)
+        return [self._to_domain(m) for m in result.scalars().all()]
+
     def _to_domain(self, model: ProductModel) -> Product:
         return Product(
             id=str(model.id),
             external_id=model.external_id,
             store=model.store,
             name=model.name,
+            normalized_name=model.normalized_name or "",
             description=model.description or "",
             price=model.price,
             currency=model.currency or "USD",

@@ -3,29 +3,29 @@ from typing import List
 import requests
 from bs4 import BeautifulSoup
 
-from scrapers.base_scraper import BaseScraper
-from models.product_dto import ProductDTO
+from scrapers.collectors.base_scraper import BaseScraper
+from scrapers.models.product_dto import ProductDTO
 
 
-class RipleyScraper(BaseScraper):
+class FalabellaScraper(BaseScraper):
 
     def __init__(self):
-        super().__init__("ripley", "https://www.ripley.com")
+        super().__init__("falabella", "https://www.falabella.com")
 
     def scrape(self, category: str, max_items: int) -> List[ProductDTO]:
         products = []
-        url = f"{self.base_url}/categoria/{category}"
+        url = f"{self.base_url}/falabella-cl/category/{category}"
         headers = {"User-Agent": "Mozilla/5.0"}
 
         try:
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "lxml")
-            items = soup.select(".product-card") or soup.select(".catalog-product-item") or soup.select("[data-product]")
+            items = soup.select("[data-pod]") or soup.select(".pod-item") or soup.select(".js-product")
             for item in items[:max_items]:
                 try:
                     html = str(item)
-                    product = self.parse_product(html)
+                    product = self.parse_product(html, category)
                     products.append(product)
                 except Exception:
                     continue
@@ -34,47 +34,46 @@ class RipleyScraper(BaseScraper):
 
         return products
 
-    def parse_product(self, html: str) -> ProductDTO:
+    def parse_product(self, html: str, category: str = "") -> ProductDTO:
         soup = BeautifulSoup(html, "lxml")
 
         try:
-            name = soup.select_one(".product-name").get_text(strip=True)
-        except AttributeError:
+            name = soup.select_one("[data-product-name]")["data-product-name"]
+        except (AttributeError, KeyError, TypeError):
             name = ""
 
         try:
             price = self.normalize_price(
-                soup.select_one(".product-price .price").get_text(strip=True)
+                soup.select_one(".prices-0 span")["data-price"]
             )
-        except (AttributeError, ValueError):
+        except (AttributeError, KeyError, TypeError):
             try:
-                price = float(soup.select_one("[data-price]")["data-price"])
+                price = float(soup.select_one(".price")["data-price"])
             except (AttributeError, KeyError, TypeError):
                 price = 0.0
 
         try:
-            product_id = soup.select_one("[data-sku]")["data-sku"]
+            product_id = soup.select_one("[data-product-id]")["data-product-id"]
         except (AttributeError, KeyError, TypeError):
             product_id = ""
 
         try:
-            image = soup.select_one(".product-image img")["src"]
+            image = soup.select_one("img[data-src]")["data-src"]
         except (AttributeError, KeyError, TypeError):
             try:
-                image = soup.select_one("img[data-original]")["data-original"]
+                image = soup.select_one("img")["src"]
             except (AttributeError, KeyError, TypeError):
                 image = ""
 
         try:
-            description = soup.select_one(".product-description").get_text(strip=True)
+            description = soup.select_one("[data-description]").get_text(strip=True)
         except AttributeError:
             description = ""
 
         try:
             sizes = [
                 s.get_text(strip=True)
-                for s in soup.select(".size-selector option")
-                if s.get_text(strip=True)
+                for s in soup.select("[data-size]")
             ]
         except Exception:
             sizes = []
@@ -82,14 +81,14 @@ class RipleyScraper(BaseScraper):
         try:
             colors = [
                 c.get_text(strip=True)
-                for c in soup.select(".color-selector .color-name")
+                for c in soup.select("[data-color]")
             ]
         except Exception:
             colors = []
 
         try:
-            availability = "disabled" not in (
-                soup.select_one(".add-to-cart").get("class", [])
+            availability = "out-of-stock" not in (
+                soup.select_one("[data-stock]").get("class", [])
             )
         except AttributeError:
             availability = True
@@ -113,39 +112,39 @@ class RipleyScraper(BaseScraper):
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
         mock_products = [
             {
-                "external_id": "RIP-001",
-                "name": "Polera Ripley Basic",
-                "description": "Polera algodón peinado",
-                "price": 12990.0,
-                "image": "https://ripley.cl/img/polera1.jpg",
+                "external_id": "FAL-001",
+                "name": "Zapatillas Deportivas Falabella",
+                "description": "Zapatillas running confort",
+                "price": 39990.0,
+                "image": "https://falabella.com/img/shoe1.jpg",
             },
             {
-                "external_id": "RIP-002",
-                "name": "Pantalón Cargo Hombre",
-                "description": "Pantalón cargo holgado",
-                "price": 29990.0,
-                "image": "https://ripley.cl/img/cargo1.jpg",
+                "external_id": "FAL-002",
+                "name": "Chaqueta Impermeable Hombre",
+                "description": "Chaqueta cortavientos",
+                "price": 59990.0,
+                "image": "https://falabella.com/img/jacket1.jpg",
             },
             {
-                "external_id": "RIP-003",
-                "name": "Parka Invierno Mujer",
-                "description": "Parka acolchada con capucha",
-                "price": 69990.0,
-                "image": "https://ripley.cl/img/parka1.jpg",
+                "external_id": "FAL-003",
+                "name": "Jeans Slim Fit Mujer",
+                "description": "Jeans elastizados",
+                "price": 24990.0,
+                "image": "https://falabella.com/img/jeans1.jpg",
             },
             {
-                "external_id": "RIP-004",
-                "name": "Zapatos Casual Cuero",
-                "description": "Zapatos vestir cuero",
-                "price": 45990.0,
-                "image": "https://ripley.cl/img/zapato1.jpg",
+                "external_id": "FAL-004",
+                "name": "Polera Algodón Premium",
+                "description": "Polera cuello redondo",
+                "price": 14990.0,
+                "image": "https://falabella.com/img/tshirt1.jpg",
             },
             {
-                "external_id": "RIP-005",
-                "name": "Short Deportivo Mujer",
-                "description": "Short running licra",
-                "price": 18990.0,
-                "image": "https://ripley.cl/img/short1.jpg",
+                "external_id": "FAL-005",
+                "name": "Vestido Estampado Floral",
+                "description": "Vestido largo floreado",
+                "price": 34990.0,
+                "image": "https://falabella.com/img/dress1.jpg",
             },
         ]
         return [
@@ -160,7 +159,7 @@ class RipleyScraper(BaseScraper):
                 image_urls=[p["image"]],
                 category=category,
                 sizes=["S", "M", "L", "XL"],
-                colors=["Negro", "Gris", "Azul Marino"],
+                colors=["Negro", "Blanco", "Azul"],
                 availability=True,
             )
             for p in mock_products[:max_items]

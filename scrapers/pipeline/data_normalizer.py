@@ -1,4 +1,4 @@
-from models.product_dto import ProductDTO
+from scrapers.models.product_dto import ProductDTO
 
 
 _CATEGORY_MAP = {

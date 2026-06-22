@@ -1,7 +1,7 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "skills": {
-    "paths": [".opencode/skills"]
+    "paths": [".opencode/skills", "~/.config/opencode/skills"]
   },
   "model": "ollama/dolphin3-tools",
   "provider": {
