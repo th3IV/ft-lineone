@@ -4,7 +4,9 @@ function ProductGrid({ products, loading, emptyMessage, onTryOn }) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="relative">
+          <div className="w-12 h-12 rounded-full border-2 border-fashion-pink/20 border-t-fashion-pink animate-spin" />
+        </div>
       </div>
     );
   }
@@ -12,15 +14,17 @@ function ProductGrid({ products, loading, emptyMessage, onTryOn }) {
   if (!products || products.length === 0) {
     return (
       <div className="text-center py-20">
-        <p className="text-gray-500 text-lg">{emptyMessage || "No products found."}</p>
+        <p className="text-gray-400 text-lg font-serif italic">
+          {emptyMessage || "No se encontraron productos."}
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-      {products.map((product) => (
-        <ProductCard key={product.id} product={product} onTryOn={onTryOn} />
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+      {products.map((product, i) => (
+        <ProductCard key={product.id} product={product} index={i} onTryOn={onTryOn} />
       ))}
     </div>
   );

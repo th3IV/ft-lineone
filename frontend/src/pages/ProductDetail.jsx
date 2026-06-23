@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchProductById } from "../store/productSlice";
 import { fetchRecommendations } from "../store/recommendationSlice";
+import { openVtonModal } from "../store/uiSlice";
 import ProductGrid from "../components/ProductGrid";
 
 function ProductDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const dispatch = useDispatch();
   const { selectedProduct, loading } = useSelector((state) => state.products);
   const { recommendations } = useSelector((state) => state.recommendations);
@@ -28,11 +28,13 @@ function ProductDetail() {
   }, [selectedProduct]);
 
   const handleTryOn = () => {
-    navigate(`/virtual-try-on?product=${id}`);
+    if (selectedProduct) {
+      dispatch(openVtonModal(selectedProduct));
+    }
   };
 
   const handleRecommendationTryOn = (product) => {
-    navigate(`/virtual-try-on?product=${product.id}`);
+    dispatch(openVtonModal(product));
   };
 
   if (loading || !selectedProduct) {
@@ -127,9 +129,9 @@ function ProductDetail() {
 
           <button
             onClick={handleTryOn}
-            className="w-full mt-8 bg-indigo-600 text-white py-3 rounded-xl text-lg font-semibold hover:bg-indigo-700 transition-colors"
+            className="w-full mt-8 btn-primary text-lg py-3"
           >
-            Try On Now
+            Probar ahora
           </button>
         </div>
       </div>

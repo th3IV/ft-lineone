@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import { fetchProducts } from "../store/productSlice";
+import { openVtonModal } from "../store/uiSlice";
 import ProductGrid from "../components/ProductGrid";
 
 const stores = [
@@ -21,23 +22,23 @@ function Home() {
   }, [dispatch]);
 
   const handleTryOn = (product) => {
-    window.location.href = `/virtual-try-on?product=${product.id}`;
+    dispatch(openVtonModal(product));
   };
 
   return (
     <div>
-      <section className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white">
+      <section className="bg-gradient-to-br from-fashion-pink to-fashion-purple text-white">
         <div className="max-w-7xl mx-auto px-4 py-20 sm:py-28">
           <div className="text-center">
             <h1 className="text-4xl sm:text-6xl font-bold mb-4">
               FT. THE LINE ONE
             </h1>
-            <p className="text-xl sm:text-2xl text-indigo-100 mb-8">
+            <p className="text-xl sm:text-2xl text-white/80 mb-8">
               Try before you buy. Virtual fashion at your fingertips.
             </p>
             <Link
               to="/virtual-try-on"
-              className="inline-block bg-white text-indigo-600 px-8 py-3 rounded-full text-lg font-semibold hover:bg-indigo-50 transition-colors"
+              className="inline-block bg-white text-fashion-pink px-8 py-3 rounded-full text-lg font-semibold hover:bg-fashion-pink-light transition-colors"
             >
               Try Virtual Try-On
             </Link>
@@ -50,7 +51,7 @@ function Home() {
         <ProductGrid products={products} loading={loading} onTryOn={handleTryOn} />
       </section>
 
-      <section className="bg-gray-100 py-12">
+      <section className="bg-fashion-pink-light py-12">
         <div className="max-w-7xl mx-auto px-4">
           <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">Our Stores</h2>
           <div className="flex flex-wrap justify-center gap-4">

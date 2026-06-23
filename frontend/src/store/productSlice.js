@@ -33,7 +33,16 @@ const productSlice = createSlice({
   initialState: {
     products: [],
     selectedProduct: null,
-    filters: {},
+    filters: {
+      gender: null,
+      clothingType: [],
+      size: null,
+      color: null,
+      store: null,
+      minPrice: null,
+      maxPrice: null,
+      query: null,
+    },
     pagination: { page: 1, limit: 20, total: 0 },
     loading: false,
     error: null,
@@ -41,6 +50,19 @@ const productSlice = createSlice({
   reducers: {
     setFilters(state, action) {
       state.filters = { ...state.filters, ...action.payload };
+    },
+    clearFilters(state) {
+      state.filters = {
+        gender: null,
+        clothingType: [],
+        size: null,
+        color: null,
+        store: null,
+        minPrice: null,
+        maxPrice: null,
+        query: null,
+      };
+      state.pagination.page = 1;
     },
     clearSelectedProduct(state) {
       state.selectedProduct = null;
@@ -88,5 +110,5 @@ const productSlice = createSlice({
   },
 });
 
-export const { setFilters, clearSelectedProduct } = productSlice.actions;
+export const { setFilters, clearFilters, clearSelectedProduct } = productSlice.actions;
 export default productSlice.reducer;

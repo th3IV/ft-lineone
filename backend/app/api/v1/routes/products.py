@@ -15,9 +15,28 @@ def get_product_service():
 async def list_products(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
+    limit: int | None = Query(None, ge=1, le=100),
+    store: str | None = Query(None),
+    gender: str | None = Query(None),
+    clothing_type: str | None = Query(None),
+    size: str | None = Query(None),
+    color: str | None = Query(None),
+    min_price: float | None = Query(None),
+    max_price: float | None = Query(None),
+    q: str | None = Query(None),
 ):
     svc = get_product_service()
-    products, total = await svc.get_catalog(page=page, per_page=per_page)
+    limit = limit or per_page
+    filters = {}
+    if store: filters["store"] = store
+    if gender: filters["gender"] = gender
+    if clothing_type: filters["clothingType"] = clothing_type.split(",")
+    if size: filters["size"] = size
+    if color: filters["color"] = color
+    if min_price is not None: filters["minPrice"] = min_price
+    if max_price is not None: filters["maxPrice"] = max_price
+    if q: filters["query"] = q
+    products, total = await svc.get_catalog(page=page, per_page=limit, filters=filters)
     return {
         "products": [p.model_dump() for p in products],
         "total": total,
