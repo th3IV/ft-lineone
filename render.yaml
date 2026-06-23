@@ -116,19 +116,19 @@ envVarGroups:
   - name: ft-lineone-common
     envVars:
       - key: JWT_SECRET
-        sync: false
+        value: ft-lineone-jwt-secret-2024-prod
       - key: JWT_ALGORITHM
         value: HS256
       - key: R2_ACCOUNT_ID
-        sync: false
+        value: b17c769bfd01fc782de6bf33b946ee82
       - key: R2_ACCESS_KEY_ID
-        sync: false
+        value: 9563f2285a1294a0f5a852eded01651f
       - key: R2_SECRET_ACCESS_KEY
-        sync: false
+        value: d50292f27291248a9c375336a003f335d84e99ee9562e40f27f14cdce8616698
       - key: R2_BUCKET
         value: ft-lineone-media
       - key: R2_ENDPOINT
-        sync: false
+        value: https://b17c769bfd01fc782de6bf33b946ee82.r2.cloudflarestorage.com
       - key: R2_PUBLIC_URL
         sync: false
       - key: SCRAPER_API_URL
