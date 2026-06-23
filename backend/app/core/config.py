@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "change-me-in-production"
     JWT_ALGORITHM: str = "HS256"
     REDIS_URL: str = "redis://localhost:6379/0"
-    OPENAI_API_KEY: str = ""
+    GOOGLE_API_KEY: str = ""
 
     @property
     def is_sqlite(self) -> bool:

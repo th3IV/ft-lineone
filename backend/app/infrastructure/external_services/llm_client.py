@@ -9,13 +9,13 @@ from app.core.config import settings
 
 class LLMClient:
     def __init__(self):
-        self._available = bool(settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "demo-key")
+        self._available = bool(settings.GOOGLE_API_KEY and settings.GOOGLE_API_KEY != "demo-key")
         if self._available:
-            from langchain_openai import ChatOpenAI
-            self._llm = ChatOpenAI(
-                model="gpt-4",
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            self._llm = ChatGoogleGenerativeAI(
+                model="gemini-2.0-flash",
                 temperature=0.3,
-                api_key=settings.OPENAI_API_KEY,
+                api_key=settings.GOOGLE_API_KEY,
             )
 
     async def get_recommendations(self, user: User, products: list[Product]) -> list[Product]:

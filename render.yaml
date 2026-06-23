@@ -7,6 +7,7 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: ./entrypoint.sh
+    healthCheckPath: /health
     envVars:
       - fromGroup: ft-lineone-common
       - key: DATABASE_URL
@@ -83,11 +84,9 @@ services:
     region: ohio
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port 8001
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port 8002
     envVars:
       - fromGroup: ft-lineone-common
-      - key: REPLICATE_API_TOKEN
-        sync: false
 
   # Frontend (Static Site)
   - type: static
@@ -116,6 +115,10 @@ redis:
 envVarGroups:
   - name: ft-lineone-common
     envVars:
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ALGORITHM
+        value: HS256
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID
@@ -126,9 +129,15 @@ envVarGroups:
         value: ft-lineone-media
       - key: R2_ENDPOINT
         sync: false
-      - key: OPENAI_API_KEY
+      - key: R2_PUBLIC_URL
         sync: false
-      - key: JWT_SECRET
+      - key: SCRAPER_API_URL
+        sync: false
+      - key: VTON_API_URL
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: REPLICATE_API_TOKEN
         sync: false
       - key: REPLICATE_MODEL
         value: cuuupid/idm-vton
