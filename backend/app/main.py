@@ -1,12 +1,22 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import auth, products, recommendations, scrapers, users, vton
+from app.infrastructure.persistence.postgres.database import close_db
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    yield
+    await close_db()
 
 app = FastAPI(
     title="FT LineOne Backend",
     description="Fashion Technology backend with AI orchestration",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
