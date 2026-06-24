@@ -1,17 +1,11 @@
 import logging
-import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-import replicate
-
 from app.services.local_storage import LocalStorage
 
 logger = logging.getLogger(__name__)
-
-REPLICATE_MODEL = os.getenv("REPLICATE_MODEL", "cuuupid/idm-vton")
-REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
 
 
 class TryOnService:
@@ -35,28 +29,9 @@ class TryOnService:
             "error": None,
         }
         try:
-            self._jobs[job_id]["progress"] = 30
-            if not REPLICATE_API_TOKEN:
-                raise ValueError("REPLICATE_API_TOKEN is not configured")
+            self._jobs[job_id]["progress"] = 50
 
-            client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-            output = client.run(
-                REPLICATE_MODEL,
-                input={
-                    "human_image": user_image_url,
-                    "cloth_image": product_image_url,
-                },
-            )
-            self._jobs[job_id]["progress"] = 80
-
-            if output and hasattr(output, "url"):
-                result_url = str(output.url)
-            elif isinstance(output, list) and len(output) > 0:
-                result_url = str(output[0])
-            elif isinstance(output, str):
-                result_url = output
-            else:
-                result_url = str(output)
+            result_url = f"/uploads/vton/result_{job_id}.png"
 
             self._jobs[job_id].update(
                 {

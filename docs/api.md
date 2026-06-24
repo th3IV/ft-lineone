@@ -182,7 +182,7 @@ Lista paginada de productos con filtros.
       "store": "falabella",
       "price": 29990,
       "category": "vestidos",
-      "image_url": "https://s3.amazonaws.com/ft-lineone/products/vestido.jpg",
+      "image_url": "/images/vestido.jpg",
       "description": "Vestido largo estampado floral, manga corta...",
       "sizes": ["XS", "S", "M", "L", "XL"],
       "colors": ["azul", "blanco"],
@@ -208,7 +208,7 @@ Obtiene un producto por su ID.
   "store": "falabella",
   "price": 29990,
   "category": "vestidos",
-  "image_url": "https://s3.amazonaws.com/ft-lineone/products/vestido.jpg",
+  "image_url": "/images/vestido.jpg",
   "description": "Vestido largo estampado floral, manga corta...",
   "sizes": ["XS", "S", "M", "L", "XL"],
   "colors": ["azul", "blanco"],
@@ -293,7 +293,7 @@ Obtiene recomendaciones personalizadas basadas en preferencias e historial del u
       "name": "Vestido Floral Verano",
       "store": "falabella",
       "price": 29990,
-      "image_url": "https://s3.amazonaws.com/ft-lineone/products/vestido.jpg",
+      "image_url": "/images/vestido.jpg",
       "category": "vestidos",
       "sizes": ["XS", "S", "M", "L", "XL"],
       "colors": ["azul", "blanco"],
@@ -324,7 +324,7 @@ Procesa una foto del usuario con una prenda seleccionada.
 {
   "vton_id": "uuid",
   "status": "processing",
-  "input_image_url": "https://s3.amazonaws.com/ft-lineone/vton/user-123-input.jpg"
+   "input_image_url": "/uploads/vton/user-123-input.jpg"
 }
 ```
 
@@ -339,8 +339,8 @@ Obtiene el resultado del Virtual Try-On.
 {
   "id": "uuid",
   "status": "completed",
-  "input_image_url": "https://s3.amazonaws.com/ft-lineone/vton/user-123-input.jpg",
-  "output_image_url": "https://s3.amazonaws.com/ft-lineone/vton/user-123-output.jpg",
+  "input_image_url": "/uploads/vton/user-123-input.jpg",
+  "output_image_url": "/uploads/vton/user-123-output.jpg",
   "created_at": "2026-06-10T12:00:00Z"
 }
 ```

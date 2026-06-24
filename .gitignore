@@ -31,6 +31,10 @@ terraform.tfplan
 # IDE
 .vscode/
 .idea/
+
+# Obsidian
+.obsidian/
+notas/
 *.swp
 *.swo
 *~
@@ -57,3 +61,7 @@ docker-compose.override.yml
 # Scrapers
 scrapers/data/
 scrapers/__pycache__/
+
+# Removed directories
+infra/
+ft-lineone-main/

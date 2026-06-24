@@ -5,9 +5,6 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?logo=tailwindcss&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2-EE4C2C?logo=pytorch&logoColor=white)
-![AWS](https://img.shields.io/badge/AWS-EKS-FF9900?logo=amazonaws&logoColor=white)
-![Terraform](https://img.shields.io/badge/Terraform-1.10-844FBA?logo=terraform&logoColor=white)
-![LangChain](https://img.shields.io/badge/LangChain-GPT4-1C3C3C?logo=langchain&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## Descripción
@@ -24,7 +21,6 @@ Monorepo estructurado en 4 microservicios:
 - **frontend/** — Aplicación React con TailwindCSS
 - **scrapers/** — Módulos de scraping con BeautifulSoup
 - **vton/** — Servicio de Virtual Try-On con modelos de difusión (PyTorch)
-- **infra/** — Infraestructura como código con Terraform + AWS
 - **docs/** — Documentación técnica
 
 ## Estructura del Proyecto
@@ -111,16 +107,6 @@ ft-lineone/
 │   ├── tests/
 │   ├── requirements.txt
 │   └── Dockerfile
-├── infra/
-│   └── terraform/
-│       ├── modules/
-│       │   ├── vpc/
-│       │   ├── eks/
-│       │   ├── rds/
-│       │   └── s3/
-│       └── environments/
-│           ├── dev/
-│           └── prod/
 ├── docs/
 │   ├── architecture.md
 │   └── api.md
@@ -137,8 +123,8 @@ ft-lineone/
 | **Frontend** | React + JavaScript + TailwindCSS | 19 / 4 |
 | **Scrapers** | Python + BeautifulSoup | 4.x |
 | **VTON** | Diffusion Models + PyTorch | 2.x |
-| **Infraestructura** | AWS (EKS, RDS, S3) + Terraform | 1.10 |
-| **IA** | LangChain + GPT-4 | — |
+
+| **IA** | Gemini 2.0 Flash | — |
 | **Base de Datos** | PostgreSQL + Redis | 16 / 7 |
 | **Autenticación** | JWT + bcrypt | — |
 

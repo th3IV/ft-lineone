@@ -27,7 +27,7 @@ class Publisher:
             "availability": product.availability,
         }
         response = self.client.post(
-            f"{self.base_url}/api/v1/scrapers/ingest",
+            f"{self.base_url}/scrapers/ingest",
             json=payload,
         )
         response.raise_for_status()

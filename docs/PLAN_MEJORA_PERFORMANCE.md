@@ -8,34 +8,22 @@
 ## FASE 1 — Crítico / Seguridad (Hacer YA)
 
 | # | Tarea | Impacto | Archivos |
-|---|---|---|---|
-| 1 | **Rotar todas las credenciales filtradas** — el `.env` tiene API keys y DB URIs en texto plano | 🔴 Seguridad | `.env` — regenerar TODAS las keys |
-| 2 | **Cloudinary síncrono en contexto async** — `cloudinary.uploader.upload()` bloquea el event loop | 🔴 Bloqueante | `cloudinary_client.py` → usar `run_in_executor` o `httpx` directo |
-| 3 | **SupabaseRestClient usa httpx.Client síncrono** — cada llamada bloquea el event loop | 🔴 Bloqueante | `supabase_rest_client.py` → cambiar a `AsyncClient` |
-| 4 | **Pipeline: 3 LLM calls por producto** — validar + normalizar + imagen = 2,880 llamadas en full run | 🔴 Quota agotada | `base_scraper.py` → reemplazar validación LLM con reglas heurísticas |
+|---|---|---|---|---|
+| 1 | **Pipeline: 3 LLM calls por producto** — validar + normalizar + imagen = 2,880 llamadas en full run | 🔴 Quota agotada | `base_scraper.py` → reemplazar validación LLM con reglas heurísticas |
 
-- [ ] **1.1** Rotar credenciales `.env`
-- [ ] **1.2** Cloudinary → `run_in_executor`
-- [ ] **1.3** SupabaseRestClient → `AsyncClient`
-- [ ] **1.4** Pipeline: LLM → heurísticas
+- [ ] **1.1** Pipeline: LLM → heurísticas
 
 ---
 
 ## FASE 2 — Caching & Base de Datos (Alto impacto)
 
 | # | Tarea | Impacto | Archivos |
-|---|---|---|---|
-| 5 | **Redis (Upstash) ya configurado pero nunca usado** — cachear queries de productos y recomendaciones | 📈 Velocidad API | `repositories.py` + nuevo `cache.py` |
-| 6 | **MongoDB: text index para search** — `$regex` sin índice = full collection scan | 📈 Búsquedas | `repositories.py` + migración de índices |
-| 7 | **MongoDB: batch insert en vez de `save()` individual** — `bulk_write` con `UpdateOne` | 📈 Scraping | `repositories.py` |
-| 8 | **Paginación: `find_by_store` sin total count** — `total = len(products)` es incorrecto | 🐛 Bug | `repositories.py` + `main.py` |
-| 9 | **Agregar índices faltantes** — `price`, `scraped_at`, `store+category` | 📈 Queries | `models.py` |
+|---|---|---|---|---|
+| 5 | **Batch insert en vez de `save()` individual** — `bulk_write` con `UpdateOne` | 📈 Scraping | `repositories.py` |
+| 6 | **Paginación: `find_by_store` sin total count** — `total = len(products)` es incorrecto | 🐛 Bug | `repositories.py` + `main.py` |
 
-- [ ] **2.1** Implementar Redis caching
-- [ ] **2.2** Text index MongoDB
-- [ ] **2.3** `bulk_write` en repositorios
-- [ ] **2.4** Fix paginación (total count)
-- [ ] **2.5** Índices: price, scraped_at, store+category
+- [ ] **2.1** `bulk_write` en repositorios
+- [ ] **2.2** Fix paginación (total count)
 
 ---
 
@@ -85,11 +73,9 @@
 |---|---|---|---|
 | 22 | **VTON async con polling** — `POST /vton/try-on` espera 30-300s bloqueando | ⚡ UX | `main.py` + frontend |
 | 23 | **Scraping como BackgroundTask** — no ejecutarlo inline en el request | ⚡ UX | `main.py` + `pipeline.py` |
-| 24 | **Circuit breaker para LLMs** — si Grok falla, dejar de intentar por N segundos | 🛡️ Robustez | `grok_client.py` |
 
 - [ ] **5.1** VTON async con polling
 - [ ] **5.2** Scraping como BackgroundTask
-- [ ] **5.3** Circuit breaker para LLMs
 
 ---
 
@@ -97,27 +83,16 @@
 
 | # | Tarea | Impacto |
 |---|---|---|
-| 25 | Eliminar `backend/` duplicado (o consolidar) | 🧹 |
-| 26 | Eliminar dependencias no usadas (`upstash-redis`, `python-magic`, `boto3`, etc.) | 📦 |
-| 27 | Unificar `requirements.txt` — hay 3 archivos con versiones conflictivas | 📦 |
-| 28 | Global exception handler en FastAPI | 🛡️ |
-| 29 | CORS: `allow_origins=["*"]` → dominio específico en prod | 🔒 |
+| 25 | Global exception handler en FastAPI | 🛡️ |
 
-- [ ] **6.1** Eliminar `backend/` duplicado
-- [ ] **6.2** Eliminar dependencias no usadas
-- [ ] **6.3** Unificar `requirements.txt`
-- [ ] **6.4** Global exception handler
-- [ ] **6.5** CORS restrictivo en producción
+- [ ] **6.1** Global exception handler
 
 ---
 
 ## 🏆 Top 5 Recomendados para la Próxima Semana
 
-1. **Groq como LLM principal** — key `gsk_UyvwEl...` lista, reemplazar Grok/OpenAI/Gemini
-2. **Text index en MongoDB** — 10 líneas, mejora drástica en búsquedas
-3. **Parallelizar scrapers** — `asyncio.gather` + semáforo, reduce tiempo de 48 ops secuenciales
-4. **Imágenes responsivas en frontend** — `?w=400` en thumbnails, impacto visible inmediato
-5. **Redis caching** — Upstash ya pagado, solo implementar cliente
+1. **Parallelizar scrapers** — `asyncio.gather` + semáforo, reduce tiempo de 48 ops secuenciales
+2. **Imágenes responsivas en frontend** — `?w=400` en thumbnails, impacto visible inmediato
 
 ---
 

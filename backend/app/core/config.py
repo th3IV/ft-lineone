@@ -8,8 +8,6 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str = ""
     SCRAPER_API_URL: str = "http://localhost:8001"
     VTON_API_URL: str = "http://localhost:8002"
-    REPLICATE_API_TOKEN: str = ""
-    REPLICATE_MODEL: str = "cuuupid/idm-vton"
     REACT_APP_API_URL: str = "http://localhost:8000/api/v1"
 
     @property

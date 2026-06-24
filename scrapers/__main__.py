@@ -93,19 +93,28 @@ async def health():
     return {"status": "healthy", "service": "ft-lineone-scrapers"}
 
 
+@app.get("/scrape")
 @app.post("/scrape")
-async def scrape(req: ScrapeRequest):
-    store = req.store.lower()
+async def scrape(
+    store: str = "falabella",
+    category: str = "ropa",
+    max_items: int = 20,
+    req: ScrapeRequest | None = None,
+):
+    if req:
+        store, category, max_items = req.store.lower(), req.category, req.max_items
+    else:
+        store = store.lower()
     if store not in SCRAPER_REGISTRY:
         raise HTTPException(status_code=400, detail=f"Unknown store: {store}. Available: {list(SCRAPER_REGISTRY.keys())}")
     scraper_cls = SCRAPER_REGISTRY[store]
     scraper = scraper_cls()
     try:
-        products = await asyncio.to_thread(scraper.scrape, req.category, req.max_items)
+        products = await asyncio.to_thread(scraper.scrape, category, max_items)
         return {
             "success": True,
             "store": store,
-            "category": req.category,
+            "category": category,
             "count": len(products),
             "products": [p.to_dict() for p in products],
         }
@@ -113,13 +122,22 @@ async def scrape(req: ScrapeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/scrape-and-save")
 @app.post("/scrape-and-save")
-async def scrape_and_save(req: ScrapeRequest):
-    store = req.store.lower()
+async def scrape_and_save(
+    store: str = "falabella",
+    category: str = "ropa",
+    max_items: int = 20,
+    req: ScrapeRequest | None = None,
+):
+    if req:
+        store, category, max_items = req.store.lower(), req.category, req.max_items
+    else:
+        store = store.lower()
     if store not in SCRAPER_REGISTRY:
         raise HTTPException(status_code=400, detail=f"Unknown store: {store}. Available: {list(SCRAPER_REGISTRY.keys())}")
     try:
-        result = await asyncio.to_thread(scrape_store_sync, store, req.category, req.max_items)
+        result = await asyncio.to_thread(scrape_store_sync, store, category, max_items)
         return {"success": True, **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
