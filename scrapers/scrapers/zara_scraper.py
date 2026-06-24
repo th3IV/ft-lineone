@@ -116,57 +116,60 @@ class ZaraScraper(BaseScraper):
         return dto
 
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
-        mock_products = [
-            {
-                "external_id": "ZAR-001",
-                "name": "Blazer Oversize Mujer",
-                "description": "Blazer corte oversize",
-                "price": 79990.0,
-                "image": "https://zara.com/img/blazer1.jpg",
-            },
-            {
-                "external_id": "ZAR-002",
-                "name": "Camisa Lino Hombre",
-                "description": "Camisa manga larga lino",
-                "price": 45990.0,
-                "image": "https://zara.com/img/camisa1.jpg",
-            },
-            {
-                "external_id": "ZAR-003",
-                "name": "Vestido Noche Corto",
-                "description": "Vestido corto brillos",
-                "price": 69990.0,
-                "image": "https://zara.com/img/vestido1.jpg",
-            },
-            {
-                "external_id": "ZAR-004",
-                "name": "Jeans Rectos Mujer",
-                "description": "Jeans tiro alto recto",
-                "price": 39990.0,
-                "image": "https://zara.com/img/jeans2.jpg",
-            },
-            {
-                "external_id": "ZAR-005",
-                "name": "Chaleco Acolchado",
-                "description": "Chaleco acolchado reversible",
-                "price": 54990.0,
-                "image": "https://zara.com/img/chaleco1.jpg",
-            },
-        ]
+        mock_by_category = {
+            "mujer": [
+                {"name": "Blazer Oversize Mujer", "description": "Blazer corte oversize con solapa ancha", "price": 79990.0, "image": "https://picsum.photos/seed/zara-blazer/400/500"},
+                {"name": "Vestido Noche Corto", "description": "Vestido corto con brillos y escote en V", "price": 69990.0, "image": "https://picsum.photos/seed/zara-vestido/400/500"},
+                {"name": "Jeans Rectos Mujer", "description": "Jeans tiro alto recto en denim elastico", "price": 39990.0, "image": "https://picsum.photos/seed/zara-jeans/400/500"},
+                {"name": "Falda Mini Pliatada", "description": "Falda mini plisada con pretina ancha", "price": 25990.0, "image": "https://picsum.photos/seed/zara-falda/400/500"},
+                {"name": "Polera Algodon Mujer", "description": "Polera de algodon organico cuello redondo", "price": 15990.0, "image": "https://picsum.photos/seed/zara-polera-m/400/500"},
+                {"name": "Chaqueta Cuero Mujer", "description": "Chaqueta de cuero sintetico con cierre", "price": 89990.0, "image": "https://picsum.photos/seed/zara-chaqueta-m/400/500"},
+                {"name": "Short Denim Mujer", "description": "Short de jean con dobladillo desfilado", "price": 22990.0, "image": "https://picsum.photos/seed/zara-short-m/400/500"},
+                {"name": "Blusa Seda Mujer", "description": "Blusa de seda con manga larga y botones", "price": 34990.0, "image": "https://picsum.photos/seed/zara-blusa/400/500"},
+                {"name": "Abrigo Lana Mujer", "description": "Abrigo de lana con cinturon incluido", "price": 99990.0, "image": "https://picsum.photos/seed/zara-abrigo/400/500"},
+                {"name": "Top Cropt Mujer", "description": "Top corto de algodon con tirantes ajustables", "price": 12990.0, "image": "https://picsum.photos/seed/zara-top/400/500"},
+            ],
+            "hombre": [
+                {"name": "Camisa Lino Hombre", "description": "Camisa manga larga de lino premium", "price": 45990.0, "image": "https://picsum.photos/seed/zara-camisa-h/400/500"},
+                {"name": "Chaleco Acolchado", "description": "Chaleco acolchado reversible", "price": 54990.0, "image": "https://picsum.photos/seed/zara-chaleco/400/500"},
+                {"name": "Pantalon Chino Hombre", "description": "Pantalon chino de algodon slim fit", "price": 39990.0, "image": "https://picsum.photos/seed/zara-chino/400/500"},
+                {"name": "Poleron Cremallera Hombre", "description": "Poleron con cremallera completa y capucha", "price": 34990.0, "image": "https://picsum.photos/seed/zara-poleron-h/400/500"},
+                {"name": "Jeans Skinny Hombre", "description": "Jeans skinny elastizado oscuro", "price": 42990.0, "image": "https://picsum.photos/seed/zara-jeans-h/400/500"},
+                {"name": "Polera Basica Hombre", "description": "Polera basica de algodon peinado", "price": 13990.0, "image": "https://picsum.photos/seed/zara-polera-h/400/500"},
+                {"name": "Chaqueta Bomber Hombre", "description": "Chaqueta estilo bomber con cierre", "price": 59990.0, "image": "https://picsum.photos/seed/zara-bomber/400/500"},
+                {"name": "Short Deportivo Hombre", "description": "Short deportivo con bolsillos laterales", "price": 19990.0, "image": "https://picsum.photos/seed/zara-short-h/400/500"},
+                {"name": "Blazer Slim Hombre", "description": "Blazer slim fit en tejido mezcla", "price": 69990.0, "image": "https://picsum.photos/seed/zara-blazer-h/400/500"},
+                {"name": "Parka Invierno Hombre", "description": "Parka impermeable con capucha desmontable", "price": 89990.0, "image": "https://picsum.photos/seed/zara-parka/400/500"},
+            ],
+            "zapatos": [
+                {"name": "Zapatillas Casual Zara", "description": "Zapatillas casual con suela cushlon", "price": 49990.0, "image": "https://picsum.photos/seed/zara-zapa/400/500"},
+                {"name": "Botines Cuero Zara", "description": "Botines de cuero con taco block", "price": 69990.0, "image": "https://picsum.photos/seed/zara-botin/400/500"},
+                {"name": "Zapatos Oxford Zara", "description": "Zapatos oxford de cuero con suela", "price": 59990.0, "image": "https://picsum.photos/seed/zara-oxford/400/500"},
+                {"name": "Sandalias Playa Zara", "description": "Sandalias de playa con suela goma", "price": 15990.0, "image": "https://picsum.photos/seed/zara-sandalias/400/500"},
+            ],
+            "bolsos": [
+                {"name": "Mochila Urbana Zara", "description": "Mochila urbana impermeable 25L", "price": 34990.0, "image": "https://picsum.photos/seed/zara-mochila/400/500"},
+                {"name": "Bolso Tote Zara", "description": "Bolso tote de cuero sintetico grande", "price": 45990.0, "image": "https://picsum.photos/seed/zara-tote/400/500"},
+                {"name": "Cartera Bandolera Zara", "description": "Cartera bandolera ajustable pequena", "price": 29990.0, "image": "https://picsum.photos/seed/zara-bandolera/400/500"},
+            ],
+        }
+        products = mock_by_category.get(category, [
+            {"name": "Producto Zara", "description": "Producto de temporada Zara", "price": 29990.0, "image": "https://picsum.photos/seed/zara-generic/400/500"},
+        ])
         return [
             ProductDTO(
-                external_id=p["external_id"],
+                external_id=f"ZAR-{category[:3].upper()}-{i+1:03d}",
                 store=self.store_name,
                 name=p["name"],
                 description=p["description"],
                 price=p["price"],
                 currency="CLP",
-                original_url=f"{self.base_url}/product/{p['external_id']}",
+                original_url=f"{self.base_url}/{category}/product/{i+1}",
                 image_urls=[p["image"]],
                 category=category,
                 sizes=["XS", "S", "M", "L", "XL"],
-                colors=["Beige", "Negro", "Blanco"],
+                colors=["Beige", "Negro", "Blanco", "Gris"],
                 availability=True,
             )
-            for p in mock_products[:max_items]
+            for i, p in enumerate(products[:max_items])
         ]
