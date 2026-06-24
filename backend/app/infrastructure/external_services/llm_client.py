@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-import google.generativeai as genai
+from google import genai
 
 from app.domain.models.product import Product
 from app.domain.models.user import User
@@ -12,13 +12,15 @@ class LLMClient:
     def __init__(self):
         self._available = bool(settings.GOOGLE_API_KEY)
         if self._available:
-            genai.configure(api_key=settings.GOOGLE_API_KEY)
-            self._model = genai.GenerativeModel("gemini-2.0-flash")
+            self._client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+            self._model = "gemini-2.0-flash"
 
     def _call_llm(self, prompt: str) -> str:
         if not self._available:
             return ""
-        response = self._model.generate_content(prompt)
+        response = self._client.models.generate_content(
+            model=self._model, contents=prompt
+        )
         return response.text.strip()
 
     async def _call_llm_async(self, prompt: str) -> str:
