@@ -90,14 +90,14 @@ function Profile() {
 
   const tryOnHistory = JSON.parse(localStorage.getItem("tryOnHistory") || "[]");
 
-  if (!isAuthenticated) {
+  /*if (!isAuthenticated) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-20 text-center">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Inicia Sesión</h1>
         <p className="text-gray-500">Necesitas iniciar sesión para ver tu perfil.</p>
       </div>
     );
-  }
+  }*/
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
