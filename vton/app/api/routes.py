@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from app.services.local_storage import LocalStorage
 from app.services.try_on_service import TryOnService
 
 logger = logging.getLogger(__name__)
@@ -11,56 +12,54 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/try-on", tags=["try-on"])
 
 try_on_service = TryOnService()
+storage = LocalStorage()
 
 
-class StatusResponse(BaseModel):
-    job_id: str
-    status: str
-    progress: int | None = None
-    result_url: str | None = None
-    error: str | None = None
-
-
-class ResultResponse(BaseModel):
-    job_id: str
-    result_url: str
+class TryOnRequest(BaseModel):
+    user_image_url: str
+    product_image_url: str
+    user_id: str = ""
 
 
 @router.post("")
 async def create_try_on(
-    user_image: UploadFile = File(...),
-    product_id: str = Form(...),
-    user_id: str = Form(...),
+    body: TryOnRequest | None = None,
+    user_image: UploadFile | None = File(None),
+    product_image_url: str | None = Form(None),
+    user_id: str | None = Form(None),
 ) -> dict[str, Any]:
-    image_bytes = await user_image.read()
-    product_image_url = f"s3://ft-lineone-vton/products/{product_id}.png"
-    job = await try_on_service.process_try_on(image_bytes, product_image_url)
+    if body:
+        u_url = body.user_image_url
+        p_url = body.product_image_url
+        uid = body.user_id
+    elif user_image and product_image_url:
+        image_bytes = await user_image.read()
+        filename = storage.save_image(image_bytes)
+        u_url = storage.get_url(filename)
+        p_url = product_image_url
+        uid = user_id or ""
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide JSON body (user_image_url, product_image_url) or multipart (user_image file, product_image_url)",
+        )
+    job = await try_on_service.process_try_on(u_url, p_url)
     return job
 
 
-@router.get("/{job_id}/status", response_model=StatusResponse)
-async def get_job_status(job_id: str) -> StatusResponse:
+@router.get("/{job_id}/status")
+async def get_job_status(job_id: str) -> dict:
     status = try_on_service.get_job_status(job_id)
     if status["status"] == "not_found":
         raise HTTPException(status_code=404, detail="Job not found")
-    return StatusResponse(**status)
+    return status
 
 
-@router.get("/{job_id}/result", response_model=ResultResponse)
-async def get_job_result(job_id: str) -> ResultResponse:
+@router.get("/{job_id}/result")
+async def get_job_result(job_id: str) -> dict:
     status = try_on_service.get_job_status(job_id)
     if status["status"] == "not_found":
         raise HTTPException(status_code=404, detail="Job not found")
     if status["status"] != "completed":
         raise HTTPException(status_code=400, detail=f"Job is {status['status']}")
-    return ResultResponse(job_id=job_id, result_url=status["result_url"])
-
-
-@router.post("/{job_id}/retry")
-async def retry_job(job_id: str) -> dict[str, Any]:
-    status = try_on_service.get_job_status(job_id)
-    if status["status"] == "not_found":
-        raise HTTPException(status_code=404, detail="Job not found")
-    if status["status"] != "failed":
-        raise HTTPException(status_code=400, detail="Only failed jobs can be retried")
-    return {"job_id": job_id, "detail": "Retry not yet implemented"}
+    return {"job_id": job_id, "result_url": status["result_url"]}

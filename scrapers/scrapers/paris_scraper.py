@@ -112,58 +112,13 @@ class ParisScraper(BaseScraper):
         )
         return dto
 
+    MOCK_DATA = [
+        {"external_id": "PAR-001", "name": "Chamarra Paris Cuero", "description": "Chamarra cuero genuino", "price": 89990.0, "image": "https://paris.cl/img/chamarra1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Café", "Beige"]},
+        {"external_id": "PAR-002", "name": "Blusa Seda Mujer", "description": "Blusa manga larga seda", "price": 34990.0, "image": "https://paris.cl/img/blusa1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Café", "Beige"]},
+        {"external_id": "PAR-003", "name": "Buzo Oversize Hombre", "description": "Buzo capucha polar", "price": 22990.0, "image": "https://paris.cl/img/buzo1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Café", "Beige"]},
+        {"external_id": "PAR-004", "name": "Falda Plisada Mujer", "description": "Falda plisada midi", "price": 19990.0, "image": "https://paris.cl/img/falda1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Café", "Beige"]},
+        {"external_id": "PAR-005", "name": "Calcetines Deportivos Pack", "description": "Pack 6 pares calcetines", "price": 9990.0, "image": "https://paris.cl/img/calcetines1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Café", "Beige"]},
+    ]
+
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
-        mock_products = [
-            {
-                "external_id": "PAR-001",
-                "name": "Chamarra Paris Cuero",
-                "description": "Chamarra cuero genuino",
-                "price": 89990.0,
-                "image": "https://paris.cl/img/chamarra1.jpg",
-            },
-            {
-                "external_id": "PAR-002",
-                "name": "Blusa Seda Mujer",
-                "description": "Blusa manga larga seda",
-                "price": 34990.0,
-                "image": "https://paris.cl/img/blusa1.jpg",
-            },
-            {
-                "external_id": "PAR-003",
-                "name": "Buzo Oversize Hombre",
-                "description": "Buzo capucha polar",
-                "price": 22990.0,
-                "image": "https://paris.cl/img/buzo1.jpg",
-            },
-            {
-                "external_id": "PAR-004",
-                "name": "Falda Plisada Mujer",
-                "description": "Falda plisada midi",
-                "price": 19990.0,
-                "image": "https://paris.cl/img/falda1.jpg",
-            },
-            {
-                "external_id": "PAR-005",
-                "name": "Calcetines Deportivos Pack",
-                "description": "Pack 6 pares calcetines",
-                "price": 9990.0,
-                "image": "https://paris.cl/img/calcetines1.jpg",
-            },
-        ]
-        return [
-            ProductDTO(
-                external_id=p["external_id"],
-                store=self.store_name,
-                name=p["name"],
-                description=p["description"],
-                price=p["price"],
-                currency="CLP",
-                original_url=f"{self.base_url}/product/{p['external_id']}",
-                image_urls=[p["image"]],
-                category=category,
-                sizes=["S", "M", "L", "XL"],
-                colors=["Negro", "Café", "Beige"],
-                availability=True,
-            )
-            for p in mock_products[:max_items]
-        ]
+        return self._build_mock_products(self.MOCK_DATA, category, max_items)

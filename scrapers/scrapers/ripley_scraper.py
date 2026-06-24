@@ -110,58 +110,13 @@ class RipleyScraper(BaseScraper):
         )
         return dto
 
+    MOCK_DATA = [
+        {"external_id": "RIP-001", "name": "Polera Ripley Basic", "description": "Polera algodón peinado", "price": 12990.0, "image": "https://ripley.cl/img/polera1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Gris", "Azul Marino"]},
+        {"external_id": "RIP-002", "name": "Pantalón Cargo Hombre", "description": "Pantalón cargo holgado", "price": 29990.0, "image": "https://ripley.cl/img/cargo1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Gris", "Azul Marino"]},
+        {"external_id": "RIP-003", "name": "Parka Invierno Mujer", "description": "Parka acolchada con capucha", "price": 69990.0, "image": "https://ripley.cl/img/parka1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Gris", "Azul Marino"]},
+        {"external_id": "RIP-004", "name": "Zapatos Casual Cuero", "description": "Zapatos vestir cuero", "price": 45990.0, "image": "https://ripley.cl/img/zapato1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Gris", "Azul Marino"]},
+        {"external_id": "RIP-005", "name": "Short Deportivo Mujer", "description": "Short running licra", "price": 18990.0, "image": "https://ripley.cl/img/short1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Gris", "Azul Marino"]},
+    ]
+
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
-        mock_products = [
-            {
-                "external_id": "RIP-001",
-                "name": "Polera Ripley Basic",
-                "description": "Polera algodón peinado",
-                "price": 12990.0,
-                "image": "https://ripley.cl/img/polera1.jpg",
-            },
-            {
-                "external_id": "RIP-002",
-                "name": "Pantalón Cargo Hombre",
-                "description": "Pantalón cargo holgado",
-                "price": 29990.0,
-                "image": "https://ripley.cl/img/cargo1.jpg",
-            },
-            {
-                "external_id": "RIP-003",
-                "name": "Parka Invierno Mujer",
-                "description": "Parka acolchada con capucha",
-                "price": 69990.0,
-                "image": "https://ripley.cl/img/parka1.jpg",
-            },
-            {
-                "external_id": "RIP-004",
-                "name": "Zapatos Casual Cuero",
-                "description": "Zapatos vestir cuero",
-                "price": 45990.0,
-                "image": "https://ripley.cl/img/zapato1.jpg",
-            },
-            {
-                "external_id": "RIP-005",
-                "name": "Short Deportivo Mujer",
-                "description": "Short running licra",
-                "price": 18990.0,
-                "image": "https://ripley.cl/img/short1.jpg",
-            },
-        ]
-        return [
-            ProductDTO(
-                external_id=p["external_id"],
-                store=self.store_name,
-                name=p["name"],
-                description=p["description"],
-                price=p["price"],
-                currency="CLP",
-                original_url=f"{self.base_url}/product/{p['external_id']}",
-                image_urls=[p["image"]],
-                category=category,
-                sizes=["S", "M", "L", "XL"],
-                colors=["Negro", "Gris", "Azul Marino"],
-                availability=True,
-            )
-            for p in mock_products[:max_items]
-        ]
+        return self._build_mock_products(self.MOCK_DATA, category, max_items)

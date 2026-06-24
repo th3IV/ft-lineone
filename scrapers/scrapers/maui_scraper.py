@@ -115,58 +115,13 @@ class MauiScraper(BaseScraper):
         )
         return dto
 
+    MOCK_DATA = [
+        {"external_id": "MAU-001", "name": "Lentes Sol Aviador", "description": "Lentes polarizados clásicos", "price": 45990.0, "image": "https://maui.cl/img/lentes1.jpg", "sizes": ["Único"], "colors": ["Negro", "Grafito"]},
+        {"external_id": "MAU-002", "name": "Mochila Urbana 30L", "description": "Mochila impermeable", "price": 34990.0, "image": "https://maui.cl/img/mochila1.jpg", "sizes": ["Único"], "colors": ["Negro", "Grafito"]},
+        {"external_id": "MAU-003", "name": "Reloj Deportivo Digital", "description": "Reloj cronógrafo resistente", "price": 25990.0, "image": "https://maui.cl/img/reloj1.jpg", "sizes": ["Único"], "colors": ["Negro", "Grafito"]},
+        {"external_id": "MAU-004", "name": "Cinturón Cuero Hombre", "description": "Cinturón cuero 3cm", "price": 15990.0, "image": "https://maui.cl/img/cinturon1.jpg", "sizes": ["Único"], "colors": ["Negro", "Grafito"]},
+        {"external_id": "MAU-005", "name": "Gorra Trucker", "description": "Gorra malla ajustable", "price": 9990.0, "image": "https://maui.cl/img/gorra1.jpg", "sizes": ["Único"], "colors": ["Negro", "Grafito"]},
+    ]
+
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
-        mock_products = [
-            {
-                "external_id": "MAU-001",
-                "name": "Lentes Sol Aviador",
-                "description": "Lentes polarizados clásicos",
-                "price": 45990.0,
-                "image": "https://maui.cl/img/lentes1.jpg",
-            },
-            {
-                "external_id": "MAU-002",
-                "name": "Mochila Urbana 30L",
-                "description": "Mochila impermeable",
-                "price": 34990.0,
-                "image": "https://maui.cl/img/mochila1.jpg",
-            },
-            {
-                "external_id": "MAU-003",
-                "name": "Reloj Deportivo Digital",
-                "description": "Reloj cronógrafo resistente",
-                "price": 25990.0,
-                "image": "https://maui.cl/img/reloj1.jpg",
-            },
-            {
-                "external_id": "MAU-004",
-                "name": "Cinturón Cuero Hombre",
-                "description": "Cinturón cuero 3cm",
-                "price": 15990.0,
-                "image": "https://maui.cl/img/cinturon1.jpg",
-            },
-            {
-                "external_id": "MAU-005",
-                "name": "Gorra Trucker",
-                "description": "Gorra malla ajustable",
-                "price": 9990.0,
-                "image": "https://maui.cl/img/gorra1.jpg",
-            },
-        ]
-        return [
-            ProductDTO(
-                external_id=p["external_id"],
-                store=self.store_name,
-                name=p["name"],
-                description=p["description"],
-                price=p["price"],
-                currency="CLP",
-                original_url=f"{self.base_url}/product/{p['external_id']}",
-                image_urls=[p["image"]],
-                category=category,
-                sizes=["Único"],
-                colors=["Negro", "Grafito"],
-                availability=True,
-            )
-            for p in mock_products[:max_items]
-        ]
+        return self._build_mock_products(self.MOCK_DATA, category, max_items)

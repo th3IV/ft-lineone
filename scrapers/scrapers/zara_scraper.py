@@ -115,58 +115,13 @@ class ZaraScraper(BaseScraper):
         )
         return dto
 
+    MOCK_DATA = [
+        {"external_id": "ZAR-001", "name": "Blazer Oversize Mujer", "description": "Blazer corte oversize", "price": 79990.0, "image": "https://zara.com/img/blazer1.jpg", "sizes": ["XS", "S", "M", "L", "XL"], "colors": ["Beige", "Negro", "Blanco"]},
+        {"external_id": "ZAR-002", "name": "Camisa Lino Hombre", "description": "Camisa manga larga lino", "price": 45990.0, "image": "https://zara.com/img/camisa1.jpg", "sizes": ["XS", "S", "M", "L", "XL"], "colors": ["Beige", "Negro", "Blanco"]},
+        {"external_id": "ZAR-003", "name": "Vestido Noche Corto", "description": "Vestido corto brillos", "price": 69990.0, "image": "https://zara.com/img/vestido1.jpg", "sizes": ["XS", "S", "M", "L", "XL"], "colors": ["Beige", "Negro", "Blanco"]},
+        {"external_id": "ZAR-004", "name": "Jeans Rectos Mujer", "description": "Jeans tiro alto recto", "price": 39990.0, "image": "https://zara.com/img/jeans2.jpg", "sizes": ["XS", "S", "M", "L", "XL"], "colors": ["Beige", "Negro", "Blanco"]},
+        {"external_id": "ZAR-005", "name": "Chaleco Acolchado", "description": "Chaleco acolchado reversible", "price": 54990.0, "image": "https://zara.com/img/chaleco1.jpg", "sizes": ["XS", "S", "M", "L", "XL"], "colors": ["Beige", "Negro", "Blanco"]},
+    ]
+
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
-        mock_products = [
-            {
-                "external_id": "ZAR-001",
-                "name": "Blazer Oversize Mujer",
-                "description": "Blazer corte oversize",
-                "price": 79990.0,
-                "image": "https://zara.com/img/blazer1.jpg",
-            },
-            {
-                "external_id": "ZAR-002",
-                "name": "Camisa Lino Hombre",
-                "description": "Camisa manga larga lino",
-                "price": 45990.0,
-                "image": "https://zara.com/img/camisa1.jpg",
-            },
-            {
-                "external_id": "ZAR-003",
-                "name": "Vestido Noche Corto",
-                "description": "Vestido corto brillos",
-                "price": 69990.0,
-                "image": "https://zara.com/img/vestido1.jpg",
-            },
-            {
-                "external_id": "ZAR-004",
-                "name": "Jeans Rectos Mujer",
-                "description": "Jeans tiro alto recto",
-                "price": 39990.0,
-                "image": "https://zara.com/img/jeans2.jpg",
-            },
-            {
-                "external_id": "ZAR-005",
-                "name": "Chaleco Acolchado",
-                "description": "Chaleco acolchado reversible",
-                "price": 54990.0,
-                "image": "https://zara.com/img/chaleco1.jpg",
-            },
-        ]
-        return [
-            ProductDTO(
-                external_id=p["external_id"],
-                store=self.store_name,
-                name=p["name"],
-                description=p["description"],
-                price=p["price"],
-                currency="CLP",
-                original_url=f"{self.base_url}/product/{p['external_id']}",
-                image_urls=[p["image"]],
-                category=category,
-                sizes=["XS", "S", "M", "L", "XL"],
-                colors=["Beige", "Negro", "Blanco"],
-                availability=True,
-            )
-            for p in mock_products[:max_items]
-        ]
+        return self._build_mock_products(self.MOCK_DATA, category, max_items)

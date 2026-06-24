@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 
 from app.application.services.product_service import ProductService
 from app.domain.models.product import Product
-from app.domain.models.price_history import PriceHistory
 
 router = APIRouter(prefix="/scrapers", tags=["scrapers"])
 
@@ -28,7 +27,6 @@ async def ingest_product(payload: dict):
             colors=payload.get("colors", []),
         )
         saved = await svc.upsert_product(product)
-        await svc.record_price(product)
         return {"success": True, "product_id": saved.id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

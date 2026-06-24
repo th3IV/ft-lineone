@@ -3,9 +3,8 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.domain.models.product import Product
-from app.infrastructure.persistence.postgres.models import Base, ProductModel
+from app.infrastructure.persistence.postgres.models import ProductModel
 
 
 class ProductRepository:
@@ -15,16 +14,9 @@ class ProductRepository:
     async def _get_session(self) -> AsyncSession:
         if self._session:
             return self._session
-        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-        url = settings.DATABASE_URL
-        if "postgresql" in url:
-            url = url.replace("psycopg2", "asyncpg")
-        engine = create_async_engine(url)
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        session_maker = async_sessionmaker(engine, expire_on_commit=False)
-        return session_maker()
+        from app.infrastructure.persistence.postgres.session import get_session
+        session = await get_session()
+        return session
 
     async def create(self, product: Product) -> Product:
         session = await self._get_session()
@@ -46,6 +38,26 @@ class ProductRepository:
         await session.commit()
         await session.refresh(model)
         return self._to_domain(model)
+
+    async def upsert(self, product: Product) -> Product:
+        existing = await self.find_by_external_id_and_store(
+            product.store, product.external_id
+        )
+        if existing:
+            product.id = existing.id
+            return await self.update(product)
+        return await self.create(product)
+
+    async def find_by_external_id_and_store(self, store: str, external_id: str) -> Product | None:
+        session = await self._get_session()
+        result = await session.execute(
+            select(ProductModel).where(
+                ProductModel.store == store,
+                ProductModel.external_id == external_id,
+            )
+        )
+        model = result.scalar_one_or_none()
+        return self._to_domain(model) if model else None
 
     async def find_by_id(self, product_id: str) -> Product | None:
         session = await self._get_session()

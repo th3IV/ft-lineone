@@ -3,13 +3,14 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./ft_lineone.db"
-    MONGODB_URL: str = "mongodb://localhost:27017/ft_lineone"
-    AWS_ACCESS_KEY: str = ""
-    AWS_SECRET_KEY: str = ""
-    S3_BUCKET: str = "ft-lineone-assets"
     JWT_SECRET: str = "change-me-in-production"
     JWT_ALGORITHM: str = "HS256"
-    OPENAI_API_KEY: str = ""
+    GOOGLE_API_KEY: str = ""
+    SCRAPER_API_URL: str = "http://localhost:8001"
+    VTON_API_URL: str = "http://localhost:8002"
+    REPLICATE_API_TOKEN: str = ""
+    REPLICATE_MODEL: str = "cuuupid/idm-vton"
+    REACT_APP_API_URL: str = "http://localhost:8000/api/v1"
 
     @property
     def is_sqlite(self) -> bool:

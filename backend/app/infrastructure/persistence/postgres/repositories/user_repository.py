@@ -3,9 +3,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.domain.models.user import User
-from app.infrastructure.persistence.postgres.models import Base, UserModel
+from app.infrastructure.persistence.postgres.models import UserModel
 
 
 class UserRepository:
@@ -15,16 +14,8 @@ class UserRepository:
     async def _get_session(self) -> AsyncSession:
         if self._session:
             return self._session
-        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-        url = settings.DATABASE_URL
-        if "postgresql" in url:
-            url = url.replace("psycopg2", "asyncpg")
-        engine = create_async_engine(url)
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        session_maker = async_sessionmaker(engine, expire_on_commit=False)
-        return session_maker()
+        from app.infrastructure.persistence.postgres.session import get_session
+        return await get_session()
 
     async def create(self, user: User) -> User:
         session = await self._get_session()

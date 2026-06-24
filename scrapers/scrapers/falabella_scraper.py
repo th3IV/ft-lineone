@@ -109,58 +109,13 @@ class FalabellaScraper(BaseScraper):
         )
         return dto
 
+    MOCK_DATA = [
+        {"external_id": "FAL-001", "name": "Zapatillas Deportivas Falabella", "description": "Zapatillas running confort", "price": 39990.0, "image": "https://falabella.com/img/shoe1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Blanco", "Azul"]},
+        {"external_id": "FAL-002", "name": "Chaqueta Impermeable Hombre", "description": "Chaqueta cortavientos", "price": 59990.0, "image": "https://falabella.com/img/jacket1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Blanco", "Azul"]},
+        {"external_id": "FAL-003", "name": "Jeans Slim Fit Mujer", "description": "Jeans elastizados", "price": 24990.0, "image": "https://falabella.com/img/jeans1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Blanco", "Azul"]},
+        {"external_id": "FAL-004", "name": "Polera Algodón Premium", "description": "Polera cuello redondo", "price": 14990.0, "image": "https://falabella.com/img/tshirt1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Blanco", "Azul"]},
+        {"external_id": "FAL-005", "name": "Vestido Estampado Floral", "description": "Vestido largo floreado", "price": 34990.0, "image": "https://falabella.com/img/dress1.jpg", "sizes": ["S", "M", "L", "XL"], "colors": ["Negro", "Blanco", "Azul"]},
+    ]
+
     def _generate_mock_data(self, category: str, max_items: int) -> List[ProductDTO]:
-        mock_products = [
-            {
-                "external_id": "FAL-001",
-                "name": "Zapatillas Deportivas Falabella",
-                "description": "Zapatillas running confort",
-                "price": 39990.0,
-                "image": "https://falabella.com/img/shoe1.jpg",
-            },
-            {
-                "external_id": "FAL-002",
-                "name": "Chaqueta Impermeable Hombre",
-                "description": "Chaqueta cortavientos",
-                "price": 59990.0,
-                "image": "https://falabella.com/img/jacket1.jpg",
-            },
-            {
-                "external_id": "FAL-003",
-                "name": "Jeans Slim Fit Mujer",
-                "description": "Jeans elastizados",
-                "price": 24990.0,
-                "image": "https://falabella.com/img/jeans1.jpg",
-            },
-            {
-                "external_id": "FAL-004",
-                "name": "Polera Algodón Premium",
-                "description": "Polera cuello redondo",
-                "price": 14990.0,
-                "image": "https://falabella.com/img/tshirt1.jpg",
-            },
-            {
-                "external_id": "FAL-005",
-                "name": "Vestido Estampado Floral",
-                "description": "Vestido largo floreado",
-                "price": 34990.0,
-                "image": "https://falabella.com/img/dress1.jpg",
-            },
-        ]
-        return [
-            ProductDTO(
-                external_id=p["external_id"],
-                store=self.store_name,
-                name=p["name"],
-                description=p["description"],
-                price=p["price"],
-                currency="CLP",
-                original_url=f"{self.base_url}/product/{p['external_id']}",
-                image_urls=[p["image"]],
-                category=category,
-                sizes=["S", "M", "L", "XL"],
-                colors=["Negro", "Blanco", "Azul"],
-                availability=True,
-            )
-            for p in mock_products[:max_items]
-        ]
+        return self._build_mock_products(self.MOCK_DATA, category, max_items)

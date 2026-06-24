@@ -19,3 +19,6 @@ class ProductService:
 
     async def get_by_store(self, store: str, page: int = 1, per_page: int = 20) -> tuple[list[Product], int]:
         return await self._product_repo.find_by_store(store=store, page=page, per_page=per_page)
+
+    async def upsert_product(self, product: Product) -> Product:
+        return await self._product_repo.upsert(product)

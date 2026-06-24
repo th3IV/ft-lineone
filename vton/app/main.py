@@ -1,7 +1,9 @@
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router as try_on_router
 
@@ -12,7 +14,7 @@ logging.basicConfig(
 
 app = FastAPI(
     title="FT LineOne VTON Service",
-    description="Virtual Try-On microservice using diffusion models",
+    description="Virtual Try-On microservice",
     version="1.0.0",
 )
 
@@ -23,5 +25,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+uploads_dir.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 app.include_router(try_on_router)

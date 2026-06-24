@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import uvicorn
@@ -100,7 +101,7 @@ async def scrape(req: ScrapeRequest):
     scraper_cls = SCRAPER_REGISTRY[store]
     scraper = scraper_cls()
     try:
-        products = scraper.scrape(category=req.category, max_items=req.max_items)
+        products = await asyncio.to_thread(scraper.scrape, req.category, req.max_items)
         return {
             "success": True,
             "store": store,
@@ -118,7 +119,7 @@ async def scrape_and_save(req: ScrapeRequest):
     if store not in SCRAPER_REGISTRY:
         raise HTTPException(status_code=400, detail=f"Unknown store: {store}. Available: {list(SCRAPER_REGISTRY.keys())}")
     try:
-        result = scrape_store_sync(store, req.category, req.max_items)
+        result = await asyncio.to_thread(scrape_store_sync, store, req.category, req.max_items)
         return {"success": True, **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
