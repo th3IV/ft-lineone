@@ -1,18 +1,17 @@
-import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from app.services.replicate_client import ReplicateClient
-from app.services.s3_connector import S3Connector
+from app.services.local_storage import LocalStorage
 
 logger = logging.getLogger(__name__)
 
 
 class TryOnService:
-    def __init__(self, s3_connector: S3Connector, replicate_client: ReplicateClient):
-        self.s3 = s3_connector
+    def __init__(self, storage: LocalStorage, replicate_client: ReplicateClient):
+        self.storage = storage
         self.replicate = replicate_client
         self._jobs: dict[str, dict[str, Any]] = {}
 
@@ -31,18 +30,16 @@ class TryOnService:
 
         try:
             self._jobs[job_id]["progress"] = 10
-            
-            # 1. Upload user image to R2 to get a public URL for Replicate
+
+            # 1. Save user image locally to get a URL for Replicate
             user_key = f"vton/users/{job_id}_user.png"
-            user_url = await asyncio.to_thread(self.s3.upload_image, user_image_bytes, user_key)
-            
+            user_url = self.storage.save_image(user_image_bytes, user_key)
+
             self._jobs[job_id]["progress"] = 30
-            
+
             # 2. Call Replicate API
-            result_url = await asyncio.to_thread(
-                self.replicate.generate_try_on, user_url, product_image_url
-            )
-            
+            result_url = self.replicate.generate_try_on(user_url, product_image_url)
+
             self._jobs[job_id].update(
                 {
                     "status": "completed",

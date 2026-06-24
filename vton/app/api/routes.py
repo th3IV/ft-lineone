@@ -1,26 +1,20 @@
 import logging
-import os
 from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from app.services.replicate_client import ReplicateClient
-from app.services.s3_connector import S3Connector
+from app.services.local_storage import LocalStorage
 from app.services.try_on_service import TryOnService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/try-on", tags=["try-on"])
 
-s3 = S3Connector(
-    r2_access_key=os.getenv("R2_ACCESS_KEY_ID", ""),
-    r2_secret_key=os.getenv("R2_SECRET_ACCESS_KEY", ""),
-    r2_account_id=os.getenv("R2_ACCOUNT_ID", ""),
-    bucket=os.getenv("R2_BUCKET", "ft-lineone-vton"),
-)
+storage = LocalStorage()
 replicate_client = ReplicateClient()
-try_on_service = TryOnService(s3_connector=s3, replicate_client=replicate_client)
+try_on_service = TryOnService(storage=storage, replicate_client=replicate_client)
 
 
 class StatusResponse(BaseModel):
@@ -39,13 +33,11 @@ class ResultResponse(BaseModel):
 @router.post("")
 async def create_try_on(
     user_image: UploadFile = File(...),
+    product_image_url: str = Form(...),
     product_id: str = Form(...),
     user_id: str = Form(...),
 ) -> dict[str, Any]:
     image_bytes = await user_image.read()
-    public_url = os.getenv("R2_PUBLIC_URL", "").rstrip("/")
-    bucket = os.getenv("R2_BUCKET", "ft-lineone-vton")
-    product_image_url = f"{public_url}/{bucket}/products/{product_id}.png"
     job = await try_on_service.process_try_on(image_bytes, product_image_url)
     return job
 
