@@ -16,7 +16,11 @@ class TryOnService:
         self._jobs: dict[str, dict[str, Any]] = {}
 
     async def process_try_on(
-        self, user_image_bytes: bytes, product_image_url: str, job_id: str | None = None
+        self,
+        product_image_url: str,
+        user_image_bytes: bytes | None = None,
+        user_image_url: str = "",
+        job_id: str | None = None,
     ) -> dict:
         job_id = job_id or str(uuid.uuid4())
         self._jobs[job_id] = {
@@ -31,13 +35,16 @@ class TryOnService:
         try:
             self._jobs[job_id]["progress"] = 10
 
-            # 1. Save user image locally to get a URL for Replicate
-            user_key = f"vton/users/{job_id}_user.png"
-            user_url = self.storage.save_image(user_image_bytes, user_key)
+            if user_image_url:
+                user_url = user_image_url
+            elif user_image_bytes:
+                user_key = f"vton/users/{job_id}_user.png"
+                user_url = self.storage.save_image(user_image_bytes, user_key)
+            else:
+                raise ValueError("No user image provided")
 
             self._jobs[job_id]["progress"] = 30
 
-            # 2. Call Replicate API
             result_url = self.replicate.generate_try_on(user_url, product_image_url)
 
             self._jobs[job_id].update(

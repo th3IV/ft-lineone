@@ -3,8 +3,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./ft_lineone.db"
-    MONGODB_URL: str = "mongodb://localhost:27017/ft_lineone"
-    MONGODB_DB: str = "ft_lineone"
+    VTON_API_URL: str = "http://localhost:8001"
+    SCRAPER_API_URL: str = "http://localhost:8001"
     
     # Replicate (VTON)
     REPLICATE_API_TOKEN: str = ""

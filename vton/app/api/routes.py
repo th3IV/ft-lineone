@@ -30,15 +30,35 @@ class ResultResponse(BaseModel):
     result_url: str
 
 
+class TryOnRequest(BaseModel):
+    user_image_url: str
+    product_image_url: str
+    product_id: str = ""
+    user_id: str = ""
+
+
 @router.post("")
 async def create_try_on(
-    user_image: UploadFile = File(...),
-    product_image_url: str = Form(...),
-    product_id: str = Form(...),
-    user_id: str = Form(...),
+    payload: TryOnRequest | None = None,
+    user_image: UploadFile | None = File(None),
+    product_image_url: str = Form(""),
+    product_id: str = Form(""),
+    user_id: str = Form(""),
 ) -> dict[str, Any]:
-    image_bytes = await user_image.read()
-    job = await try_on_service.process_try_on(image_bytes, product_image_url)
+    if payload:
+        job = await try_on_service.process_try_on(
+            user_image_bytes=None,
+            product_image_url=payload.product_image_url,
+            user_image_url=payload.user_image_url,
+        )
+    elif user_image:
+        image_bytes = await user_image.read()
+        job = await try_on_service.process_try_on(
+            user_image_bytes=image_bytes,
+            product_image_url=product_image_url,
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Provide user_image (file) or JSON body with user_image_url")
     return job
 
 

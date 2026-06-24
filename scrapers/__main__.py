@@ -8,6 +8,7 @@ from scrapers.collectors.ripley_scraper import RipleyScraper
 from scrapers.collectors.paris_scraper import ParisScraper
 from scrapers.collectors.maui_scraper import MauiScraper
 from scrapers.collectors.zara_scraper import ZaraScraper
+from scrapers.pipeline.publisher import Publisher
 
 app = FastAPI(title="FT LineOne Scrapers", version="1.0.0")
 
@@ -54,6 +55,29 @@ async def scrape(req: ScrapeRequest):
             "category": req.category,
             "count": len(products),
             "products": [p.to_dict() for p in products],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/scrape-and-save")
+async def scrape_and_save(req: ScrapeRequest):
+    store = req.store.lower()
+    if store not in SCRAPER_REGISTRY:
+        raise HTTPException(status_code=400, detail=f"Unknown store: {store}. Available: {list(SCRAPER_REGISTRY.keys())}")
+    scraper_cls = SCRAPER_REGISTRY[store]
+    scraper = scraper_cls()
+    try:
+        products = scraper.scrape(category=req.category, max_items=req.max_items)
+        publisher = Publisher()
+        results = publisher.publish_batch(products)
+        publisher.close()
+        return {
+            "success": True,
+            "store": store,
+            "category": req.category,
+            "count": len(products),
+            "saved": results,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

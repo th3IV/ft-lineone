@@ -2,12 +2,13 @@ from uuid import uuid4
 
 import httpx
 
+from app.core.config import settings
 from app.domain.models.vton_result import VTONResult, VTONStatus
 
 
 class VTONClient:
-    def __init__(self, base_url: str = "http://vton:8001"):
-        self._base_url = base_url
+    def __init__(self, base_url: str = ""):
+        self._base_url = base_url or settings.VTON_API_URL or "http://localhost:8001"
 
     async def request_try_on(self, user_image_url: str, product_image_url: str) -> VTONResult:
         async with httpx.AsyncClient() as client:

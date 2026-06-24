@@ -21,11 +21,17 @@ async def get_current_user(authorization: str = Header("")) -> str:
 @router.post("/try-on")
 async def try_on(
     product_id: str = Form(...),
-    user_image: UploadFile = File(...),
     user_id: str = Depends(get_current_user),
+    user_image: UploadFile | None = File(None),
+    user_image_url: str = Form(""),
 ):
     svc = get_vton_service()
-    image_url = f"uploads/{user_id}/{user_image.filename}"
+    if user_image_url:
+        image_url = user_image_url
+    elif user_image:
+        image_url = f"uploads/{user_id}/{user_image.filename}"
+    else:
+        raise HTTPException(status_code=400, detail="Provide user_image (file) or user_image_url")
     try:
         result = await svc.request_try_on(user_id, product_id, image_url)
         return {
