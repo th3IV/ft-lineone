@@ -31,3 +31,8 @@ uploads_dir.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 app.include_router(try_on_router)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "ft-lineone-vton"}
