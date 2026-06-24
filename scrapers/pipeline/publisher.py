@@ -2,7 +2,7 @@ from typing import List
 
 import httpx
 
-from models.product_dto import ProductDTO
+from scrapers.models.product_dto import ProductDTO
 
 
 class Publisher:

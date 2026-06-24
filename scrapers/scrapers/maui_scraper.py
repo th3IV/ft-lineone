@@ -3,8 +3,8 @@ from typing import List
 import requests
 from bs4 import BeautifulSoup
 
-from scrapers.base_scraper import BaseScraper
-from models.product_dto import ProductDTO
+from scrapers.scrapers.base_scraper import BaseScraper
+from scrapers.models.product_dto import ProductDTO
 
 
 class MauiScraper(BaseScraper):
