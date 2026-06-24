@@ -1,0 +1,20 @@
+{
+  "main": {
+    "id": "a6b1c2d3e4f5",
+    "type": "split",
+    "children": [
+      {
+        "id": "explorer",
+        "type": "sidebar",
+        "icon": "folder-tree"
+      },
+      {
+        "id": "editor",
+        "type": "leaf",
+        "direction": "horizontal"
+      }
+    ],
+    "direction": "horizontal"
+  },
+  "active": "editor"
+}
