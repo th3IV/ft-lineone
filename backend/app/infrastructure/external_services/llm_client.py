@@ -8,9 +8,13 @@ from app.domain.models.user import User
 from app.core.config import settings
 
 
+def _is_valid_key(key: str) -> bool:
+    return bool(key) and "insert-your-" not in key
+
+
 class LLMClient:
     def __init__(self):
-        self._available = bool(settings.GOOGLE_API_KEY)
+        self._available = _is_valid_key(settings.GOOGLE_API_KEY)
         if self._available:
             self._client = genai.Client(api_key=settings.GOOGLE_API_KEY)
             self._model = "gemini-2.0-flash"

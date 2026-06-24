@@ -25,7 +25,7 @@ class ParisScraper(BaseScraper):
             for item in items[:max_items]:
                 try:
                     html = str(item)
-                    product = self.parse_product(html)
+                    product = self.parse_product(html, category=category)
                     products.append(product)
                 except Exception:
                     continue
@@ -34,7 +34,7 @@ class ParisScraper(BaseScraper):
 
         return products
 
-    def parse_product(self, html: str) -> ProductDTO:
+    def parse_product(self, html: str, category: str = "") -> ProductDTO:
         soup = BeautifulSoup(html, "lxml")
 
         try:

@@ -24,7 +24,7 @@ class BaseScraper(ABC):
         pass
 
     @abstractmethod
-    def parse_product(self, html: str) -> ProductDTO:
+    def parse_product(self, html: str, category: str = "") -> ProductDTO:
         pass
 
     def normalize_price(self, price_str: str) -> float:
