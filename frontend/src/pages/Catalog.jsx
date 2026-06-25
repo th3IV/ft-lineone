@@ -1,10 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useSearchParams } from "react-router-dom";
-import { fetchProducts, setFilters, clearFilters } from "../store/productSlice";
+import { fetchProducts, setFilters, setPage, clearFilters } from "../store/productSlice";
 import { openVtonModal } from "../store/uiSlice";
 import ProductGrid from "../components/ProductGrid";
 import SidebarFiltros from "../components/SidebarFiltros";
+
+const GENDER_CATEGORY_MAP = {
+  Mujer: ["mujer", "vestidos", "bolsos", "faldas"],
+  Hombre: ["hombre"],
+  Unisex: ["accesorios", "unisex"],
+  Niños: ["nino"],
+};
 
 function Catalog() {
   const dispatch = useDispatch();
@@ -16,18 +23,10 @@ function Catalog() {
 
   useEffect(() => {
     const params = {};
-    if (filters.store) params.store = filters.store;
-    if (filters.gender) params.gender = filters.gender;
-    if (filters.clothingType?.length) params.clothing_type = filters.clothingType.join(",");
-    if (filters.size) params.size = filters.size;
-    if (filters.color) params.color = filters.color;
-    if (filters.minPrice) params.min_price = filters.minPrice;
-    if (filters.maxPrice) params.max_price = filters.maxPrice;
-    if (filters.query) params.q = filters.query;
     params.page = pagination.page;
     params.limit = 20;
     dispatch(fetchProducts(params));
-  }, [dispatch, filters, pagination.page]);
+  }, [dispatch, pagination.page]);
 
   useEffect(() => {
     const storeParam = searchParams.get("store");
@@ -35,6 +34,49 @@ function Catalog() {
       dispatch(setFilters({ store: storeParam }));
     }
   }, [dispatch, searchParams]);
+
+  const filteredProducts = useMemo(() => {
+    let result = products;
+    if (filters.store) {
+      result = result.filter((p) => p.store?.toLowerCase() === filters.store.toLowerCase());
+    }
+    if (filters.size) {
+      result = result.filter((p) => p.sizes?.includes(filters.size));
+    }
+    if (filters.color) {
+      result = result.filter((p) => p.colors?.some((c) => c.toLowerCase() === filters.color.toLowerCase()));
+    }
+    if (filters.minPrice) {
+      result = result.filter((p) => p.price >= Number(filters.minPrice));
+    }
+    if (filters.maxPrice) {
+      result = result.filter((p) => p.price <= Number(filters.maxPrice));
+    }
+    if (filters.gender) {
+      const validCategories = GENDER_CATEGORY_MAP[filters.gender] || [];
+      if (validCategories.length > 0) {
+        result = result.filter((p) => validCategories.includes(p.category?.toLowerCase()));
+      }
+    }
+    if (filters.clothingType?.length > 0) {
+      const types = filters.clothingType.map((t) => t.toLowerCase());
+      result = result.filter((p) => types.includes(p.category?.toLowerCase()));
+    }
+    if (filters.query) {
+      const q = filters.query.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(q) ||
+          p.description?.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [products, filters]);
+
+  const totalFiltered = filteredProducts.length;
+  const totalPages = Math.ceil(totalFiltered / 20);
+  const startIdx = (pagination.page - 1) * 20;
+  const pagedProducts = filteredProducts.slice(startIdx, startIdx + 20);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -60,15 +102,13 @@ function Catalog() {
   };
 
   const handlePageChange = (page) => {
-    dispatch(setFilters({ page }));
+    dispatch(setPage(page));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleTryOn = (product) => {
     dispatch(openVtonModal(product));
   };
-
-  const totalPages = Math.ceil((pagination.total || 0) / 20);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -111,7 +151,7 @@ function Catalog() {
             </form>
           </div>
 
-          <ProductGrid products={products} loading={loading} onTryOn={handleTryOn} />
+          <ProductGrid products={pagedProducts} loading={loading} onTryOn={handleTryOn} />
 
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-2 mt-8">

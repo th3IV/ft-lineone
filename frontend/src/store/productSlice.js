@@ -49,7 +49,14 @@ const productSlice = createSlice({
   },
   reducers: {
     setFilters(state, action) {
-      state.filters = { ...state.filters, ...action.payload };
+      const { page, ...filterPayload } = action.payload;
+      state.filters = { ...state.filters, ...filterPayload };
+      if (page !== undefined) {
+        state.pagination.page = page;
+      }
+    },
+    setPage(state, action) {
+      state.pagination.page = action.payload;
     },
     clearFilters(state) {
       state.filters = {
@@ -110,5 +117,5 @@ const productSlice = createSlice({
   },
 });
 
-export const { setFilters, clearFilters, clearSelectedProduct } = productSlice.actions;
+export const { setFilters, setPage, clearFilters, clearSelectedProduct } = productSlice.actions;
 export default productSlice.reducer;

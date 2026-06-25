@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import toast from "react-hot-toast";
 import { fetchProducts } from "../store/productSlice";
 import { requestTryOn } from "../services/vton";
 import VirtualMirror from "../components/VirtualMirror";
@@ -37,8 +38,12 @@ function VirtualTryOn() {
   };
 
   const handleGenerate = async () => {
-    if (!userFile || !selectedProductId) return;
+    if (!userFile || !selectedProductId) {
+      toast.error("Selecciona un producto y sube una foto primero.");
+      return;
+    }
     setLoading(true);
+    const toastId = toast.loading("Generando try-on...");
     try {
       const formData = new FormData();
       formData.append("user_image", userFile);
@@ -55,8 +60,10 @@ function VirtualTryOn() {
       const updated = [entry, ...history].slice(0, 10);
       setHistory(updated);
       localStorage.setItem("tryOnHistory", JSON.stringify(updated));
+      toast.success("Try-on generado exitosamente!", { id: toastId });
     } catch (err) {
-      console.error("Try-On failed:", err);
+      const msg = err.response?.data?.detail || err.message || "Error al generar try-on";
+      toast.error(msg, { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -67,21 +74,28 @@ function VirtualTryOn() {
     setResultImage(entry.resultImage);
   };
 
+  const canGenerate = !!userFile && !!selectedProductId;
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Virtual Try-On</h1>
+      <div className="text-center mb-10">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-fashion-pink to-fashion-purple bg-clip-text text-transparent">
+          Virtual Try-On
+        </h1>
+        <p className="text-gray-500 mt-2">Sube tu foto y pruebate la prenda virtualmente</p>
+      </div>
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Select Product</label>
+      <div className="bg-white rounded-2xl card-shadow p-6 mb-6">
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Selecciona una prenda</label>
         <select
           value={selectedProductId}
           onChange={(e) => {
             setSelectedProductId(e.target.value);
             setResultImage(null);
           }}
-          className="w-full max-w-md border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500"
+          className="w-full max-w-md border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-fashion-pink focus:border-transparent bg-white"
         >
-          <option value="">Choose a product...</option>
+          <option value="">Elige un producto...</option>
           {products.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} - {p.store}
@@ -95,19 +109,20 @@ function VirtualTryOn() {
         productImage={selectedProduct?.image_url}
         resultImage={resultImage}
         loading={loading}
+        canGenerate={canGenerate}
         onUserImageUpload={handleUserImageUpload}
         onGenerate={handleGenerate}
       />
 
       {history.length > 0 && (
         <section className="mt-12">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Try-On History</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Historial de Try-On</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
             {history.map((entry) => (
               <button
                 key={entry.id}
                 onClick={() => loadFromHistory(entry)}
-                className="aspect-square rounded-lg overflow-hidden bg-gray-100 border-2 border-transparent hover:border-indigo-600 transition-colors"
+                className="aspect-square rounded-xl overflow-hidden bg-gray-100 border-2 border-transparent hover:border-fashion-pink transition-all hover:shadow-lg"
               >
                 <img
                   src={entry.resultImage}

@@ -6,6 +6,7 @@ import Catalog from "./pages/Catalog";
 import ProductDetail from "./pages/ProductDetail";
 import VirtualTryOn from "./pages/VirtualTryOn";
 import Profile from "./pages/Profile";
+import Register from "./pages/Register";
 import ChatFlotante from "./components/ChatFlotante";
 import ModalVTON from "./components/ModalVTON";
 import { closeVtonModal } from "./store/uiSlice";
@@ -25,7 +26,7 @@ function App() {
           <Route path="/virtual-try-on" element={<VirtualTryOn />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/login" element={<Home />} />
-          <Route path="/register" element={<Home />} />
+          <Route path="/register" element={<Register />} />
         </Routes>
       </main>
       <ChatFlotante />
