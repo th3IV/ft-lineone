@@ -21,6 +21,10 @@ dist/
 .env.local
 .env.production
 
+# Cloudflare Workers
+.wrangler/
+.dev.vars
+
 # Terraform
 .terraform/
 *.tfstate
@@ -41,11 +45,6 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# AWS
-.aws/
-credentials
-config
-
 # Docker
 *.log
 docker-compose.override.yml
@@ -54,6 +53,6 @@ docker-compose.override.yml
 .env
 .env.*.local
 
-# Scrapers
-scrapers/data/
-scrapers/__pycache__/
+# Legacy (removed)
+# scrapers/data/
+# scrapers/__pycache__/

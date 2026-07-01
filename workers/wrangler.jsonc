@@ -1,0 +1,38 @@
+{
+  "name": "ft-lineone-api",
+  "main": "src/entry.py",
+  "compatibility_date": "2024-10-01",
+  "compatibility_flags": ["python_workers"],
+
+  "observability": {
+    "enabled": true
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ft-lineone-db",
+      "database_id": "<replace-with-your-d1-database-id>"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "r2-thelineone01"
+    }
+  ],
+
+  "ai": {
+    "binding": "AI"
+  },
+
+  "vars": {
+    "JWT_ALGORITHM": "HS256",
+    "CORS_ORIGINS": "https://yourdomain.com"
+  },
+
+  "triggers": {
+    "crons": ["0 6 * * *"]
+  }
+}

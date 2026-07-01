@@ -1,6 +1,4 @@
 const tiendas = [
-  { nombre: "Falabella", clase: "bg-green-600" },
-  { nombre: "Ripley", clase: "bg-red-600" },
   { nombre: "Paris", clase: "bg-blue-600" },
   { nombre: "Maui", clase: "bg-teal-500" },
   { nombre: "Zara", clase: "bg-black" },

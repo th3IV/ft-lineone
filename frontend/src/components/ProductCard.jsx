@@ -1,8 +1,6 @@
 import { Link } from "react-router-dom";
 
 const storeColors = {
-  falabella: "bg-green-600",
-  ripley: "bg-red-600",
   paris: "bg-blue-600",
   maui: "bg-teal-500",
   zara: "bg-black",
