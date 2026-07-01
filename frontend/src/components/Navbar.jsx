@@ -55,7 +55,6 @@ function Navbar() {
           <div className="hidden md:flex items-center space-x-1">
             {[
               { to: "/catalog", label: "Catálogo" },
-              { to: "/virtual-try-on", label: "Virtual Try-On" },
             ].map(({ to, label }) => (
               <Link
                 key={to}
@@ -185,7 +184,6 @@ function Navbar() {
           <div className="px-4 pt-2 pb-4 space-y-1">
             {[
               { to: "/catalog", label: "Catálogo" },
-              { to: "/virtual-try-on", label: "Virtual Try-On" },
               { to: isAuthenticated ? "/profile" : "/login", label: isAuthenticated ? "Perfil" : "Ingresar" },
             ].map(({ to, label }) => (
               <Link

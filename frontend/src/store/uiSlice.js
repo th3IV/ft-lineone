@@ -22,6 +22,8 @@ const uiSlice = createSlice({
     },
     openVtonModal(state, action) {
       state.vtonModal = { isOpen: true, product: action.payload };
+      console.log("🛠️ Intentando abrir VTON. Producto recibido:", action.payload);
+
     },
     closeVtonModal(state) {
       state.vtonModal = { isOpen: false, product: null };

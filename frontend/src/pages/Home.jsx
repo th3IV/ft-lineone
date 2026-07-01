@@ -36,12 +36,6 @@ function Home() {
             <p className="text-xl sm:text-2xl text-white/80 mb-8">
               Try before you buy. Virtual fashion at your fingertips.
             </p>
-            <Link
-              to="/virtual-try-on"
-              className="inline-block bg-white text-fashion-pink px-8 py-3 rounded-full text-lg font-semibold hover:bg-fashion-pink-light transition-colors"
-            >
-              Try Virtual Try-On
-            </Link>
           </div>
         </div>
       </section>

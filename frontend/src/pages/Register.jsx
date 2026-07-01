@@ -176,7 +176,7 @@ function Register() {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-500">
               ¿Ya tienes cuenta?{" "}
-              <Link to="/login" className="text-fashion-pink font-semibold hover:text-fashion-purple transition-colors">
+              <Link to="/" className="text-fashion-pink font-semibold hover:text-fashion-purple transition-colors">
                 Inicia sesión
               </Link>
             </p>

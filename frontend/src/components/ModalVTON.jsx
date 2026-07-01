@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { requestTryOn } from "../services/vton";
 
 function ModalVTON({ product, isOpen, onClose }) {
   const [userImage, setUserImage] = useState(null);
   const [userFile, setUserFile] = useState(null);
   const [resultImage, setResultImage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
@@ -30,10 +32,23 @@ function ModalVTON({ product, isOpen, onClose }) {
   const handleGenerate = async () => {
     if (!userFile || !product) return;
     setLoading(true);
-    setTimeout(() => {
-      setResultImage("/placeholder.jpg");
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("image", userFile);
+      formData.append("product_id", product.id);
+      const data = await requestTryOn(formData);
+      setResultImage(data.image_url || data.result_url || data.url);
+    } catch (err) {
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Error al procesar la imagen. Intenta de nuevo.";
+      setError(message);
+      console.log("Error en la petición de VTON:", err.response || err);
+    } finally {
       setLoading(false);
-    }, 2000);
+    }
   };
 
   const handleClose = () => {
@@ -41,6 +56,7 @@ function ModalVTON({ product, isOpen, onClose }) {
     setUserFile(null);
     setResultImage(null);
     setLoading(false);
+    setError(null);
     onClose();
   };
 
@@ -80,6 +96,12 @@ function ModalVTON({ product, isOpen, onClose }) {
             </div>
           </div>
 
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+              {error}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
@@ -116,7 +138,7 @@ function ModalVTON({ product, isOpen, onClose }) {
                       />
                     </svg>
                     <p className="mt-2 text-xs text-gray-400">
-                      {isDragActive ? "Suelta tu foto aquí" : "Sube tu foto"}
+                      {isDragActive ? "Suelta tu foto aqui­" : "Sube tu foto"}
                     </p>
                   </div>
                 )}
