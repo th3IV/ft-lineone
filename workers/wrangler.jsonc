@@ -4,6 +4,8 @@
   "compatibility_date": "2024-10-01",
   "compatibility_flags": ["python_workers"],
 
+  "account_id": "b17c769bfd01fc782de6bf33b946ee82",
+
   "observability": {
     "enabled": true
   },
@@ -12,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "ft-lineone-db",
-      "database_id": "<replace-with-your-d1-database-id>"
+      "database_id": "95835a2d-02ce-48bb-a53d-a89636f1508c"
     }
   ],
 
@@ -29,7 +31,7 @@
 
   "vars": {
     "JWT_ALGORITHM": "HS256",
-    "CORS_ORIGINS": "https://yourdomain.com"
+    "CORS_ORIGINS": "https://thelineone.com,https://www.thelineone.com"
   },
 
   "triggers": {
