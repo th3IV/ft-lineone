@@ -1,10 +1,11 @@
 """Recommendation routes."""
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from typing import Optional
 
 from models.product import ProductResponse
 from services.llm import LLMService
+from middleware.security import require_auth, optional_auth
 
 router = APIRouter()
 
@@ -18,26 +19,20 @@ def get_db(request: Request):
 async def get_recommendations(
     request: Request,
     query: Optional[str] = None,
+    user: dict = Depends(require_auth),
 ):
     """Get personalized product recommendations."""
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
     db = get_db(request)
     llm_service = LLMService(request.app.state.env)
 
-    # Get user preferences (simplified - in real app, fetch from DB)
     user_preferences = {
         "gender": None,
         "clothing_type": [],
         "budget": None,
     }
 
-    # Get available products
     products, _ = await db.get_products({}, page=1, limit=50)
 
-    # Convert products to dicts for LLM
     products_dict = [
         {
             "id": p.id,
@@ -50,14 +45,12 @@ async def get_recommendations(
         for p in products
     ]
 
-    # Get recommendations from LLM
     recommendations = await llm_service.get_recommendations(
         user_preferences=user_preferences,
         available_products=products_dict,
         query=query,
     )
 
-    # Fetch full product details for recommended products
     recommended_products = []
     for rec in recommendations:
         product = await db.get_product(rec["product_id"])
@@ -80,7 +73,7 @@ async def get_recommendations(
             )
 
     return {
-        "user_id": user_id,
+        "user_id": user.user_id,
         "recommendations": recommended_products,
         "count": len(recommended_products),
     }
@@ -114,7 +107,4 @@ async def style_chat(
         user_question=question,
     )
 
-    return {
-        "advice": advice,
-        "product_id": product_id,
-    }
+    return {"advice": advice, "product_id": product_id}

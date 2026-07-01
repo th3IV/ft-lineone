@@ -1,20 +1,27 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import api from "../services/api";
 
 function ModalVTON({ product, isOpen, onClose }) {
   const [userImage, setUserImage] = useState(null);
   const [userFile, setUserFile] = useState(null);
   const [resultImage, setResultImage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
+      if (file.size > 10 * 1024 * 1024) {
+        setError("La imagen no puede superar 10MB.");
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (e) => {
         setUserImage(e.target.result);
         setUserFile(file);
         setResultImage(null);
+        setError(null);
       };
       reader.readAsDataURL(file);
     }
@@ -25,21 +32,41 @@ function ModalVTON({ product, isOpen, onClose }) {
     accept: { "image/*": [".png", ".jpg", ".jpeg"] },
     maxFiles: 1,
     multiple: false,
+    maxSize: 10 * 1024 * 1024,
   });
 
   const handleGenerate = async () => {
     if (!userFile || !product) return;
     setLoading(true);
-    setTimeout(() => {
-      setResultImage("/placeholder.jpg");
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("user_image", userFile);
+      formData.append("product_id", product.id);
+
+      const res = await api.post("/vton/try-on", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (res.data?.output_image_url) {
+        setResultImage(res.data.output_image_url);
+      } else {
+        setError("No se pudo generar el resultado. Intenta con otra foto.");
+      }
+    } catch (err) {
+      const msg = err.response?.data?.detail || "Error al procesar la imagen.";
+      setError(msg);
+    } finally {
       setLoading(false);
-    }, 2000);
+    }
   };
 
   const handleClose = () => {
     setUserImage(null);
     setUserFile(null);
     setResultImage(null);
+    setError(null);
     setLoading(false);
     onClose();
   };
@@ -75,10 +102,16 @@ function ModalVTON({ product, isOpen, onClose }) {
               <p className="font-medium text-gray-900 truncate">{product.name}</p>
               <p className="text-sm text-gray-500">{product.store}</p>
               <p className="text-sm font-semibold text-fashion-pink">
-                {product.currency || "$"}{Number(product.price)?.toFixed(2)}
+                {product.currency || "$"}{Number(product.price)?.toLocaleString("es-CL")}
               </p>
             </div>
           </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">
+              {error}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -116,7 +149,7 @@ function ModalVTON({ product, isOpen, onClose }) {
                       />
                     </svg>
                     <p className="mt-2 text-xs text-gray-400">
-                      {isDragActive ? "Suelta tu foto aquí" : "Sube tu foto"}
+                      {isDragActive ? "Suelta tu foto aquí" : "Sube tu foto (máx. 10MB)"}
                     </p>
                   </div>
                 )}

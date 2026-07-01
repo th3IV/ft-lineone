@@ -1,25 +1,34 @@
-import json
+"""FT-LineOne API - Cloudflare Workers Python Entry Point."""
+
+import os
 from typing import Any
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+
+import asgi
 
 from routes import auth, products, vton, recommendations, scrapers
+from services.database import DatabaseService
 
 app = FastAPI(
     title="FT-LineOne API",
     description="Fashion Try-On Platform API - Cloudflare Workers",
     version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
-# CORS middleware - configured via env vars
+
+# CORS middleware
+cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
@@ -45,46 +54,26 @@ async def root():
     }
 
 
-# Cloudflare Workers ASGI entry point
-async def on_fetch(request: Request, env: Any, ctx: Any) -> Response:
+class Default:
     """Cloudflare Workers Python entry point."""
-    from starlette.requests import Request as StarletteRequest
-    from starlette.responses import Response as StarletteResponse
 
-    # Create a scope from the incoming request
-    scope = {
-        "type": "http",
-        "method": request.method,
-        "path": request.url.path,
-        "query_string": request.url.query.encode() if request.url.query else b"",
-        "headers": [
-            (k.lower().encode(), v.encode()) for k, v in request.headers.items()
-        ],
-        "server": ("localhost", 443),
-        "client": ("0.0.0.0", 0),
-        "app": app,
-        "env": env,
-        "ctx": ctx,
-    }
+    def __init__(self, env: Any):
+        self.env = env
 
-    # Handle CORS preflight
-    if request.method == "OPTIONS":
-        origin = request.headers.get("Origin", "*")
-        return Response(
-            status_code=204,
-            headers={
-                "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization",
-                "Access-Control-Max-Age": "86400",
-            },
-        )
+    async def fetch(self, request: Any) -> Response:
+        """Handle incoming HTTP requests via ASGI bridge."""
+        # Attach env and db to app.state for route access
+        app.state.env = self.env
+        app.state.db = DatabaseService(self.env)
+        return await asgi.fetch(app, request, self.env)
 
-    # Process request through ASGI app
-    response = await app(scope, receive=lambda: request.body(), send=None)
+    async def scheduled(self, controller: Any, env: Any, ctx: Any) -> None:
+        """Handle cron triggers for scraper scheduling."""
+        from scrapers.scheduler import ScraperRunner
 
-    return Response(
-        status_code=response.status_code,
-        headers=dict(response.headers),
-        body=response.body,
-    )
+        runner = ScraperRunner(env)
+        try:
+            results = await runner.run_all_scrapers()
+            print(f"Cron completed: {results}")
+        finally:
+            await runner.close()

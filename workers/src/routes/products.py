@@ -37,9 +37,9 @@ async def list_products(
         filters["store"] = store
     if category:
         filters["category"] = category
-    if min_price:
+    if min_price is not None:
         filters["min_price"] = min_price
-    if max_price:
+    if max_price is not None:
         filters["max_price"] = max_price
     if q:
         filters["query"] = q

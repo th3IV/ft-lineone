@@ -1,4 +1,4 @@
-"""Zara scraper using unofficial API endpoints."""
+"""Zara scraper using unofficial API endpoints (Async HTTP)."""
 
 import httpx
 from typing import Optional
@@ -28,7 +28,7 @@ class ZaraScraper:
     API_BASE = "https://www.zara.com/itxrest"
 
     def __init__(self):
-        self.client = httpx.Client(
+        self.client = httpx.AsyncClient(
             timeout=30.0,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -37,10 +37,10 @@ class ZaraScraper:
             },
         )
 
-    def get_categories(self) -> list[dict]:
+    async def get_categories(self) -> list[dict]:
         """Get category tree from Zara API."""
         try:
-            response = self.client.get(
+            response = await self.client.get(
                 f"{self.API_BASE}/2/catalog/category",
                 params={"languageId": "-1"},
             )
@@ -50,12 +50,12 @@ class ZaraScraper:
         except Exception:
             return []
 
-    def get_category_products(
+    async def get_category_products(
         self, category_id: int, page: int = 1, limit: int = 60
     ) -> list[dict]:
         """Get products from a specific category."""
         try:
-            response = self.client.get(
+            response = await self.client.get(
                 f"{self.API_BASE}/2/catalog/category/{category_id}/products",
                 params={
                     "page": page,
@@ -69,10 +69,10 @@ class ZaraScraper:
         except Exception:
             return []
 
-    def get_product_details(self, product_id: int) -> Optional[dict]:
+    async def get_product_details(self, product_id: int) -> Optional[dict]:
         """Get detailed product information."""
         try:
-            response = self.client.get(
+            response = await self.client.get(
                 f"{self.API_BASE}/2/catalog/products/{product_id}",
                 params={"languageId": "-1"},
             )
@@ -81,15 +81,12 @@ class ZaraScraper:
         except Exception:
             return None
 
-    def search_products(self, query: str, limit: int = 30) -> list[dict]:
+    async def search_products(self, query: str, limit: int = 30) -> list[dict]:
         """Search products by keyword."""
         try:
-            response = self.client.get(
+            response = await self.client.get(
                 f"{self.API_BASE}/2/catalog/search",
-                params={
-                    "query": query,
-                    "languageId": "-1",
-                },
+                params={"query": query, "languageId": "-1"},
             )
             response.raise_for_status()
             data = response.json()
@@ -99,30 +96,25 @@ class ZaraScraper:
 
     def parse_product(self, raw_product: dict) -> ZaraProduct:
         """Parse raw product data into ZaraProduct."""
-        # Extract basic info
         name = raw_product.get("name", "")
         product_id = raw_product.get("id", "")
         seo_keyword = raw_product.get("seo", {}).get("keyword", "")
         seo_product_id = raw_product.get("seo", {}).get("productId", "")
 
-        # Build original URL
         if seo_keyword and seo_product_id:
             original_url = f"{self.BASE_URL}/{seo_keyword}-p{seo_product_id}.html"
         else:
             original_url = f"{self.BASE_URL}/product/{product_id}"
 
-        # Get price
         price_info = raw_product.get("price", {})
         price = price_info.get("price", 0)
         currency = price_info.get("currency", "CLP")
 
-        # Get image
         image_url = ""
         images = raw_product.get("detail", {}).get("images", [])
         if images:
             image_url = images[0].get("url", "")
 
-        # Get sizes and colors
         sizes = []
         colors = []
         skus = raw_product.get("detail", {}).get("skus", [])
@@ -134,7 +126,6 @@ class ZaraScraper:
             if color and color not in colors:
                 colors.append(color)
 
-        # Get availability
         availability = any(
             sku.get("availability", "OUT_OF_STOCK") == "IN_STOCK"
             for sku in skus
@@ -154,12 +145,12 @@ class ZaraScraper:
             original_url=original_url,
         )
 
-    def scrape_category(
+    async def scrape_category(
         self, category_id: int, max_items: int = 50
     ) -> list[ZaraProduct]:
         """Scrape all products from a category."""
         products = []
-        raw_products = self.get_category_products(category_id, limit=max_items)
+        raw_products = await self.get_category_products(category_id, limit=max_items)
 
         for raw_product in raw_products[:max_items]:
             try:
@@ -170,12 +161,12 @@ class ZaraScraper:
 
         return products
 
-    def scrape_search(
+    async def scrape_search(
         self, query: str, max_items: int = 30
     ) -> list[ZaraProduct]:
         """Search and scrape products."""
         products = []
-        raw_products = self.search_products(query, limit=max_items)
+        raw_products = await self.search_products(query, limit=max_items)
 
         for raw_product in raw_products[:max_items]:
             try:
@@ -186,6 +177,6 @@ class ZaraScraper:
 
         return products
 
-    def close(self):
+    async def close(self):
         """Close the HTTP client."""
-        self.client.close()
+        await self.client.aclose()

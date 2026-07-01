@@ -2,11 +2,11 @@
 
 import asyncio
 from datetime import datetime
-from typing import Optional
 
 from scrapers.zara import ZaraScraper
 from scrapers.paris import ParisScraper
 from scrapers.maui import MauiScraper
+from services.database import DatabaseService
 
 
 class ScraperRunner:
@@ -14,6 +14,7 @@ class ScraperRunner:
 
     def __init__(self, env):
         self.env = env
+        self.db = DatabaseService(env)
         self.scrapers = {
             "zara": ZaraScraper(),
             "paris": ParisScraper(),
@@ -44,7 +45,6 @@ class ScraperRunner:
         start_time = datetime.utcnow()
 
         try:
-            # Get categories to scrape
             categories = self._get_categories(store_name)
 
             total_products = 0
@@ -54,17 +54,12 @@ class ScraperRunner:
 
             for category in categories:
                 try:
-                    products = await self._scrape_category(
-                        store_name, scraper, category
-                    )
+                    products = await self._scrape_category(store_name, scraper, category)
                     total_products += len(products)
 
-                    # Ingest products
                     for product in products:
                         try:
-                            result = await self._ingest_product(
-                                store_name, product
-                            )
+                            result = await self._ingest_product(store_name, product)
                             if result["status"] == "created":
                                 total_new += 1
                             else:
@@ -89,36 +84,46 @@ class ScraperRunner:
             }
 
         except Exception as e:
-            return {
-                "status": "failed",
-                "error": str(e),
-            }
+            return {"status": "failed", "error": str(e)}
 
     async def _scrape_category(self, store_name: str, scraper, category: str) -> list:
-        """Scrape products from a category."""
-        # Run in executor to avoid blocking
-        loop = asyncio.get_event_loop()
-
+        """Scrape products from a category (all scrapers are now async)."""
         if store_name == "zara":
-            return await loop.run_in_executor(
-                None, lambda: scraper.scrape_category(category, max_items=50)
-            )
+            return await scraper.scrape_category(category, max_items=50)
         elif store_name == "paris":
-            return await loop.run_in_executor(
-                None, lambda: scraper.scrape_category(category, max_items=50)
-            )
+            return await scraper.scrape_category(category, max_items=50)
         elif store_name == "maui":
-            return await loop.run_in_executor(
-                None, lambda: scraper.scrape_category(category, max_items=50)
-            )
+            return await scraper.scrape_category(category, max_items=50)
         else:
             return []
 
     async def _ingest_product(self, store_name: str, product) -> dict:
         """Ingest a scraped product into the database."""
-        # This would call the API's ingest endpoint
-        # For now, return a placeholder
-        return {"status": "created", "product_id": "placeholder"}
+        existing_products, _ = await self.db.get_products(
+            {"store": store_name}, page=1, limit=1000,
+        )
+
+        for p in existing_products:
+            if p.external_id == product.external_id:
+                return {"status": "skipped", "product_id": p.id}
+
+        created = await self.db.create_product({
+            "external_id": product.external_id,
+            "name": product.name,
+            "store": store_name,
+            "price": product.price,
+            "currency": product.currency,
+            "category": product.category,
+            "description": product.description,
+            "original_url": product.original_url,
+            "image_url": product.image_url,
+            "image_urls": [product.image_url] if product.image_url else [],
+            "sizes": product.sizes,
+            "colors": product.colors,
+            "availability": product.availability,
+        })
+
+        return {"status": "created", "product_id": created.id}
 
     def _get_categories(self, store_name: str) -> list[str]:
         """Get categories to scrape for a store."""
@@ -143,7 +148,7 @@ class ScraperRunner:
         }
         return categories.get(store_name, [])
 
-    def close(self):
+    async def close(self):
         """Close all scrapers."""
         for scraper in self.scrapers.values():
-            scraper.close()
+            await scraper.close()

@@ -34,14 +34,10 @@ async def ingest_product(product_data: ScraperIngestRequest, request: Request):
     """Ingest a product from a scraper."""
     db = get_db(request)
 
-    # Check if product already exists by external_id and store
     existing_products, _ = await db.get_products(
-        {"store": product_data.store},
-        page=1,
-        limit=1000,
+        {"store": product_data.store}, page=1, limit=1000,
     )
 
-    # Check for duplicate
     for p in existing_products:
         if p.external_id == product_data.external_id:
             return {
@@ -50,7 +46,6 @@ async def ingest_product(product_data: ScraperIngestRequest, request: Request):
                 "product_id": p.id,
             }
 
-    # Create new product
     product = await db.create_product({
         "external_id": product_data.external_id,
         "name": product_data.name,

@@ -13,14 +13,6 @@ const colorPalettes = [
 
 const styleOptions = ["Casual", "Formal", "Deportivo", "Bohemio", "Minimalista", "Trendy"];
 
-const stores = [
-  { name: "Falabella", color: "bg-green-600" },
-  { name: "Ripley", color: "bg-red-600" },
-  { name: "Paris", color: "bg-blue-600" },
-  { name: "Maui", color: "bg-teal-500" },
-  { name: "Zara", color: "bg-black" },
-];
-
 function Profile() {
   const dispatch = useDispatch();
   const { user, isAuthenticated, measurements, preferences, loading } = useSelector((state) => state.user);
@@ -30,8 +22,6 @@ function Profile() {
   const [localMeasurements, setLocalMeasurements] = useState(measurements || {});
   const [localPreferences, setLocalPreferences] = useState(preferences || {});
   const [saving, setSaving] = useState(false);
-  const [linkedAccounts, setLinkedAccounts] = useState([]);
-
   useEffect(() => {
     if (user) {
       setLocalUser({ name: user.name || "", email: user.email || "" });
@@ -42,8 +32,6 @@ function Profile() {
     if (preferences) {
       setLocalPreferences(preferences);
     }
-    const stored = JSON.parse(localStorage.getItem("linkedAccounts") || "[]");
-    setLinkedAccounts(stored);
   }, [user, measurements, preferences]);
 
   const handleSavePersonal = async () => {
@@ -67,20 +55,6 @@ function Profile() {
     dispatch(updatePreferences(localPreferences));
   };
 
-  const handleLinkAccount = (storeName) => {
-    const credential = prompt(`Ingresa tu credencial (usuario o email) para ${storeName}:`);
-    if (!credential) return;
-    const updated = [...linkedAccounts.filter((a) => a.store !== storeName), { store: storeName, credential, linked: true }];
-    setLinkedAccounts(updated);
-    localStorage.setItem("linkedAccounts", JSON.stringify(updated));
-  };
-
-  const handleUnlinkAccount = (storeName) => {
-    const updated = linkedAccounts.filter((a) => a.store !== storeName);
-    setLinkedAccounts(updated);
-    localStorage.setItem("linkedAccounts", JSON.stringify(updated));
-  };
-
   const togglePreference = (key, value) => {
     setLocalPreferences((prev) => ({
       ...prev,
@@ -88,16 +62,22 @@ function Profile() {
     }));
   };
 
-  const tryOnHistory = JSON.parse(localStorage.getItem("tryOnHistory") || "[]");
+  const tryOnHistory = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("tryOnHistory") || "[]");
+    } catch {
+      return [];
+    }
+  })();
 
-  /*if (!isAuthenticated) {
+  if (!isAuthenticated) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-20 text-center">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Inicia Sesión</h1>
         <p className="text-gray-500">Necesitas iniciar sesión para ver tu perfil.</p>
       </div>
     );
-  }*/
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -327,52 +307,6 @@ function Profile() {
         </div>
 
         <div className="space-y-8">
-          {/* Associated Accounts */}
-          <section className="bg-white rounded-xl card-shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Cuentas Asociadas</h2>
-            <p className="text-xs text-gray-500 mb-4">Vincula tus credenciales de las tiendas para una experiencia personalizada.</p>
-            <div className="space-y-3">
-              {stores.map((store) => {
-                const linked = linkedAccounts.find((a) => a.store === store.name);
-                return (
-                  <div
-                    key={store.name}
-                    className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:border-gray-200 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-8 h-8 rounded-lg ${store.color} flex items-center justify-center text-white text-xs font-bold`}>
-                        {store.name.charAt(0)}
-                      </span>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{store.name}</p>
-                        {linked ? (
-                          <p className="text-[11px] text-gray-400">{linked.credential}</p>
-                        ) : (
-                          <p className="text-[11px] text-gray-400">No vinculada</p>
-                        )}
-                      </div>
-                    </div>
-                    {linked ? (
-                      <button
-                        onClick={() => handleUnlinkAccount(store.name)}
-                        className="text-xs text-red-500 font-medium hover:text-red-600 transition-all px-3 py-1.5 rounded-lg hover:bg-red-50"
-                      >
-                        Desvincular
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleLinkAccount(store.name)}
-                        className="text-xs text-fashion-pink font-medium hover:text-fashion-purple transition-all px-3 py-1.5 rounded-lg hover:bg-fashion-pink-light"
-                      >
-                        Vincular
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
           {/* Try-On History */}
           <section className="bg-white rounded-xl card-shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Historial de Try-On</h2>

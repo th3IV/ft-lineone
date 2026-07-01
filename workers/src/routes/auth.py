@@ -1,6 +1,6 @@
 """Authentication routes."""
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import EmailStr
 
 from models.user import UserCreate, UserLogin, UserResponse, TokenResponse, UserUpdate
@@ -26,22 +26,16 @@ async def register(user_data: UserCreate, request: Request):
     """Register a new user."""
     db = get_db(request)
 
-    # Check if user already exists
     existing_user = await db.get_user_by_email(user_data.email)
     if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered",
-        )
+        raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Create user
     user = await db.create_user({
         "email": user_data.email,
         "name": user_data.name,
         "password_hash": hash_password(user_data.password),
     })
 
-    # Generate tokens
     access_token = create_access_token(user.id, user.email)
     refresh_token = create_refresh_token(user.id, user.email)
 
@@ -64,12 +58,8 @@ async def login(credentials: UserLogin, request: Request):
 
     user = await db.get_user_by_email(credentials.email)
     if not user or not verify_password(credentials.password, user.password_hash):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password",
-        )
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    # Generate tokens
     access_token = create_access_token(user.id, user.email)
     refresh_token = create_refresh_token(user.id, user.email)
 
@@ -92,20 +82,13 @@ async def refresh_token(refresh_token: str, request: Request):
     """Refresh access token."""
     token_data = verify_token(refresh_token)
     if not token_data:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid refresh token",
-        )
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     db = get_db(request)
     user = await db.get_user_by_email(token_data.email)
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="User not found",
-        )
+        raise HTTPException(status_code=401, detail="User not found")
 
-    # Generate new tokens
     new_access_token = create_access_token(user.id, user.email)
     new_refresh_token = create_refresh_token(user.id, user.email)
 

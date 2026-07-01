@@ -1,30 +1,11 @@
 import { useState } from "react";
+import api from "../services/api";
 
-const respuestasMock = [
-  {
-    id: 1,
-    pregunta: "¿Qué me recomiendas para una fiesta?",
-    respuesta:
-      "¡Claro! Para una fiesta te sugiero un vestido midi en tonos vibrantes como rojo o rosa neón, combinado con accesorios dorados. Si prefieres pantalón, unos palazzo satinados con una blusa casual elegante son perfectos.",
-  },
-  {
-    id: 2,
-    pregunta: "¿Cómo combino este pantalón?",
-    respuesta:
-      "Ese pantalón queda genial con una camiseta blanca básica y una chaqueta oversize. Para los zapatos, unos tenis blancos o mocasines dependiendo de la ocasión.",
-  },
-  {
-    id: 3,
-    pregunta: "¿Qué colores están de moda esta temporada?",
-    respuesta:
-      "Esta temporada mandan los tonos tierra, el verde oliva, el rosa pastel y el azul eléctrico. También los neutros como beige y crema son infalibles para cualquier outfit.",
-  },
-  {
-    id: 4,
-    pregunta: "Recomiéndame un outfit casual",
-    respuesta:
-      "Un outfit casual ideal: jeans rectos de tiro medio, una polera oversize de algodón, zapatillas blancas y una mochila de cuero. Sencillo pero con estilo.",
-  },
+const quickQuestions = [
+  "¿Qué me recomiendas para una fiesta?",
+  "¿Cómo combino este pantalón?",
+  "¿Qué colores están de moda?",
+  "Recomiéndame un outfit casual",
 ];
 
 function ChatFlotante() {
@@ -35,15 +16,36 @@ function ChatFlotante() {
       text: "¡Hola! Soy tu Asesor de Imagen IA. Pregúntame sobre moda, combinaciones o tendencias.",
     },
   ]);
-  const [selectedQuestion, setSelectedQuestion] = useState(null);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleQuestionClick = (item) => {
-    setSelectedQuestion(item.id);
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: item.pregunta },
-      { role: "assistant", text: item.respuesta },
-    ]);
+  const sendMessage = async (text) => {
+    if (!text.trim()) return;
+
+    const userMsg = { role: "user", text: text.trim() };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await api.post("/recommendations/chat", null, {
+        params: { question: text.trim() },
+      });
+      const advice = res.data?.advice || "No pude generar un consejo.";
+      setMessages((prev) => [...prev, { role: "assistant", text: advice }]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: "Servicio no disponible temporalmente." },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    sendMessage(input);
   };
 
   return (
@@ -74,7 +76,7 @@ function ChatFlotante() {
               </div>
               <div>
                 <h3 className="font-serif font-semibold text-sm">Asesor de Imagen</h3>
-                <p className="text-xs text-white/70">IA de moda • Online</p>
+                <p className="text-xs text-white/70">IA de moda</p>
               </div>
             </div>
           </div>
@@ -93,27 +95,51 @@ function ChatFlotante() {
                 </div>
               </div>
             ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-2.5">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.1s]" />
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-gray-100 p-3">
             <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider mb-2">
               Preguntas rápidas:
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {respuestasMock.map((item) => (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {quickQuestions.map((q, i) => (
                 <button
-                  key={item.id}
-                  onClick={() => handleQuestionClick(item)}
-                  className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                    selectedQuestion === item.id
-                      ? "bg-fashion-pink text-white border-fashion-pink"
-                      : "bg-white text-gray-500 border-gray-200 hover:border-fashion-pink hover:text-fashion-pink"
-                  }`}
+                  key={i}
+                  onClick={() => sendMessage(q)}
+                  className="text-xs px-3 py-1.5 rounded-full border bg-white text-gray-500 border-gray-200 hover:border-fashion-pink hover:text-fashion-pink transition-all"
                 >
-                  {item.pregunta}
+                  {q}
                 </button>
               ))}
             </div>
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Escribe tu pregunta..."
+                className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-fashion-pink focus:border-transparent outline-none"
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                className="bg-gradient-to-r from-fashion-pink to-fashion-purple text-white rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-40"
+              >
+                Enviar
+              </button>
+            </form>
           </div>
         </div>
       )}

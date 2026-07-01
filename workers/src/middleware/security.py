@@ -1,53 +1,17 @@
 """Middleware for CORS, rate limiting, and authentication."""
 
-import os
-import time
-from typing import Optional
-
 from fastapi import Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from services.auth import verify_token
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Simple rate limiting middleware."""
+class AuthMiddleware:
+    """Authentication middleware for protected routes.
 
-    def __init__(self, app, requests_per_minute: int = 60):
-        super().__init__(app)
-        self.requests_per_minute = requests_per_minute
-        self.request_counts: dict[str, list[float]] = {}
-
-    async def dispatch(self, request: Request, call_next):
-        client_ip = request.client.host if request.client else "unknown"
-        current_time = time.time()
-
-        # Clean old entries (older than 1 minute)
-        if client_ip in self.request_counts:
-            self.request_counts[client_ip] = [
-                t for t in self.request_counts[client_ip]
-                if current_time - t < 60
-            ]
-        else:
-            self.request_counts[client_ip] = []
-
-        # Check rate limit
-        if len(self.request_counts[client_ip]) >= self.requests_per_minute:
-            raise HTTPException(
-                status_code=429,
-                detail="Too many requests. Please try again later.",
-            )
-
-        # Record this request
-        self.request_counts[client_ip].append(current_time)
-
-        response = await call_next(request)
-        return response
-
-
-class AuthMiddleware(BaseHTTPMiddleware):
-    """Authentication middleware for protected routes."""
+    Applied per-route via Depends() rather than as global middleware,
+    since Workers are stateless and in-memory rate limiting doesn't persist.
+    """
 
     PROTECTED_PATHS = [
         "/api/v1/users/",
@@ -55,45 +19,29 @@ class AuthMiddleware(BaseHTTPMiddleware):
         "/api/v1/recommendations/",
     ]
 
-    async def dispatch(self, request: Request, call_next):
-        # Skip auth for public routes
-        path = request.url.path
-        is_protected = any(path.startswith(p) for p in self.PROTECTED_PATHS)
+    @staticmethod
+    def is_protected(path: str) -> bool:
+        return any(path.startswith(p) for p in AuthMiddleware.PROTECTED_PATHS)
 
-        if is_protected:
-            auth_header = request.headers.get("Authorization")
-            if not auth_header or not auth_header.startswith("Bearer "):
-                raise HTTPException(
-                    status_code=401,
-                    detail="Missing or invalid authorization header",
-                )
+    @staticmethod
+    def extract_user(request: Request) -> dict | None:
+        """Extract and verify user from Authorization header."""
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return None
 
-            token = auth_header.split(" ")[1]
-            token_data = verify_token(token)
-
-            if not token_data:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Invalid or expired token",
-                )
-
-            # Add user info to request state
-            request.state.user_id = token_data.user_id
-            request.state.user_email = token_data.email
-
-        response = await call_next(request)
-        return response
+        token = auth_header.split(" ")[1]
+        return verify_token(token)
 
 
-def setup_cors(app):
-    """Configure CORS middleware."""
-    cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
+async def require_auth(request: Request) -> dict:
+    """FastAPI dependency: require authenticated user."""
+    user = AuthMiddleware.extract_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["*"],
-    )
+
+async def optional_auth(request: Request) -> dict | None:
+    """FastAPI dependency: optionally extract user."""
+    return AuthMiddleware.extract_user(request)

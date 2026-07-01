@@ -6,8 +6,6 @@ import { openVtonModal } from "../store/uiSlice";
 import ProductGrid from "../components/ProductGrid";
 
 const stores = [
-  { name: "Falabella", color: "bg-green-600" },
-  { name: "Ripley", color: "bg-red-600" },
   { name: "Paris", color: "bg-blue-600" },
   { name: "Maui", color: "bg-teal-500" },
   { name: "Zara", color: "bg-black" },

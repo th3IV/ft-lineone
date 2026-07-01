@@ -84,8 +84,9 @@ class R2Service:
             List of object keys
         """
         try:
-            result = await self.r2.list({"prefix": prefix})
-            return [obj.key for obj in result.get("objects", [])]
+            result = await self.r2.list(prefix=prefix)
+            objects = result.get("objects", [])
+            return [obj["key"] for obj in objects] if isinstance(objects, list) else []
         except Exception:
             return []
 

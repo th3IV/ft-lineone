@@ -1,12 +1,12 @@
 """Virtual Try-On routes."""
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Depends
 from typing import Optional
 
 from models.vton_result import VtonResult, VtonStatus, VtonHistoryResponse
 from services.vton import VtonService
 from services.r2 import R2Service
+from middleware.security import require_auth
 
 router = APIRouter()
 
@@ -21,28 +21,19 @@ async def try_on(
     request: Request,
     user_image: UploadFile = File(...),
     product_id: str = Form(...),
+    user: dict = Depends(require_auth),
 ):
     """Process a virtual try-on request."""
     # Validate file type
     if not user_image.content_type or not user_image.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid file type. Please upload an image.",
-        )
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
 
     # Validate file size (max 10MB)
     contents = await user_image.read()
     if len(contents) > 10 * 1024 * 1024:
-        raise HTTPException(
-            status_code=400,
-            detail="File too large. Maximum size is 10MB.",
-        )
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
 
-    # Get user ID from auth middleware
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
+    user_id = user.user_id
     db = get_db(request)
     vton_service = VtonService(request.app.state.env)
     r2_service = R2Service(request.app.state.env)
@@ -60,13 +51,13 @@ async def try_on(
     )
 
     # Create VTON result record
-    vton_result = VtonResult(
-        user_id=user_id,
-        product_id=product_id,
-        status=VtonStatus.PROCESSING,
-        input_image_url=user_image_url,
-        garment_image_url=product.image_url,
-    )
+    vton_result = await db.create_vton_result({
+        "user_id": user_id,
+        "product_id": product_id,
+        "status": "processing",
+        "input_image_url": user_image_url,
+        "garment_image_url": product.image_url,
+    })
 
     # Process try-on
     result = await vton_service.process_try_on(
@@ -76,43 +67,52 @@ async def try_on(
         user_id=user_id,
     )
 
-    # Update result
-    vton_result.status = VtonStatus(result["status"])
-    if result.get("output_image_url"):
-        vton_result.output_image_url = result["output_image_url"]
-    if result.get("error"):
-        vton_result.error_message = result["error"]
-
     return {
         "vton_id": vton_result.id,
-        "status": vton_result.status.value,
-        "input_image_url": vton_result.input_image_url,
-        "output_image_url": vton_result.output_image_url,
+        "status": result["status"],
+        "input_image_url": user_image_url,
+        "output_image_url": result.get("output_image_url"),
     }
 
 
 @router.get("/result/{vton_id}")
 async def get_result(request: Request, vton_id: str):
     """Get the result of a VTON request."""
-    # In a full implementation, this would query the database
-    # For now, return a placeholder
+    db = get_db(request)
+    result = await db.get_vton_result(vton_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="VTON result not found")
+
     return {
-        "id": vton_id,
-        "status": "completed",
-        "message": "VTON result retrieved successfully",
+        "id": result.id,
+        "status": result.status,
+        "input_image_url": result.input_image_url,
+        "output_image_url": result.output_image_url,
+        "error_message": result.error_message,
+        "created_at": result.created_at,
     }
 
 
 @router.get("/history")
-async def get_history(request: Request):
+async def get_history(request: Request, user: dict = Depends(require_auth)):
     """Get VTON history for the authenticated user."""
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
+    db = get_db(request)
+    results = await db.get_vton_history(user.user_id)
 
-    # In a full implementation, this would query the database
-    # For now, return empty history
     return VtonHistoryResponse(
-        results=[],
-        total=0,
+        results=[
+            VtonResult(
+                id=r.id,
+                user_id=r.user_id,
+                product_id=r.product_id,
+                status=VtonStatus(r.status),
+                input_image_url=r.input_image_url,
+                output_image_url=r.output_image_url,
+                garment_image_url=r.garment_image_url,
+                error_message=r.error_message,
+                created_at=r.created_at,
+            )
+            for r in results
+        ],
+        total=len(results),
     )
