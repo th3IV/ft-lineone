@@ -44,6 +44,14 @@ async def list_products(
         filters["max_price"] = max_price
     if q:
         filters["query"] = q
+    if gender:
+        filters["gender"] = gender
+    if clothing_type:
+        filters["clothing_type"] = clothing_type
+    if size:
+        filters["size"] = size
+    if color:
+        filters["color"] = color
 
     products, total = await db.get_products(filters, page, limit)
     total_pages = math.ceil(total / limit) if limit > 0 else 0
@@ -60,6 +68,7 @@ async def list_products(
                 description=p.description,
                 original_url=p.original_url,
                 image_url=p.image_url,
+                image_urls=p.image_urls or [],
                 sizes=p.sizes or [],
                 colors=p.colors or [],
                 availability=p.availability,
@@ -98,6 +107,7 @@ async def search_products(
                 category=p.category,
                 description=p.description,
                 image_url=p.image_url,
+                image_urls=p.image_urls or [],
                 sizes=p.sizes or [],
                 colors=p.colors or [],
                 availability=p.availability,
@@ -136,6 +146,7 @@ async def list_products_by_store(
                 category=p.category,
                 description=p.description,
                 image_url=p.image_url,
+                image_urls=p.image_urls or [],
                 sizes=p.sizes or [],
                 colors=p.colors or [],
                 availability=p.availability,
@@ -169,6 +180,7 @@ async def get_product(request: Request, product_id: str):
         description=product.description,
         original_url=product.original_url,
         image_url=product.image_url,
+        image_urls=product.image_urls or [],
         sizes=product.sizes or [],
         colors=product.colors or [],
         availability=product.availability,
@@ -207,6 +219,7 @@ async def create_product(product_data: ProductCreate, request: Request, user: di
         description=product.description,
         original_url=product.original_url,
         image_url=product.image_url,
+        image_urls=product.image_urls or [],
         sizes=product.sizes or [],
         colors=product.colors or [],
         availability=product.availability,

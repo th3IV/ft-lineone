@@ -26,6 +26,7 @@ class ProductCreate(ProductBase):
 class ProductResponse(ProductBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     image_url: Optional[str] = None
+    image_urls: list[str] = []
     sizes: list[str] = []
     colors: list[str] = []
     availability: bool = True

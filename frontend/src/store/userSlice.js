@@ -4,7 +4,11 @@ import api from "../services/api";
 
 export const loginUser = createAsyncThunk("user/login", async ({ email, password }, { rejectWithValue }) => {
   try {
-    return await authService.login(email, password);
+    const data = await authService.login(email, password);
+    if (data.refresh_token) {
+      localStorage.setItem("refresh_token", data.refresh_token);
+    }
+    return data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.detail || "Login failed");
   }
@@ -12,7 +16,11 @@ export const loginUser = createAsyncThunk("user/login", async ({ email, password
 
 export const registerUser = createAsyncThunk("user/register", async (data, { rejectWithValue }) => {
   try {
-    return await authService.register(data);
+    const result = await authService.register(data);
+    if (result.refresh_token) {
+      localStorage.setItem("refresh_token", result.refresh_token);
+    }
+    return result;
   } catch (err) {
     return rejectWithValue(err.response?.data?.detail || "Registration failed");
   }
@@ -28,7 +36,7 @@ export const fetchCurrentUser = createAsyncThunk("user/fetchCurrentUser", async 
 
 export const updateMeasurements = createAsyncThunk("user/updateMeasurements", async (measurements, { rejectWithValue }) => {
   try {
-    const response = await api.put("/user/measurements", measurements);
+    const response = await api.put("/users/measurements", measurements);
     return response.data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.detail || "Failed to update measurements");
@@ -37,7 +45,7 @@ export const updateMeasurements = createAsyncThunk("user/updateMeasurements", as
 
 export const updatePreferences = createAsyncThunk("user/updatePreferences", async (preferences, { rejectWithValue }) => {
   try {
-    const response = await api.put("/user/preferences", preferences);
+    const response = await api.put("/users/preferences", preferences);
     return response.data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.detail || "Failed to update preferences");
@@ -62,7 +70,8 @@ const userSlice = createSlice({
       state.isAuthenticated = false;
       state.measurements = null;
       state.preferences = null;
-      authService.logout();
+      localStorage.removeItem("token");
+      localStorage.removeItem("refresh_token");
     },
     clearError(state) {
       state.error = null;
@@ -79,8 +88,8 @@ const userSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.access_token;
         state.isAuthenticated = true;
-        state.measurements = action.payload.measurements || null;
-        state.preferences = action.payload.preferences || null;
+        state.measurements = action.payload.user?.body_measurements || null;
+        state.preferences = action.payload.user?.preferences || null;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -104,8 +113,8 @@ const userSlice = createSlice({
       })
       .addCase(fetchCurrentUser.fulfilled, (state, action) => {
         state.user = action.payload.user || action.payload;
-        state.measurements = action.payload.measurements || null;
-        state.preferences = action.payload.preferences || null;
+        state.measurements = action.payload.measurements || action.payload.user?.body_measurements || null;
+        state.preferences = action.payload.preferences || action.payload.user?.preferences || null;
       })
       .addCase(updateMeasurements.fulfilled, (state, action) => {
         state.measurements = action.payload.measurements || action.payload;

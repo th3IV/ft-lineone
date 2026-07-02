@@ -1,9 +1,8 @@
 """Authentication routes."""
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import EmailStr
 
-from models.user import UserCreate, UserLogin, UserResponse, TokenResponse, UserUpdate
+from models.user import UserCreate, UserLogin, UserResponse, TokenResponse
 from services.auth import (
     create_access_token,
     create_refresh_token,
@@ -21,10 +20,16 @@ def get_db(request: Request) -> DatabaseService:
     return request.app.state.db
 
 
+def get_env(request: Request):
+    """Get Workers env binding from request state."""
+    return getattr(request.app.state, "env", None)
+
+
 @router.post("/register", response_model=TokenResponse)
 async def register(user_data: UserCreate, request: Request):
     """Register a new user."""
     db = get_db(request)
+    env = get_env(request)
 
     existing_user = await db.get_user_by_email(user_data.email)
     if existing_user:
@@ -36,8 +41,8 @@ async def register(user_data: UserCreate, request: Request):
         "password_hash": hash_password(user_data.password),
     })
 
-    access_token = create_access_token(user.id, user.email)
-    refresh_token = create_refresh_token(user.id, user.email)
+    access_token = create_access_token(user.id, user.email, env=env)
+    refresh_token = create_refresh_token(user.id, user.email, env=env)
 
     return TokenResponse(
         access_token=access_token,
@@ -55,13 +60,14 @@ async def register(user_data: UserCreate, request: Request):
 async def login(credentials: UserLogin, request: Request):
     """Login with email and password."""
     db = get_db(request)
+    env = get_env(request)
 
     user = await db.get_user_by_email(credentials.email)
     if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    access_token = create_access_token(user.id, user.email)
-    refresh_token = create_refresh_token(user.id, user.email)
+    access_token = create_access_token(user.id, user.email, env=env)
+    refresh_token = create_refresh_token(user.id, user.email, env=env)
 
     return TokenResponse(
         access_token=access_token,
@@ -84,7 +90,8 @@ async def refresh_token(body: dict, request: Request):
     if not token:
         raise HTTPException(status_code=400, detail="refresh_token required")
 
-    token_data = verify_token(token, expected_type="refresh")
+    env = get_env(request)
+    token_data = verify_token(token, expected_type="refresh", env=env)
     if not token_data:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
@@ -93,8 +100,8 @@ async def refresh_token(body: dict, request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    new_access_token = create_access_token(user.id, user.email)
-    new_refresh_token = create_refresh_token(user.id, user.email)
+    new_access_token = create_access_token(user.id, user.email, env=env)
+    new_refresh_token = create_refresh_token(user.id, user.email, env=env)
 
     return TokenResponse(
         access_token=new_access_token,

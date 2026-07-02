@@ -110,6 +110,28 @@ class DatabaseService:
             "created_at": now,
         })
 
+    async def update_user(self, user_id: str, updates: dict) -> bool:
+        """Update user fields. Supports: name, email, body_measurements, preferences."""
+        set_clauses = []
+        params = []
+        for key, value in updates.items():
+            if key in ("name", "email"):
+                set_clauses.append(f"{key} = ?")
+                params.append(value)
+            elif key == "body_measurements":
+                set_clauses.append("body_measurements = ?")
+                params.append(json.dumps(value))
+            elif key == "preferences":
+                set_clauses.append("preferences = ?")
+                params.append(json.dumps(value))
+        if not set_clauses:
+            return False
+        params.append(user_id)
+        await self.db.prepare(
+            f"UPDATE users SET {', '.join(set_clauses)} WHERE id = ?"
+        ).bind(*params).run()
+        return True
+
     async def get_product(self, product_id: str) -> Optional[ProductModel]:
         """Get product by ID."""
         result = await self.db.prepare(
@@ -139,6 +161,22 @@ class DatabaseService:
         if filters.get("query"):
             conditions.append("name LIKE ?")
             params.append(f"%{filters['query']}%")
+        # Gender filter: stored in category column as prefix (e.g., "mujer/camisetas")
+        if filters.get("gender"):
+            conditions.append("category LIKE ?")
+            params.append(f"%{filters['gender']}%")
+        # Clothing type filter: stored in category column
+        if filters.get("clothing_type"):
+            conditions.append("category LIKE ?")
+            params.append(f"%{filters['clothing_type']}%")
+        # Size filter: stored in JSON array column
+        if filters.get("size"):
+            conditions.append("sizes LIKE ?")
+            params.append(f'%"{filters["size"]}"%')
+        # Color filter: stored in JSON array column
+        if filters.get("color"):
+            conditions.append("colors LIKE ?")
+            params.append(f'%"{filters["color"]}"%')
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 

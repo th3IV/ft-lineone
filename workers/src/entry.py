@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import asgi
 
-from routes import auth, products, vton, recommendations, scrapers
+from routes import auth, products, vton, recommendations, scrapers, users
 from services.database import DatabaseService
 
 app = FastAPI(
@@ -36,6 +36,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["Products"])
 app.include_router(vton.router, prefix="/api/v1/vton", tags=["VTON"])
 app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"])

@@ -70,8 +70,9 @@ class VtonService:
             http_metadata={"contentType": content_type},
         )
 
-        bucket_name = os.getenv("R2_BUCKET", "r2-thelineone01")
-        return f"https://{bucket_name}.{os.getenv('R2_ACCOUNT_ID')}.r2.dev/{key}"
+        bucket_name = getattr(self.env, "R2_BUCKET", None) or os.getenv("R2_BUCKET", "r2-thelineone01")
+        account_id = getattr(self.env, "R2_ACCOUNT_ID", None) or os.getenv("R2_ACCOUNT_ID", "")
+        return f"https://{bucket_name}.{account_id}.r2.dev/{key}"
 
     async def store_user_image(self, image_bytes: bytes, user_id: str) -> str:
         """Store user uploaded image in R2."""
@@ -85,8 +86,9 @@ class VtonService:
             http_metadata={"contentType": content_type},
         )
 
-        bucket_name = os.getenv("R2_BUCKET", "r2-thelineone01")
-        return f"https://{bucket_name}.{os.getenv('R2_ACCOUNT_ID')}.r2.dev/{key}"
+        bucket_name = getattr(self.env, "R2_BUCKET", None) or os.getenv("R2_BUCKET", "r2-thelineone01")
+        account_id = getattr(self.env, "R2_ACCOUNT_ID", None) or os.getenv("R2_ACCOUNT_ID", "")
+        return f"https://{bucket_name}.{account_id}.r2.dev/{key}"
 
     @staticmethod
     def _detect_content_type(image_bytes: bytes) -> str:

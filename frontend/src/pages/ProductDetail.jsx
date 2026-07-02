@@ -45,7 +45,7 @@ function ProductDetail() {
     );
   }
 
-  const images = selectedProduct.images || [selectedProduct.image_url];
+  const images = selectedProduct.image_urls?.length ? selectedProduct.image_urls : [selectedProduct.image_url];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -81,7 +81,7 @@ function ProductDetail() {
           </span>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-3">{selectedProduct.name}</h1>
           <p className="text-2xl font-bold text-gray-900 mt-2">
-            {selectedProduct.currency || "$"}{selectedProduct.price?.toFixed(2)}
+            {selectedProduct.currency || "$"}{selectedProduct.price?.toLocaleString("es-CL")}
           </p>
           <p className="text-gray-600 mt-4">{selectedProduct.description}</p>
 

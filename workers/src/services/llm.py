@@ -35,7 +35,7 @@ class LLMService:
 
             # Call Workers AI LLM
             result = await self.ai.run(
-                "@cf/meta/llama-3.3-70b-instruct",
+                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
                 {
                     "messages": [
                         {
@@ -80,7 +80,7 @@ class LLMService:
             )
 
             result = await self.ai.run(
-                "@cf/meta/llama-3.3-70b-instruct",
+                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
                 {
                     "messages": [
                         {

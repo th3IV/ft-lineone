@@ -81,6 +81,7 @@ async def get_recommendations(
                     category=product.category,
                     description=product.description,
                     image_url=product.image_url,
+                    image_urls=product.image_urls or [],
                     sizes=product.sizes or [],
                     colors=product.colors or [],
                     availability=product.availability,

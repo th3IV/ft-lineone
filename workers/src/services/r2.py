@@ -10,8 +10,9 @@ class R2Service:
     def __init__(self, env):
         self.env = env
         self.r2 = env.R2  # R2 binding
-        self.bucket_name = os.getenv("R2_BUCKET", "r2-thelineone01")
-        self.account_id = os.getenv("R2_ACCOUNT_ID", "")
+        # Access R2_ACCOUNT_ID from env binding (Workers secret) or fallback to os.getenv
+        self.account_id = getattr(env, "R2_ACCOUNT_ID", None) or os.getenv("R2_ACCOUNT_ID", "")
+        self.bucket_name = getattr(env, "R2_BUCKET", None) or os.getenv("R2_BUCKET", "r2-thelineone01")
 
     async def upload_image(
         self,

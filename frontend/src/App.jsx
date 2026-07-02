@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
@@ -13,6 +13,14 @@ import ChatFlotante from "./components/ChatFlotante";
 import ModalVTON from "./components/ModalVTON";
 import { closeVtonModal } from "./store/uiSlice";
 
+function ProtectedRoute({ children }) {
+  const { isAuthenticated } = useSelector((state) => state.user);
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
 function App() {
   const dispatch = useDispatch();
   const { vtonModal } = useSelector((state) => state.ui);
@@ -25,8 +33,22 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/product/:id" element={<ProductDetail />} />
-          <Route path="/virtual-try-on" element={<VirtualTryOn />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route
+            path="/virtual-try-on"
+            element={
+              <ProtectedRoute>
+                <VirtualTryOn />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="*" element={<NotFound />} />
@@ -36,7 +58,7 @@ function App() {
       <ModalVTON
         product={vtonModal.product}
         isOpen={vtonModal.isOpen}
-        onClose={() => dispatch(closeVtonModal)}
+        onClose={() => dispatch(closeVtonModal())}
       />
     </div>
   );

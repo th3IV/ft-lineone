@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || "https://ft-lineone-api.thelineone.workers.dev",
+  baseURL: process.env.REACT_APP_API_URL || "https://api.thelineone.com/api/v1",
   headers: {
     "Content-Type": "application/json",
   },

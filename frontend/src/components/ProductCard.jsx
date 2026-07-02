@@ -43,7 +43,7 @@ function ProductCard({ product, onTryOn, index = 0 }) {
           </h3>
         </Link>
         <p className="text-lg font-bold bg-gradient-to-r from-fashion-pink to-fashion-purple bg-clip-text text-transparent mt-1">
-          {product.currency || "$"}{Number(product.price)?.toFixed(2)}
+          {product.currency || "$"}{Number(product.price)?.toLocaleString("es-CL")}
         </p>
       </div>
     </div>

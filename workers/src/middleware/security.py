@@ -1,7 +1,6 @@
 """Middleware for CORS, rate limiting, and authentication."""
 
 from fastapi import Request, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 
 from services.auth import verify_token
 
@@ -31,7 +30,8 @@ class AuthMiddleware:
             return None
 
         token = auth_header.split(" ")[1]
-        return verify_token(token)
+        env = getattr(request.app.state, "env", None)
+        return verify_token(token, env=env)
 
 
 async def require_auth(request: Request) -> dict:
