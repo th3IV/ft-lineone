@@ -93,8 +93,8 @@ class R2Service:
 
     def _get_public_url(self, key: str) -> str:
         """Generate the public URL for an R2 object."""
-        # R2 public access URL format
-        return f"https://{self.bucket_name}.{self.account_id}.r2.dev/{key}"
+        pub_domain = getattr(self.env, "R2_PUBLIC_DOMAIN", None) or "pub-ae92531aa2144de7aad7a3510e7b31ff.r2.dev"
+        return f"https://{pub_domain}/{key}"
 
     def generate_product_key(self, store: str, product_id: str, filename: str) -> str:
         """Generate a safe key for product images."""
