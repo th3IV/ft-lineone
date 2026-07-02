@@ -81,11 +81,17 @@ async def upload_image(
         )
 
     key = f"vton/user-uploads/{user_id}/{uuid.uuid4().hex}.jpg"
-    image_url = await r2_service.upload_image(
-        key=key,
-        data=image_bytes,
-        content_type=mime,
-    )
+    try:
+        image_url = await r2_service.upload_image(
+            key=key,
+            data=image_bytes,
+            content_type=mime,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload image to storage. Please try again. ({e})",
+        )
 
     return {"image_url": image_url}
 
@@ -109,13 +115,19 @@ async def try_on(
     if not product.image_url:
         raise HTTPException(status_code=400, detail="Product has no image available for try-on")
 
-    vton_result = await db.create_vton_result({
-        "user_id": user_id,
-        "product_id": body.product_id,
-        "status": "processing",
-        "input_image_url": body.user_image_url,
-        "garment_image_url": product.image_url,
-    })
+    try:
+        vton_result = await db.create_vton_result({
+            "user_id": user_id,
+            "product_id": body.product_id,
+            "status": "processing",
+            "input_image_url": body.user_image_url,
+            "garment_image_url": product.image_url,
+        })
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create try-on record. Please try again. ({e})",
+        )
 
     result = await vton_service.process_try_on(
         user_image_url=body.user_image_url,
@@ -143,11 +155,22 @@ async def try_on(
 
     content_type = result.get("content_type", "image/jpeg")
 
-    output_image_url = await r2_service.upload_image(
-        key=r2_service.generate_vton_key(user_id, body.product_id, is_result=True),
-        data=image_bytes_result,
-        content_type=content_type,
-    )
+    try:
+        output_image_url = await r2_service.upload_image(
+            key=r2_service.generate_vton_key(user_id, body.product_id, is_result=True),
+            data=image_bytes_result,
+            content_type=content_type,
+        )
+    except Exception as e:
+        await db.update_vton_result(vton_result.id, {
+            "status": "failed",
+            "error_message": f"Failed to store result: {e}",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
+        raise HTTPException(
+            status_code=500,
+            detail=f"Try-on succeeded but failed to save result. Please try again. ({e})",
+        )
 
     await db.update_vton_result(vton_result.id, {
         "status": "completed",

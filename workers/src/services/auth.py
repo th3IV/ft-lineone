@@ -16,6 +16,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from fastapi import HTTPException
 from pydantic import BaseModel
 
 
@@ -46,8 +47,9 @@ def get_jwt_secret(env=None) -> str:
     if not secret:
         secret = os.getenv("JWT_SECRET")
     if not secret:
-        raise RuntimeError(
-            "JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET"
+        raise HTTPException(
+            status_code=500,
+            detail="JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET",
         )
     _jwt_secret_cache = secret
     return secret

@@ -1,6 +1,5 @@
 """FT-LineOne API - Cloudflare Workers Python Entry Point."""
 
-import os
 import json
 import time
 
@@ -8,6 +7,7 @@ from workers import WorkerEntrypoint, Response
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 import asgi
 
@@ -23,16 +23,61 @@ app = FastAPI(
 )
 
 
-# CORS middleware
-cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
+# CORS middleware — hardcoded because os.getenv doesn't work in Workers Python
+# (vars only arrive via self.env, which isn't available at import time)
+CORS_ORIGINS = [
+    "https://thelineone.com",
+    "https://www.thelineone.com",
+    "http://localhost:3000",
+    "https://feat-cloudflare-migration.ft-lineone.pages.dev",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+
+def _cors_headers(origin):
+    origins = CORS_ORIGINS
+    if origin and origin in origins:
+        allow_origin = origin
+    else:
+        allow_origin = origins[0] if origins else "*"
+    return {
+        "Access-Control-Allow-Origin": allow_origin,
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Max-Age": "86400",
+    }
+
+
+# Exception handler — catches unhandled exceptions that escape FastAPI/Starlette
+# and returns them WITH CORS headers so the browser shows the real error
+# instead of a misleading "network error" / CORS block.
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    import traceback
+    origin = request.headers.get("origin", "")
+    headers = _cors_headers(origin)
+    headers["Content-Type"] = "application/json"
+    print(json.dumps({
+        "event": "unhandled_exception",
+        "url": str(request.url),
+        "method": request.method,
+        "error": str(exc),
+        "traceback": traceback.format_exc(),
+    }))
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"},
+        headers=headers,
+    )
+
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
@@ -55,24 +100,6 @@ async def root():
         "version": "2.0.0",
         "docs": "/docs",
         "health": "/health",
-    }
-
-
-def _cors_headers(origin):
-    allowed = os.getenv("CORS_ORIGINS", "*")
-    origins = [o.strip() for o in allowed.split(",")]
-    if "*" in origins:
-        allow_origin = origin or "*"
-    elif origin and origin in origins:
-        allow_origin = origin
-    else:
-        allow_origin = origins[0] if origins else "*"
-    return {
-        "Access-Control-Allow-Origin": allow_origin,
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400",
     }
 
 
