@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -6,16 +6,18 @@
 
 @layer base {
   body {
-    @apply font-sans text-editorial-charcoal bg-editorial-cream antialiased;
+    @apply font-sans text-editorial-black bg-editorial-cream antialiased;
     margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4 {
-    @apply font-serif;
+    @apply font-display;
   }
 
   ::-webkit-scrollbar {
-    @apply w-1.5;
+    @apply w-1;
   }
 
   ::-webkit-scrollbar-track {
@@ -23,28 +25,64 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 rounded-full hover:bg-gray-400;
+    @apply bg-editorial-gray-light rounded-full hover:bg-editorial-gray;
+  }
+
+  ::selection {
+    @apply bg-fashion-pink/20 text-editorial-black;
   }
 }
 
 @layer components {
   .glass {
-    @apply bg-white/80 backdrop-blur-lg border-b border-white/20;
+    @apply bg-editorial-cream/80 backdrop-blur-xl border-b border-editorial-black/5;
   }
 
   .card-shadow {
-    @apply shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:shadow-[0_12px_40px_rgb(0,0,0,0.15)];
+    @apply shadow-[0_2px_20px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)];
   }
 
   .btn-primary {
-    @apply bg-gradient-to-r from-fashion-pink to-fashion-purple text-white font-semibold py-2.5 px-6 rounded-xl hover:opacity-90 transition-all duration-300 active:scale-[0.98];
+    @apply bg-editorial-black text-white font-medium py-3 px-7 rounded-full text-sm tracking-wide hover:bg-editorial-black/90 transition-all duration-300 active:scale-[0.97];
+  }
+
+  .btn-gradient {
+    @apply bg-gradient-to-r from-fashion-pink to-fashion-purple text-white font-medium py-3 px-7 rounded-full text-sm tracking-wide hover:opacity-90 transition-all duration-300 active:scale-[0.97];
   }
 
   .btn-outline {
-    @apply border-2 border-fashion-pink text-fashion-pink font-semibold py-2.5 px-6 rounded-xl hover:bg-fashion-pink-light transition-all duration-300 active:scale-[0.98];
+    @apply border border-editorial-black/20 text-editorial-black font-medium py-3 px-7 rounded-full text-sm tracking-wide hover:bg-editorial-black hover:text-white transition-all duration-300 active:scale-[0.97];
+  }
+
+  .btn-outline-white {
+    @apply border border-white/40 text-white font-medium py-3 px-7 rounded-full text-sm tracking-wide hover:bg-white hover:text-editorial-black transition-all duration-300 active:scale-[0.97];
   }
 
   .tag-pill {
-    @apply px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border;
+    @apply px-4 py-1.5 rounded-full text-xs font-medium tracking-wide transition-all duration-200 border border-editorial-black/10;
+  }
+
+  .tag-pill-active {
+    @apply bg-editorial-black text-white border-editorial-black;
+  }
+
+  .section-title {
+    @apply font-display text-3xl md:text-4xl tracking-tight text-editorial-black;
+  }
+
+  .section-subtitle {
+    @apply text-sm tracking-[0.2em] uppercase text-editorial-gray font-medium;
+  }
+
+  .editorial-heading {
+    @apply font-display tracking-tight leading-[0.9] text-editorial-black;
+  }
+
+  .editorial-label {
+    @apply text-[11px] tracking-[0.2em] uppercase text-editorial-gray font-medium;
+  }
+
+  .editorial-card {
+    @apply bg-editorial-white rounded-2xl overflow-hidden transition-all duration-500;
   }
 }

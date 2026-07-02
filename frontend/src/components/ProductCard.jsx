@@ -1,49 +1,59 @@
 import { Link } from "react-router-dom";
-
-const storeColors = {
-  paris: "bg-blue-600",
-  maui: "bg-teal-500",
-  zara: "bg-black",
-};
+import { Heart } from "lucide-react";
 
 function ProductCard({ product, onTryOn, index = 0 }) {
-  const storeKey = product.store?.toLowerCase();
-  const storeColor = storeColors[storeKey] || "bg-gray-600";
-
   return (
     <div
-      className="group bg-white rounded-2xl card-shadow overflow-hidden transition-all duration-500 hover:-translate-y-1 animate-fade-in"
-      style={{ animationDelay: `${(index % 20) * 50}ms`, animationFillMode: "both" }}
+      className="group editorial-card card-shadow animate-fade-in"
+      style={{ animationDelay: `${(index % 20) * 60}ms`, animationFillMode: "both" }}
     >
-      <div className="relative aspect-square overflow-hidden bg-gray-100">
+      <div className="relative aspect-[3/4] overflow-hidden bg-editorial-cream-dark">
         <Link to={`/product/${product.id}`}>
           <img
             src={product.image_url || "/placeholder.jpg"}
             alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+            className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700 ease-out"
           />
         </Link>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        <div className="absolute top-3 left-3 flex gap-1.5">
-          <span className={`${storeColor} text-white text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-lg`}>
+
+        {/* Hover Overlay */}
+        <div className="absolute inset-0 bg-editorial-black/0 group-hover:bg-editorial-black/10 transition-colors duration-500" />
+
+        {/* Store Badge */}
+        <div className="absolute top-3 left-3">
+          <span className="editorial-label text-[9px] bg-editorial-white/90 backdrop-blur-sm text-editorial-black px-2.5 py-1 rounded-full">
             {product.store}
           </span>
         </div>
+
+        {/* Heart Button */}
+        <button
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-editorial-white/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-editorial-white"
+          onClick={(e) => {
+            e.preventDefault();
+          }}
+        >
+          <Heart size={14} className="text-editorial-gray hover:text-red-500 transition-colors" />
+        </button>
+
+        {/* Try-On Button */}
         <button
           onClick={() => onTryOn && onTryOn(product)}
-          className="absolute bottom-3 left-3 right-3 btn-primary text-sm text-center opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 shadow-lg"
+          className="absolute bottom-3 left-3 right-3 py-2.5 bg-editorial-white/90 backdrop-blur-sm text-editorial-black text-xs font-medium tracking-wide rounded-xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 hover:bg-editorial-white"
         >
-          Probar ahora
+          Probar con IA
         </button>
       </div>
+
       <div className="p-4">
         <Link to={`/product/${product.id}`}>
-          <h3 className="text-sm font-medium text-gray-900 truncate group-hover:text-fashion-pink transition-colors">
+           <h3 className="text-[13px] font-medium text-editorial-black truncate transition-colors duration-200">
             {product.name}
           </h3>
         </Link>
-        <p className="text-lg font-bold bg-gradient-to-r from-fashion-pink to-fashion-purple bg-clip-text text-transparent mt-1">
-          {product.currency || "$"}{Number(product.price)?.toLocaleString("es-CL")}
+        <p className="text-sm font-semibold text-editorial-black mt-1 tabular-nums">
+          {product.currency === "CLP" ? "$" : product.currency || "$"}
+          {Number(product.price)?.toLocaleString("es-CL")}
         </p>
       </div>
     </div>

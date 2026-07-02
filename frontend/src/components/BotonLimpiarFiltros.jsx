@@ -4,7 +4,7 @@ function BotonLimpiarFiltros({ onClick, hasFilters }) {
   return (
     <button
       onClick={onClick}
-      className="w-full py-2.5 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-500 hover:text-fashion-pink hover:border-fashion-pink transition-all duration-200 active:scale-[0.98]"
+      className="w-full py-2.5 rounded-full border border-editorial-black/10 text-xs font-medium text-editorial-gray hover:text-editorial-black hover:border-editorial-black/30 transition-all duration-200"
     >
       Limpiar todos los filtros
     </button>

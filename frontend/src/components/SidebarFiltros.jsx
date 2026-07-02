@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import FiltroGenero from "./FiltroGenero";
 import FiltroTiendas from "./FiltroTiendas";
 import FiltroTipoRopa from "./FiltroTipoRopa";
@@ -24,28 +25,30 @@ function SidebarFiltros({
 
   return (
     <>
+      {/* Mobile Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/20 z-30 lg:hidden"
+          className="fixed inset-0 bg-editorial-black/20 backdrop-blur-sm z-30 lg:hidden"
           onClick={() => onFilterChange("_toggle", null)}
         />
       )}
 
       <aside
-        className={`fixed lg:sticky top-16 lg:top-24 left-0 z-40 lg:z-0 h-[calc(100vh-4rem)] lg:h-auto w-72 bg-white lg:bg-transparent border-r border-gray-100 lg:border-none overflow-y-auto transform transition-transform duration-300 lg:transform-none ${
+        className={`fixed lg:sticky top-14 lg:top-[72px] left-0 z-40 lg:z-0 h-[calc(100vh-3.5rem)] lg:h-[calc(100vh-72px)] w-72 bg-editorial-white lg:bg-transparent border-r border-editorial-black/5 lg:border-none overflow-y-auto transform transition-transform duration-300 lg:transform-none ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        } ${isOpen ? "shadow-2xl lg:shadow-none" : ""}`}
+        } ${isOpen ? "shadow-[20px_0_60px_rgba(0,0,0,0.1)] lg:shadow-none" : ""}`}
       >
-        <div className="p-5 space-y-6">
+        <div className="p-6 space-y-6">
+          {/* Mobile Header */}
           <div className="flex items-center justify-between lg:hidden">
-            <h3 className="font-serif text-lg font-semibold">Filtros</h3>
+            <h3 className="font-display text-base font-semibold text-editorial-black">
+              Filtros
+            </h3>
             <button
               onClick={() => onFilterChange("_toggle", null)}
-              className="p-1 text-gray-400 hover:text-gray-600"
+              className="p-1.5 text-editorial-gray hover:text-editorial-black rounded-lg hover:bg-editorial-black/5 transition-all"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X size={18} />
             </button>
           </div>
 
@@ -54,35 +57,35 @@ function SidebarFiltros({
             onChange={(val) => onFilterChange("gender", val)}
           />
 
-          <hr className="border-gray-100" />
+          <div className="border-t border-editorial-black/5" />
 
           <FiltroTiendas
             selected={filters.store}
             onChange={(val) => onFilterChange("store", val)}
           />
 
-          <hr className="border-gray-100" />
+          <div className="border-t border-editorial-black/5" />
 
           <FiltroTipoRopa
             selected={filters.clothingType || []}
             onChange={(val) => onFilterChange("clothingType", val)}
           />
 
-          <hr className="border-gray-100" />
+          <div className="border-t border-editorial-black/5" />
 
           <FiltroTallas
             selected={filters.size}
             onChange={(val) => onFilterChange("size", val)}
           />
 
-          <hr className="border-gray-100" />
+          <div className="border-t border-editorial-black/5" />
 
           <FiltroColores
             selected={filters.color}
             onChange={(val) => onFilterChange("color", val)}
           />
 
-          <hr className="border-gray-100" />
+          <div className="border-t border-editorial-black/5" />
 
           <FiltroPrecio
             minPrice={filters.minPrice}

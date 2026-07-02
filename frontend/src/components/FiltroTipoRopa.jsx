@@ -22,18 +22,16 @@ function FiltroTipoRopa({ selected, onChange }) {
 
   return (
     <div>
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">
-        Tipo de Ropa
-      </h4>
+      <h4 className="editorial-label mb-3">Tipo de Ropa</h4>
       <div className="flex flex-wrap gap-1.5">
         {tipos.map((tipo) => (
           <button
             key={tipo}
             onClick={() => toggle(tipo)}
-            className={`tag-pill text-xs ${
+            className={`tag-pill text-[11px] ${
               selected.includes(tipo)
-                ? "bg-fashion-purple text-white border-fashion-purple"
-                : "bg-white text-gray-600 border-gray-200 hover:border-fashion-purple"
+                ? "tag-pill-active"
+                : "bg-editorial-white text-editorial-gray hover:border-editorial-black/20"
             }`}
           >
             {tipo}

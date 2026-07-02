@@ -26,6 +26,23 @@ export const registerUser = createAsyncThunk("user/register", async (data, { rej
   }
 });
 
+export const fetchProfile = createAsyncThunk("user/fetchProfile", async (_, { rejectWithValue }) => {
+  try {
+    return await authService.getCurrentUser();
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to fetch profile");
+  }
+});
+
+export const updateProfile = createAsyncThunk("user/updateProfile", async (data, { rejectWithValue }) => {
+  try {
+    const response = await api.put("/users/profile", data);
+    return response.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to update profile");
+  }
+});
+
 export const fetchCurrentUser = createAsyncThunk("user/fetchCurrentUser", async (_, { rejectWithValue }) => {
   try {
     return await authService.getCurrentUser();
@@ -121,6 +138,14 @@ const userSlice = createSlice({
       })
       .addCase(updatePreferences.fulfilled, (state, action) => {
         state.preferences = action.payload.preferences || action.payload;
+      })
+      .addCase(fetchProfile.fulfilled, (state, action) => {
+        state.user = action.payload.user || action.payload;
+        state.measurements = action.payload.measurements || action.payload.user?.body_measurements || null;
+        state.preferences = action.payload.preferences || action.payload.user?.preferences || null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.user = action.payload.user || action.payload;
       });
   },
 });

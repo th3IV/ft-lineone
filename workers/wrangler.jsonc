@@ -26,7 +26,8 @@
   },
   "vars": {
     "JWT_ALGORITHM": "HS256",
-    "CORS_ORIGINS": "https://thelineone.com,https://www.thelineone.com,http://localhost:3000"
+    "CORS_ORIGINS": "https://thelineone.com,https://www.thelineone.com,http://localhost:3000",
+    "CLOUDFLARE_AI_GATEWAY_ID": "ft-lineone-vton"
   },
   "triggers": {
     "crons": ["*/5 * * * *"]

@@ -3,9 +3,7 @@ const tallas = ["XS", "S", "M", "L", "XL", "XXL"];
 function FiltroTallas({ selected, onChange }) {
   return (
     <div>
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">
-        Talla
-      </h4>
+      <h4 className="editorial-label mb-3">Talla</h4>
       <div className="flex flex-wrap gap-1.5">
         {tallas.map((t) => (
           <button
@@ -13,8 +11,8 @@ function FiltroTallas({ selected, onChange }) {
             onClick={() => onChange(selected === t ? null : t)}
             className={`tag-pill min-w-[2.5rem] text-center ${
               selected === t
-                ? "bg-editorial-charcoal text-white border-editorial-charcoal"
-                : "bg-white text-gray-600 border-gray-200 hover:border-editorial-charcoal"
+                ? "tag-pill-active"
+                : "bg-editorial-white text-editorial-gray hover:border-editorial-black/20"
             }`}
           >
             {t}

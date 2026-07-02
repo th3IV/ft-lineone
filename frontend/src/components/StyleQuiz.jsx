@@ -54,26 +54,31 @@ function StyleQuiz({ onComplete, initialPreferences }) {
   return (
     <div className="w-full max-w-lg mx-auto">
       <div className="mb-6">
-        <div className="flex justify-between text-sm text-gray-500 mb-2">
-          <span>Question {step + 1} of {questions.length}</span>
+        <div className="flex justify-between text-xs text-editorial-gray mb-2">
+          <span>Pregunta {step + 1} de {questions.length}</span>
           <span>{Math.round(progress)}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div className="bg-indigo-600 h-2 rounded-full transition-all" style={{ width: `${progress}%` }}></div>
+        <div className="w-full bg-editorial-black/5 rounded-full h-1">
+          <div
+            className="bg-editorial-black h-1 rounded-full transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">{current.question}</h3>
+      <div className="bg-editorial-white rounded-2xl p-6">
+        <h3 className="text-base font-display font-semibold text-editorial-black mb-4">
+          {current.question}
+        </h3>
         <div className="space-y-2">
           {current.options.map((option) => (
             <button
               key={option}
               onClick={() => handleSelect(option)}
-              className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
+              className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-all duration-200 ${
                 preferences[current.id] === option
-                  ? "border-indigo-600 bg-indigo-50 text-indigo-700"
-                  : "border-gray-200 hover:border-indigo-300 text-gray-700"
+                  ? "border-editorial-black bg-editorial-black text-white"
+                  : "border-editorial-black/10 text-editorial-gray hover:border-editorial-black/30"
               }`}
             >
               {option}
@@ -83,9 +88,9 @@ function StyleQuiz({ onComplete, initialPreferences }) {
         {step > 0 && (
           <button
             onClick={handleBack}
-            className="mt-4 text-sm text-gray-500 hover:text-gray-700"
+            className="mt-4 text-xs text-editorial-gray hover:text-editorial-black transition-colors"
           >
-            Back
+            Volver
           </button>
         )}
       </div>

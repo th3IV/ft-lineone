@@ -1,5 +1,5 @@
 const tiendas = [
-  { nombre: "Paris", clase: "bg-blue-600" },
+  { nombre: "Paris", clase: "bg-editorial-black" },
   { nombre: "Maui", clase: "bg-teal-500" },
   { nombre: "Zara", clase: "bg-black" },
 ];
@@ -7,21 +7,29 @@ const tiendas = [
 function FiltroTiendas({ selected, onChange }) {
   return (
     <div>
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">
-        Tiendas
-      </h4>
+      <h4 className="editorial-label mb-3">Tiendas</h4>
       <div className="flex flex-wrap gap-2">
         {tiendas.map((t) => (
           <button
             key={t.nombre}
-            onClick={() => onChange(selected === t.nombre.toLowerCase() ? null : t.nombre.toLowerCase())}
+            onClick={() =>
+              onChange(
+                selected === t.nombre.toLowerCase() ? null : t.nombre.toLowerCase()
+              )
+            }
             className={`tag-pill flex items-center gap-1.5 ${
               selected === t.nombre.toLowerCase()
-                ? `${t.clase} text-white ring-2 ring-offset-1 ring-fashion-pink`
-                : "bg-white text-gray-600 border-gray-200 hover:border-fashion-pink"
+                ? "tag-pill-active"
+                : "bg-editorial-white text-editorial-gray hover:border-editorial-black/20"
             }`}
           >
-            <span className={`w-2.5 h-2.5 rounded-full ${t.clase} ${selected === t.nombre.toLowerCase() ? "ring-1 ring-white/60" : ""}`} />
+            <span
+              className={`w-2 h-2 rounded-full ${t.clase} ${
+                selected === t.nombre.toLowerCase()
+                  ? "ring-1 ring-white/60"
+                  : ""
+              }`}
+            />
             {t.nombre}
           </button>
         ))}

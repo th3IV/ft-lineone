@@ -58,11 +58,36 @@ async def root():
     }
 
 
+def _cors_headers(origin):
+    allowed = os.getenv("CORS_ORIGINS", "*")
+    origins = [o.strip() for o in allowed.split(",")]
+    if "*" in origins:
+        allow_origin = origin or "*"
+    elif origin and origin in origins:
+        allow_origin = origin
+    else:
+        allow_origin = origins[0] if origins else "*"
+    return {
+        "Access-Control-Allow-Origin": allow_origin,
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Max-Age": "86400",
+    }
+
+
 class Default(WorkerEntrypoint):
     """Cloudflare Workers Python entry point."""
 
     async def on_fetch(self, request):
         """Handle incoming HTTP requests via ASGI bridge."""
+        origin = request.headers.get("origin", "")
+
+        if request.method == "OPTIONS":
+            h = _cors_headers(origin)
+            h["Content-Type"] = "text/plain"
+            return Response(b"", status=204, headers=h)
+
         start = time.time()
         app.state.db = DatabaseService(self.env)
         app.state.env = self.env
@@ -73,7 +98,7 @@ class Default(WorkerEntrypoint):
             print(json.dumps({
                 "method": request.method,
                 "url": request.url,
-                "status": response.status if hasattr(response, "status") else 200,
+                "status": response.status_code if hasattr(response, "status_code") else 200,
                 "ms": elapsed,
             }))
             return response
@@ -85,7 +110,13 @@ class Default(WorkerEntrypoint):
                 "error": str(e),
                 "ms": elapsed,
             }))
-            raise
+            h = _cors_headers(origin)
+            h["Content-Type"] = "application/json"
+            return Response(
+                json.dumps({"detail": str(e)}).encode("utf-8"),
+                status=500,
+                headers=h,
+            )
 
     async def on_scheduled(self, controller):
         """Handle cron triggers for scraper scheduling."""

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { registerUser, clearError } from "../store/userSlice";
 
 function RegisterPage() {
@@ -22,70 +23,83 @@ function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-editorial-cream px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Crear Cuenta</h1>
-          <p className="text-gray-500 mt-2">Únete a The Line One</p>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-sm"
+      >
+        <div className="text-center mb-10">
+          <Link to="/" className="inline-block mb-6">
+            <span className="text-lg font-display italic font-semibold tracking-[0.15em] text-editorial-black">
+              FT. THE LINE ONE
+            </span>
+          </Link>
+          <h1 className="text-2xl font-display font-semibold text-editorial-black">
+            Crear Cuenta
+          </h1>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="bg-red-50 text-red-600 text-sm rounded-lg p-3">{error}</div>
+            <div className="bg-red-50 text-red-600 text-xs rounded-xl p-3 text-center">
+              {error}
+            </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-fashion-pink focus:border-transparent"
-              placeholder="Tu nombre"
+              className="w-full border-b border-editorial-black/10 rounded-none px-0 py-3 text-sm bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
+              placeholder="Nombre"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-fashion-pink focus:border-transparent"
-              placeholder="tu@email.com"
+              className="w-full border-b border-editorial-black/10 rounded-none px-0 py-3 text-sm bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
+              placeholder="Email"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-fashion-pink focus:border-transparent"
-              placeholder="Mínimo 8 caracteres"
+              className="w-full border-b border-editorial-black/10 rounded-none px-0 py-3 text-sm bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
+              placeholder="Minimo 8 caracteres"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-fashion-pink to-fashion-purple text-white py-3 rounded-xl font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="w-full btn-primary disabled:opacity-50"
           >
             {loading ? "Creando cuenta..." : "Crear Cuenta"}
           </button>
 
-          <p className="text-center text-sm text-gray-500">
-            ¿Ya tienes cuenta?{" "}
-            <Link to="/login" className="text-fashion-pink font-medium hover:underline">
-              Inicia sesión
+          <p className="text-center text-xs text-editorial-gray">
+            Ya tienes cuenta?{" "}
+            <Link
+              to="/login"
+              className="text-editorial-black font-medium hover:underline"
+            >
+              Inicia sesion
             </Link>
           </p>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 }

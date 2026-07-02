@@ -1,10 +1,11 @@
 """Virtual Try-On routes."""
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Depends
+from fastapi.responses import Response
 from typing import Optional
 
 from models.vton_result import VtonResult, VtonStatus, VtonHistoryResponse
-from services.vton import VtonService
+from services.vton import VtonService, _validate_image
 from services.r2 import R2Service
 from middleware.security import require_auth
 
@@ -23,34 +24,35 @@ async def try_on(
     product_id: str = Form(...),
     user: dict = Depends(require_auth),
 ):
-    """Process a virtual try-on request."""
-    # Validate file type
+    """Process a virtual try-on request. Returns the result image directly as JPEG."""
     if not user_image.content_type or not user_image.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
 
-    # Validate file size (max 10MB)
     contents = await user_image.read()
     if len(contents) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
+
+    if not _validate_image(contents):
+        raise HTTPException(status_code=400, detail="Invalid image format. Please upload a JPEG, PNG, or WebP file.")
 
     user_id = user.user_id
     db = get_db(request)
     vton_service = VtonService(request.app.state.env)
     r2_service = R2Service(request.app.state.env)
 
-    # Get product details
     product = await db.get_product(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # Store user image in R2
+    if not product.image_url:
+        raise HTTPException(status_code=400, detail="Product has no image available for try-on")
+
     user_image_url = await r2_service.upload_image(
         key=r2_service.generate_vton_key(user_id, product_id, is_result=False),
         data=contents,
-        content_type=user_image.content_type,
+        content_type=user_image.content_type or "image/jpeg",
     )
 
-    # Create VTON result record
     vton_result = await db.create_vton_result({
         "user_id": user_id,
         "product_id": product_id,
@@ -59,28 +61,28 @@ async def try_on(
         "garment_image_url": product.image_url,
     })
 
-    # Process try-on
     result = await vton_service.process_try_on(
-        user_image_bytes=contents,
-        garment_image_url=product.image_url or "",
+        user_image_url=user_image_url,
+        garment_image_url=product.image_url,
         product_id=product_id,
         user_id=user_id,
     )
 
-    # Update DB record with result
     from datetime import datetime, timezone
     await db.update_vton_result(vton_result.id, {
         "status": result["status"],
-        "output_image_url": result.get("output_image_url"),
         "completed_at": datetime.now(timezone.utc).isoformat(),
     })
 
-    return {
-        "vton_id": vton_result.id,
-        "status": result["status"],
-        "input_image_url": user_image_url,
-        "output_image_url": result.get("output_image_url"),
-    }
+    if result["status"] == "failed":
+        raise HTTPException(status_code=500, detail=result.get("error", "VTON processing failed"))
+
+    image_bytes = result.get("image_bytes")
+    if not image_bytes:
+        raise HTTPException(status_code=500, detail="No image data returned from VTON model")
+
+    content_type = result.get("content_type", "image/jpeg")
+    return Response(content=image_bytes, media_type=content_type)
 
 
 @router.get("/result/{vton_id}")

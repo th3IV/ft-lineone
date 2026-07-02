@@ -1,51 +1,46 @@
 # FT. THE LINE ONE
 
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![Workers AI](https://img.shields.io/badge/Workers_AI-pruna/p--image--try--on-FF6F00?logo=cloudflare&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3-06B6D4?logo=tailwindcss&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?logo=mongodb&logoColor=white)
-![LangChain](https://img.shields.io/badge/LangChain-GPT4-1C3C3C?logo=langchain&logoColor=white)
-![Render](https://img.shields.io/badge/Render-Deploy-46E3B7?logo=render&logoColor=white)
+![Cloudflare D1](https://img.shields.io/badge/D1-SQLite-F38020?logo=cloudflare&logoColor=white)
+![Cloudflare R2](https://img.shields.io/badge/R2-Object_Storage-EF7B2C?logo=cloudflare&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Workers-Deploy-F38020?logo=cloudflare&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## Descripción
 
 **FT. THE LINE ONE** es una plataforma **B2C de Fashion Tech** que integra **Web Scraping**, **Inteligencia Artificial (LLMs)** y **Virtual Try-On (VTON)** para ofrecer una experiencia de compra de moda inteligente y personalizada.
 
-La plataforma extrae productos en tiempo real desde los principales retailers de Chile, los procesa con IA, y permite a los usuarios probarse virtualmente la ropa antes de comprar.
+La plataforma extrae productos desde los principales retailers de Chile, los procesa con IA, y permite a los usuarios probarse virtualmente la ropa antes de comprar.
 
 ---
 
 ## Arquitectura
 
-Monorepo estructurado en **4 microservicios** que se comunican vía HTTP/JSON:
+Monorepo con **2 capas** que se comunican vía HTTP/JSON, todo desplegado en Cloudflare Workers:
 
 ```
 Frontend React (TailwindCSS + Redux)
-    ├── HTTP/JSON ──► Backend API (FastAPI)
-    │                     ├── PostgreSQL (datos estructurados)
-    │                     ├── MongoDB (datos no estructurados / scraping)
-    │                     ├── Cloudflare R2 (imágenes)
-    │                     └── Scrapers (BeautifulSoup)
-    │                           ├── Falabella
-    │                           ├── Ripley
-    │                           ├── Paris
-    │                           ├── Maui
-    │                           ├── Zara
-    │                           └── etc.
-    └── HTTP/JSON ──► VTON Service (FastAPI + Replicate)
-                          └── Cloudflare R2 (output)
+    └── HTTP/JSON ──► API (Cloudflare Workers Python / FastAPI + ASGI)
+                          ├── Cloudflare D1 (base de datos SQL)
+                          ├── Workers AI (LLM + VTON)
+                          ├── Cloudflare R2 (imágenes)
+                          └── Scrapers embebidos (BeautifulSoup + httpx)
+                                ├── Paris (Constructor.io API + HTML fallback)
+                                ├── Zara (Internal JSON API)
+                                └── Maui (HTML parsing)
 ```
 
 **Flujo principal:**
-1. **Scrapers** extraen productos desde los retailers → los envían al backend
-2. **Backend** los procesa, normaliza, valida con LLM y almacena (PostgreSQL + MongoDB)
+
+1. **Cron cada 5 minutos** ejecuta los scrapers embebidos → extraen productos desde retailers
+2. **API** los normaliza y almacena en D1
 3. **Usuario** navega en el Frontend → solicita productos desde la API
-4. **Usuario** sube su foto + selecciona producto → Backend envía al servicio **VTON**
-5. **VTON** procesa con IDM-VTON (Replicate API) → resultado se guarda en R2 → se muestra en Frontend
-6. **LLM (GPT-4)** genera recomendaciones personalizadas basadas en preferencias e historial
+4. **Usuario** sube su foto + selecciona producto → API ejecuta VTON con Workers AI
+5. **VTON** procesa con **Pruna P-Image-Try-On** (Workers AI) → resultado se retorna al Frontend
+6. **LLM (Llama 3.3 70B)** genera recomendaciones personalizadas basadas en preferencias
 
 ---
 
@@ -53,16 +48,15 @@ Frontend React (TailwindCSS + Redux)
 
 | Capa | Tecnología | Versión |
 |---|---|---|
-| **Backend** | FastAPI + Python | 3.12+ / 0.115 |
+| **Backend** | Cloudflare Workers + Python (Pyodide) + FastAPI (ASGI) | 3.12+ |
 | **Frontend** | React + JavaScript + TailwindCSS | 18 / 3 |
-| **Scrapers** | Python + BeautifulSoup + requests | 4.x |
-| **VTON** | FastAPI + Replicate API (IDM-VTON) | — |
-| **Base de Datos** | PostgreSQL + MongoDB | 16 / 7 |
+| **Scrapers** | Python + BeautifulSoup + httpx | 4.x |
+| **VTON** | Workers AI — Pruna P-Image-Try-On | — |
+| **Base de Datos** | Cloudflare D1 (SQLite) | — |
 | **Almacenamiento** | Cloudflare R2 (S3-compatible) | — |
-| **IA** | LangChain + GPT-4 + Replicate | — |
-| **Autenticación** | JWT (access + refresh tokens) + bcrypt | — |
-| **Cache / Queue** | Redis + Celery | 7 / 5.4 |
-| **Despliegue** | Render + GitHub Actions | — |
+| **IA** | Workers AI — Llama 3.3 70B Instruct (FP8 Fast) | — |
+| **Autenticación** | JWT (access + refresh tokens) + PBKDF2-SHA256 | — |
+| **Despliegue** | Cloudflare Workers + GitHub Actions | — |
 
 ---
 
@@ -70,57 +64,54 @@ Frontend React (TailwindCSS + Redux)
 
 ```
 ft-lineone/
-├── backend/
-│   ├── app/
-│   │   ├── api/v1/routes/        # FastAPI endpoints
-│   │   │   ├── auth.py
-│   │   │   ├── users.py
-│   │   │   ├── products.py
-│   │   │   ├── recommendations.py
-│   │   │   └── vton.py
-│   │   ├── core/                  # Config, seguridad
-│   │   ├── domain/models/         # User, Product, VTONResult, Account, Session
-│   │   ├── application/
-│   │   │   ├── services/          # Lógica de negocio
-│   │   │   └── orchestrator/      # Pipelines multi-paso
-│   │   ├── infrastructure/
-│   │   │   ├── persistence/       # PostgreSQL (SQLAlchemy) + MongoDB (Motor)
-│   │   │   └── external_services/ # LLMClient, VTONClient, ScraperClient
-│   │   └── main.py
-│   ├── tests/
-│   ├── requirements.txt
-│   └── Dockerfile
-├── frontend/
+├── workers/                         # Backend completo (Cloudflare Workers)
 │   ├── src/
-│   │   ├── components/            # Navbar, ProductCard, ProductGrid, VirtualMirror, StyleQuiz
-│   │   ├── pages/                 # Home, Catalog, ProductDetail, VirtualTryOn, Profile
-│   │   ├── services/              # api.js, auth.js, vton.js
-│   │   ├── store/                 # Redux Toolkit (user, products, recommendations)
-│   │   ├── hooks/                 # useAuth
+│   │   ├── entry.py                 # Entry point + ASGI bridge
+│   │   ├── routes/
+│   │   │   ├── auth.py              # Registro, login, refresh token
+│   │   │   ├── users.py             # Perfil, medidas, preferencias
+│   │   │   ├── products.py          # CRUD productos, búsqueda, filtros
+│   │   │   ├── vton.py              # Virtual Try-On endpoints
+│   │   │   ├── recommendations.py   # Recomendaciones LLM + chat de estilo
+│   │   │   └── scrapers.py          # Ingesta de productos + trigger manual
+│   │   ├── services/
+│   │   │   ├── database.py          # D1 Database Service
+│   │   │   ├── auth.py              # JWT + PBKDF2 (stdlib, sin bcrypt)
+│   │   │   ├── vton.py              # Workers AI: Pruna P-Image-Try-On
+│   │   │   ├── llm.py               # Workers AI: Llama 3.3 70B
+│   │   │   └── r2.py                # Cloudflare R2 Storage
+│   │   ├── scrapers/
+│   │   │   ├── scheduler.py         # Orquestador Cron
+│   │   │   ├── zara.py              # Zara (API interna /cl/es/category/)
+│   │   │   ├── paris.py             # Paris (Constructor.io API + HTML)
+│   │   │   └── maui.py              # Maui (HTML con BeautifulSoup)
+│   │   ├── models/
+│   │   │   ├── user.py              # Pydantic models
+│   │   │   ├── product.py           # Pydantic models
+│   │   │   └── vton_result.py       # Pydantic models
+│   │   └── middleware/
+│   │       └── security.py          # Auth middleware (Depends)
+│   ├── schema.sql                   # D1 schema (users, products, vton_results)
+│   ├── wrangler.jsonc               # Config Workers + D1 + R2 + AI + Cron
+│   ├── .dev.vars                    # Variables locales de desarrollo
+│   └── uv.lock                      # Lock de dependencias Python
+├── frontend/                        # Aplicación React
+│   ├── src/
+│   │   ├── components/              # Navbar, ProductCard, ProductGrid, VirtualMirror, ModalVTON, StyleQuiz, ChatFlotante, SidebarFiltros, filtros varios
+│   │   ├── pages/                   # Home, Catalog, ProductDetail, VirtualTryOn, Profile, LoginPage, RegisterPage, NotFound
+│   │   ├── services/                # api.js (axios + interceptores JWT), auth.js, vton.js
+│   │   ├── store/                   # Redux Toolkit (userSlice, productSlice, recommendationSlice, uiSlice)
+│   │   ├── hooks/                   # useAuth
 │   │   ├── App.jsx
 │   │   └── index.js
+│   ├── public/
 │   ├── package.json
-│   └── Dockerfile
-├── scrapers/
-│   ├── scrapers/                  # BaseScraper + Falabella, Ripley, Paris, Maui, Zara
-│   ├── models/                    # ProductDTO
-│   ├── pipeline/                  # DataNormalizer, ImageProcessor, Publisher
-│   ├── requirements.txt
-│   └── Dockerfile
-├── vton/
-│   ├── app/
-│   │   ├── api/routes.py          # Endpoints de Virtual Try-On
-│   │   ├── services/              # TryOnService, ReplicateClient, S3Connector, ImageProcessor
-│   │   └── main.py
-│   ├── requirements.txt
-│   └── Dockerfile
-├── infra/                         # (reservado para Terraform AWS)
-├── docs/
-│   ├── architecture.md
-│   └── api.md
-├── .github/workflows/deploy.yml   # CI/CD a Render
-├── render.yaml                    # Configuración de despliegue
+│   ├── tailwind.config.js
+│   └── postcss.config.js
+├── docs/                            # Documentación
+├── .github/workflows/deploy.yml     # CI/CD
 ├── .env.example
+├── opencode.json                    # Config opencode
 └── .gitignore
 ```
 
@@ -128,65 +119,67 @@ ft-lineone/
 
 ## Servicios
 
-### Backend API (`:8000`)
+### API (Cloudflare Workers)
 
-API REST con FastAPI, arquitectura hexagonal (puertos y adaptadores).
+API REST con FastAPI ejecutándose sobre Workers Python (ASGI bridge).
 
 | Endpoint | Método | Descripción | Auth |
 |---|---|---|---|
 | `/health` | GET | Health check | No |
-| `/auth/register` | POST | Registro de usuario | No |
-| `/auth/login` | POST | Inicio de sesión | No |
-| `/auth/refresh` | POST | Renovar token | No |
-| `/users/me` | GET | Perfil del usuario | Sí |
-| `/users/me/measurements` | PUT | Actualizar medidas corporales | Sí |
-| `/users/me/history` | GET | Historial de interacciones | Sí |
-| `/products` | GET | Listar productos (paginado) | No |
-| `/products/{id}` | GET | Detalle del producto | No |
-| `/products/search` | GET | Buscar productos | No |
-| `/products/store/{store}` | GET | Productos por tienda | No |
-| `/recommendations` | GET | Recomendaciones IA | Sí |
-| `/vton/try-on` | POST | Virtual Try-On | Sí |
-| `/vton/result/{id}` | GET | Resultado VTON | Sí |
+| `/api/v1/auth/register` | POST | Registro de usuario | No |
+| `/api/v1/auth/login` | POST | Inicio de sesión | No |
+| `/api/v1/auth/refresh` | POST | Renovar token | No |
+| `/api/v1/users/me` | GET | Perfil del usuario | Sí |
+| `/api/v1/users/profile` | PUT | Actualizar nombre/email | Sí |
+| `/api/v1/users/measurements` | PUT | Actualizar medidas corporales | Sí |
+| `/api/v1/users/preferences` | PUT | Actualizar preferencias de estilo | Sí |
+| `/api/v1/products` | GET | Listar productos (paginado + filtros) | No |
+| `/api/v1/products/{id}` | GET | Detalle del producto | No |
+| `/api/v1/products/search` | GET | Buscar productos | No |
+| `/api/v1/products/store/{store}` | GET | Productos por tienda | No |
+| `/api/v1/products` | POST | Crear producto (admin) | Sí |
+| `/api/v1/recommendations` | GET | Recomendaciones IA personalizadas | Sí |
+| `/api/v1/recommendations/chat` | POST | Chat asesor de imagen IA | No |
+| `/api/v1/vton/try-on` | POST | Virtual Try-On (retorna imagen binaria) | Sí |
+| `/api/v1/vton/result/{id}` | GET | Metadatos de resultado VTON | Sí |
+| `/api/v1/vton/history` | GET | Historial VTON del usuario | Sí |
+| `/api/v1/scrapers/ingest` | POST | Ingestar producto desde scraper | No |
+| `/api/v1/scrapers/ingest/batch` | POST | Ingestar lote de productos | No |
+| `/api/v1/scrapers/run` | POST | Ejecutar todos los scrapers manualmente | Sí |
+| `/api/v1/scrapers/run/{store}` | POST | Ejecutar scraper de una tienda | Sí |
+| `/api/v1/scrapers/debug/{store}` | GET | Debug de scraper por tienda | No |
 
 ### Frontend (`:3000`)
 
 Aplicación React 18 con:
-- **Redux Toolkit** — 3 slices (user, products, recommendations)
-- **React Router v6** — 5 páginas (Home, Catalog, ProductDetail, VirtualTryOn, Profile)
-- **TailwindCSS v3** — Diseño responsivo
-- **Axios** — Cliente HTTP con interceptores JWT
+- **Redux Toolkit** — 4 slices (user, products, recommendations, ui)
+- **React Router v6** — 7 páginas (Home, Catalog, ProductDetail, VirtualTryOn, Profile, Login, Register)
+- **TailwindCSS v3** — Diseño responsivo con animaciones Framer Motion
+- **Axios** — Cliente HTTP con interceptores JWT (token en localStorage)
 - **react-dropzone** — Subida de fotos para VTON
-- **react-hot-toast** — Notificaciones
+- **lucide-react** — Iconografía
 
-### Scrapers
+### Scrapers (embebidos en Workers)
 
-Módulos de scraping para零售商 chilenos con BeautifulSoup + requests. Cada scraper hereda de `BaseScraper` e incluye fallback con datos mock para desarrollo.
+Módulos de scraping para retailers chilenos, ejecutados vía Cron cada 5 minutos.
 
-| Scraper | Tienda | URL Base |
+| Scraper | Tienda | Método |
 |---|---|---|
-| `FalabellaScraper` | Falabella | falabella.com |
-| `RipleyScraper` | Ripley | ripley.com |
-| `ParisScraper` | Paris | paris.cl |
-| `MauiScraper` | Maui | maui.cl |
-| `ZaraScraper` | Zara | zara.com |
-| — | *y más en el futuro* | — |
+| `ZaraScraper` | Zara (zara.com/cl) | API JSON interna (`/category/{id}/products?ajax=true`) |
+| `ParisScraper` | Paris (paris.cl) | Constructor.io Search API + HTML fallback |
+| `MauiScraper` | Maui (mauiandsons.cl) | HTML parsing con BeautifulSoup |
 
-Pipeline de procesamiento: `DataNormalizer` (estandariza categorías, tallas, colores, moneda) → `ImageProcessor` (redimensiona, watermarks, thumbnails) → `Publisher` (envía al backend).
+Cada scraper se ejecuta con rate limiting (1.5-3s entre requests) y los productos se ingieren vía endpoint interno `/scrapers/ingest` con deduplicación por `external_id`.
 
-### VTON Service (`:8001`)
+### VTON
 
-Microservicio de Virtual Try-On que:
-1. Recibe la foto del usuario + ID del producto
+Servicio de Virtual Try-On integrado directamente en la API Workers. Usa **Workers AI** con el modelo `pruna/p-image-try-on`.
+
+1. Recibe la foto del usuario + product_id (multipart)
 2. Sube la foto a Cloudflare R2
-3. Llama a Replicate API con el modelo **IDM-VTON** (`cuuupid/idm-vton`)
-4. Retorna la URL del resultado generado
-
-Endpoints:
-- `POST /try-on` — Solicitar try-on (multipart: user_image + product_id + user_id)
-- `GET /try-on/{job_id}/status` — Estado del proceso
-- `GET /try-on/{job_id}/result` — Resultado final
-- `POST /try-on/{job_id}/retry` — Reintentar si falló
+3. Llama a Workers AI con el modelo Pruna P-Image-Try-On
+4. Retorna la imagen resultante como binario (JPEG)
+5. Guarda metadatos del resultado en D1
 
 ---
 
@@ -194,19 +187,16 @@ Endpoints:
 
 ### Prerrequisitos
 
-- Python 3.12+
 - Node.js 18+
-- PostgreSQL 16 (o Docker)
-- MongoDB 7 (o Docker)
+- Cuenta Cloudflare (para D1, R2, Workers AI)
+- Wrangler CLI (`npm install -g wrangler`)
 
-### Backend
+### Workers (Backend)
 
 ```bash
-cd backend
-python -m venv venv
-.\venv\Scripts\activate    # Windows
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+# Desarrollo local
+cd workers
+wrangler dev
 ```
 
 ### Frontend
@@ -219,97 +209,62 @@ npm start
 
 Abrir en `http://localhost:3000`.
 
-### Scrapers
+### Variables de Entorno
 
-```bash
-cd scrapers
-python -m venv venv
-pip install -r requirements.txt
-python -m scrapers
-```
-
-### VTON
-
-```bash
-cd vton
-python -m venv venv
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8001
-```
-
----
-
-## Variables de Entorno
-
-Copiar `.env.example` a `.env` y configurar:
-
-```bash
-cp .env.example .env
-```
+Las variables de Workers se configuran via `wrangler secret put` o archivo `.dev.vars`:
 
 | Variable | Descripción |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `MONGODB_URL` | MongoDB connection string |
-| `JWT_SECRET` | Clave secreta para JWT |
-| `R2_ACCOUNT_ID` | Cloudflare R2 account ID |
-| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key |
-| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret key |
-| `R2_BUCKET` | Bucket name (ft-lineone-media) |
-| `R2_PUBLIC_URL` | URL pública de R2 |
-| `REPLICATE_API_TOKEN` | Token de Replicate API |
-| `REPLICATE_MODEL` | Modelo VTON (cuuupid/idm-vton) |
-| `OPENAI_API_KEY` | OpenAI API key para LLM |
-| `REACT_APP_API_URL` | URL base de la API (frontend) |
+| `JWT_SECRET` | Clave secreta para firmar JWTs |
+| `JWT_ALGORITHM` | Algoritmo (HS256) |
+| `CORS_ORIGINS` | Orígenes permitidos (separados por coma) |
+| `REACT_APP_API_URL` | URL base de la API para el frontend |
+
+**Bindings (no requieren API key — se configuran en wrangler.jsonc):**
+- `DB` → Cloudflare D1 database
+- `R2` → Cloudflare R2 bucket
+- `AI` → Cloudflare Workers AI
 
 ---
 
 ## Deployment
 
-### Render (actual)
+### Cloudflare Workers (actual)
 
-Configuración declarativa en `render.yaml` con 4 servicios:
-- **ft-lineone-backend** — Web service Python (Free)
-- **ft-lineone-scrapers** — Web service Python (Free)
-- **ft-lineone-vton** — Web service Python (Free)
-- **ft-lineone-frontend** — Static site
+El backend se despliega como Workers Python:
 
-Base de datos: PostgreSQL + Redis (Free).
+```bash
+cd workers
+wrangler deploy
+```
+
+Configuración declarativa en `wrangler.jsonc` con:
+- D1 database binding
+- R2 bucket binding
+- Workers AI binding
+- Cron trigger (`*/5 * * * *` para scrapers)
+
+### Frontend
+
+El frontend es una SPA React estática que se despliega en cualquier hosting estático (Cloudflare Pages, Vercel, etc.).
 
 ### CI/CD
 
-GitHub Actions en `.github/workflows/deploy.yml` — despliegue automático a Render al hacer push a `main`.
-
----
-
-## Estrategia de Infraestructura
-
-| demo / desarrollo (gratuito) | producción (AWS) |
-|---|---|
-| **Render** (web services, PostgreSQL, Redis) | **EKS** (Kubernetes) + **RDS** (PostgreSQL) + **ElastiCache** (Redis) |
-| **Cloudflare R2** (almacenamiento S3-compatible) | **S3** |
-| **Replicate API** (IDM-VTON free credits) | **SageMaker** / **EC2 GPU** (modelo propio) |
-| **GitHub Actions** | **CodePipeline** + **CodeBuild** |
-| — | **API Gateway** (rate limiting, WAF) |
-| — | **Lambda** (cron jobs serverless) |
-
-> Iniciamos con servicios gratuitos para validar el producto sin costo. Al escalar, migramos a AWS para disponibilidad, escalabilidad horizontal y control total de infraestructura.
+GitHub Actions en `.github/workflows/deploy.yml` — despliegue automático al hacer push a `main`.
 
 ---
 
 ## Roadmap
 
-- [x] Scrapers para retailers chilenos
-- [x] Backend con autenticación JWT y arquitectura hexagonal
-- [x] Virtual Try-On con Replicate API
-- [x] Frontend con catálogo, búsqueda y perfil de usuario
-- [x] Despliegue automatizado en Render
+- [x] Scrapers para retailers chilenos (Zara, Paris, Maui)
+- [x] API con autenticación JWT (PBKDF2-SHA256)
+- [x] Virtual Try-On con Workers AI (Pruna P-Image-Try-On)
+- [x] Frontend con catálogo, búsqueda, filtros y perfil de usuario
+- [x] Recomendaciones IA con Llama 3.3 70B
 - [ ] Pasarela de pago (Webpay / Mercado Pago)
-- [ ] Perfil de estilo con IA (cuestionario + recomendaciones)
 - [ ] Prueba virtual mejorada (múltiples prendas, outfits completos)
 - [ ] App móvil (React Native)
-- [ ] Migración a AWS para escalabilidad horizontal
-- [ ] Modelo VTON propio en SageMaker / EC2 GPU
+- [ ] Migración a Workers Paid (mayor cuota de CPU)
 
 ---
 

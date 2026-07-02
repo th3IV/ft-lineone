@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Sparkles, Heart, Share2 } from "lucide-react";
 import { fetchProductById } from "../store/productSlice";
 import { fetchRecommendations } from "../store/recommendationSlice";
 import { openVtonModal } from "../store/uiSlice";
 import ProductGrid from "../components/ProductGrid";
+import RevealOnScroll from "../components/RevealOnScroll";
 
 function ProductDetail() {
   const { id } = useParams();
@@ -18,6 +21,7 @@ function ProductDetail() {
   useEffect(() => {
     dispatch(fetchProductById(id));
     dispatch(fetchRecommendations(id));
+    window.scrollTo(0, 0);
   }, [dispatch, id]);
 
   useEffect(() => {
@@ -39,33 +43,65 @@ function ProductDetail() {
 
   if (loading || !selectedProduct) {
     return (
-      <div className="flex justify-center items-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="flex justify-center items-center py-32">
+        <div className="w-8 h-8 rounded-full border-2 border-editorial-black/10 border-t-editorial-black animate-spin" />
       </div>
     );
   }
 
-  const images = selectedProduct.image_urls?.length ? selectedProduct.image_urls : [selectedProduct.image_url];
+  const images = selectedProduct.image_urls?.length
+    ? selectedProduct.image_urls
+    : [selectedProduct.image_url];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <div className="aspect-square rounded-xl overflow-hidden bg-gray-100 mb-4">
-            <img
-              src={images[selectedImage]}
-              alt={selectedProduct.name}
-              className="w-full h-full object-cover"
-            />
+    <div className="max-w-[1400px] mx-auto px-5 sm:px-8 py-8">
+      {/* Back Link */}
+      <motion.div
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="mb-8"
+      >
+        <Link
+          to="/catalog"
+          className="inline-flex items-center gap-2 text-xs text-editorial-gray hover:text-editorial-black transition-colors tracking-wide"
+        >
+          <ArrowLeft size={14} />
+          Volver al catalogo
+        </Link>
+      </motion.div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-16">
+        {/* Images */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="aspect-[3/4] rounded-2xl overflow-hidden bg-editorial-cream-dark mb-4">
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={selectedImage}
+                src={images[selectedImage]}
+                alt={selectedProduct.name}
+                className="w-full h-full object-cover"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              />
+            </AnimatePresence>
           </div>
+
           {images.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="flex gap-2 overflow-x-auto pb-2">
               {images.map((img, idx) => (
                 <button
                   key={idx}
                   onClick={() => setSelectedImage(idx)}
-                  className={`w-20 h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 ${
-                    selectedImage === idx ? "border-indigo-600" : "border-transparent"
+                  className={`w-16 h-20 rounded-lg overflow-hidden border flex-shrink-0 transition-all duration-200 ${
+                    selectedImage === idx
+                      ? "border-editorial-black"
+                      : "border-transparent opacity-60 hover:opacity-100"
                   }`}
                 >
                   <img src={img} alt="" className="w-full h-full object-cover" />
@@ -73,30 +109,49 @@ function ProductDetail() {
               ))}
             </div>
           )}
-        </div>
+        </motion.div>
 
-        <div>
-          <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-            {selectedProduct.store}
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-3">{selectedProduct.name}</h1>
-          <p className="text-2xl font-bold text-gray-900 mt-2">
-            {selectedProduct.currency || "$"}{selectedProduct.price?.toLocaleString("es-CL")}
+        {/* Product Info */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="md:py-4"
+        >
+          <div className="mb-6">
+            <span className="editorial-label text-[10px] bg-editorial-cream-dark text-editorial-gray px-3 py-1 rounded-full inline-block">
+              {selectedProduct.store}
+            </span>
+          </div>
+
+          <h1 className="text-2xl md:text-3xl font-display font-semibold text-editorial-black mb-3 leading-tight">
+            {selectedProduct.name}
+          </h1>
+
+          <p className="text-xl font-semibold text-editorial-black tabular-nums mb-6">
+            {selectedProduct.currency === "CLP" ? "$" : selectedProduct.currency || "$"}
+            {selectedProduct.price?.toLocaleString("es-CL")}
           </p>
-          <p className="text-gray-600 mt-4">{selectedProduct.description}</p>
 
+          {selectedProduct.description && (
+            <p className="text-sm text-editorial-gray leading-relaxed mb-8">
+              {selectedProduct.description}
+            </p>
+          )}
+
+          {/* Sizes */}
           {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Size</h3>
+            <div className="mb-6">
+              <h3 className="editorial-label mb-3">Talla</h3>
               <div className="flex flex-wrap gap-2">
                 {selectedProduct.sizes.map((size) => (
                   <button
                     key={size}
                     onClick={() => setSelectedSize(size)}
-                    className={`px-4 py-2 border rounded-lg text-sm ${
+                    className={`min-w-[44px] h-11 px-4 border rounded-lg text-xs font-medium transition-all duration-200 ${
                       selectedSize === size
-                        ? "border-indigo-600 bg-indigo-50 text-indigo-700"
-                        : "border-gray-300 hover:border-gray-400"
+                        ? "border-editorial-black bg-editorial-black text-white"
+                        : "border-editorial-black/10 text-editorial-black hover:border-editorial-black/30"
                     }`}
                   >
                     {size}
@@ -106,18 +161,19 @@ function ProductDetail() {
             </div>
           )}
 
+          {/* Colors */}
           {selectedProduct.colors && selectedProduct.colors.length > 0 && (
-            <div className="mt-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Color</h3>
+            <div className="mb-8">
+              <h3 className="editorial-label mb-3">Color</h3>
               <div className="flex flex-wrap gap-2">
                 {selectedProduct.colors.map((color) => (
                   <button
                     key={color}
                     onClick={() => setSelectedColor(color)}
-                    className={`px-4 py-2 border rounded-lg text-sm ${
+                    className={`px-4 py-2 border rounded-lg text-xs font-medium transition-all duration-200 ${
                       selectedColor === color
-                        ? "border-indigo-600 bg-indigo-50 text-indigo-700"
-                        : "border-gray-300 hover:border-gray-400"
+                        ? "border-editorial-black bg-editorial-black text-white"
+                        : "border-editorial-black/10 text-editorial-black hover:border-editorial-black/30"
                     }`}
                   >
                     {color}
@@ -127,24 +183,63 @@ function ProductDetail() {
             </div>
           )}
 
-          <button
-            onClick={handleTryOn}
-            className="w-full mt-8 btn-primary text-lg py-3"
-          >
-            Probar ahora
-          </button>
-        </div>
+          {/* CTAs */}
+          <div className="space-y-3">
+            <button onClick={handleTryOn} className="btn-primary w-full flex items-center justify-center gap-2">
+              <Sparkles size={16} />
+              Probar con IA Try-On
+            </button>
+            <div className="flex gap-3">
+              <button className="btn-outline flex-1 flex items-center justify-center gap-2">
+                <Heart size={16} />
+                Favoritos
+              </button>
+              <button className="btn-outline flex-1 flex items-center justify-center gap-2">
+                <Share2 size={16} />
+                Compartir
+              </button>
+            </div>
+          </div>
+
+          {/* Product Details */}
+          <div className="mt-10 pt-8 border-t border-editorial-black/5">
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span className="editorial-label">Tienda</span>
+                <p className="text-editorial-black mt-1">{selectedProduct.store}</p>
+              </div>
+              <div>
+                <span className="editorial-label">Categoria</span>
+                <p className="text-editorial-black mt-1">{selectedProduct.category || "N/A"}</p>
+              </div>
+              <div>
+                <span className="editorial-label">Disponibilidad</span>
+                <p className="text-editorial-black mt-1">
+                  {selectedProduct.availability !== false ? "Disponible" : "Agotado"}
+                </p>
+              </div>
+              <div>
+                <span className="editorial-label">Moneda</span>
+                <p className="text-editorial-black mt-1">{selectedProduct.currency || "CLP"}</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
       </div>
 
+      {/* Recommendations */}
       {recommendations.length > 0 && (
-        <section className="mt-16">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">AI Recommendations</h2>
+        <RevealOnScroll className="mt-20">
+          <div className="mb-10">
+            <p className="editorial-label mb-3">Recomendado por IA</p>
+            <h2 className="section-title">Te puede interesar</h2>
+          </div>
           <ProductGrid
             products={recommendations}
             loading={false}
             onTryOn={handleRecommendationTryOn}
           />
-        </section>
+        </RevealOnScroll>
       )}
     </div>
   );
