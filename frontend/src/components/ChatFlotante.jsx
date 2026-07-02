@@ -28,8 +28,8 @@ function ChatFlotante() {
     setLoading(true);
 
     try {
-      const res = await api.post("/recommendations/chat", null, {
-        params: { question: text.trim() },
+      const res = await api.post("/recommendations/chat", {
+        question: text.trim(),
       });
       const advice = res.data?.advice || "No pude generar un consejo.";
       setMessages((prev) => [...prev, { role: "assistant", text: advice }]);

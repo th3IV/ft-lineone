@@ -19,11 +19,10 @@ class TokenData(BaseModel):
 
 
 def get_jwt_secret() -> str:
-    """Get JWT secret from environment."""
+    """Get JWT secret from environment (must be set via wrangler secret put)."""
     secret = os.getenv("JWT_SECRET")
     if not secret:
-        secret = secrets.token_urlsafe(64)
-        os.environ["JWT_SECRET"] = secret
+        raise RuntimeError("JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET")
     return secret
 
 
@@ -82,8 +81,8 @@ def create_refresh_token(user_id: str, email: str) -> str:
     return f"{header_b64}.{payload_b64}.{signature}"
 
 
-def verify_token(token: str) -> Optional[TokenData]:
-    """Verify and decode a JWT token."""
+def verify_token(token: str, expected_type: str = None) -> Optional[TokenData]:
+    """Verify and decode a JWT token. Optionally check token type."""
     try:
         parts = token.split(".")
         if len(parts) != 3:
@@ -99,6 +98,9 @@ def verify_token(token: str) -> Optional[TokenData]:
 
         exp = payload.get("exp", 0)
         if datetime.now(timezone.utc).timestamp() > exp:
+            return None
+
+        if expected_type and payload.get("type") != expected_type:
             return None
 
         user_id = payload.get("sub")

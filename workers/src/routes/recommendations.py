@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Request, Depends
 from typing import Optional
+from pydantic import BaseModel
 
 from models.product import ProductResponse
 from services.llm import LLMService
@@ -15,6 +16,11 @@ def get_db(request: Request):
     return request.app.state.db
 
 
+class ChatRequest(BaseModel):
+    question: str
+    product_id: Optional[str] = None
+
+
 @router.get("")
 async def get_recommendations(
     request: Request,
@@ -25,11 +31,18 @@ async def get_recommendations(
     db = get_db(request)
     llm_service = LLMService(request.app.state.env)
 
+    # Read actual user preferences from DB
+    user_obj = await db.get_user_by_id(user.user_id)
     user_preferences = {
         "gender": None,
         "clothing_type": [],
         "budget": None,
     }
+    if user_obj:
+        if user_obj.preferences:
+            user_preferences["clothing_type"] = user_obj.preferences
+        if user_obj.body_measurements:
+            user_preferences["gender"] = user_obj.body_measurements.get("gender")
 
     products, _ = await db.get_products({}, page=1, limit=50)
 
@@ -51,9 +64,12 @@ async def get_recommendations(
         query=query,
     )
 
+    # Build lookup dict to avoid N+1 queries
+    product_lookup = {p.id: p for p in products}
+
     recommended_products = []
     for rec in recommendations:
-        product = await db.get_product(rec["product_id"])
+        product = product_lookup.get(rec["product_id"])
         if product:
             recommended_products.append(
                 ProductResponse(
@@ -82,11 +98,11 @@ async def get_recommendations(
 @router.post("/chat")
 async def style_chat(
     request: Request,
-    product_id: Optional[str] = None,
-    question: str = "",
+    body: ChatRequest,
+    user: dict = Depends(optional_auth),
 ):
     """Get style advice via chat."""
-    if not question:
+    if not body.question:
         raise HTTPException(status_code=400, detail="Question is required")
 
     db = get_db(request)
@@ -95,8 +111,8 @@ async def style_chat(
     product_name = "unknown product"
     product_category = "unknown"
 
-    if product_id:
-        product = await db.get_product(product_id)
+    if body.product_id:
+        product = await db.get_product(body.product_id)
         if product:
             product_name = product.name
             product_category = product.category
@@ -104,7 +120,7 @@ async def style_chat(
     advice = await llm_service.get_style_advice(
         product_name=product_name,
         product_category=product_category,
-        user_question=question,
+        user_question=body.question,
     )
 
-    return {"advice": advice, "product_id": product_id}
+    return {"advice": advice, "product_id": body.product_id}

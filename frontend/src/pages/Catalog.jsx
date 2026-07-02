@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useSearchParams } from "react-router-dom";
-import { fetchProducts, setFilters, clearFilters } from "../store/productSlice";
+import { fetchProducts, setFilters, setPage, clearFilters } from "../store/productSlice";
 import { openVtonModal } from "../store/uiSlice";
 import ProductGrid from "../components/ProductGrid";
 import SidebarFiltros from "../components/SidebarFiltros";
@@ -60,7 +60,7 @@ function Catalog() {
   };
 
   const handlePageChange = (page) => {
-    dispatch(setFilters({ page }));
+    dispatch(setPage(page));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 

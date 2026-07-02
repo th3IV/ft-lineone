@@ -1,9 +1,7 @@
 import api from "./api";
 
 export const requestTryOn = async (formData) => {
-  const response = await api.post("/vton/try-on", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const response = await api.post("/vton/try-on", formData);
   return response.data;
 };
 

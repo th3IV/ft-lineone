@@ -1,7 +1,7 @@
 """Scraper scheduler for Cloudflare Workers Cron Triggers."""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 
 from scrapers.zara import ZaraScraper
 from scrapers.paris import ParisScraper
@@ -9,12 +9,56 @@ from scrapers.maui import MauiScraper
 from services.database import DatabaseService
 
 
+# Rate limiting: seconds between requests per store
+RATE_LIMITS = {
+    "paris": 1.5,
+    "maui": 2.0,
+    "zara": 3.0,
+}
+
+# Real categories/search terms per store
+STORE_CATEGORIES = {
+    "paris": {
+        "type": "search",  # Paris uses search queries
+        "queries": [
+            "polera mujer",
+            "jean mujer",
+            "zapatilla hombre",
+            "polera hombre",
+            "vestido mujer",
+            "chaqueta hombre",
+            "falda mujer",
+            "buzo hombre",
+            "zapatilla mujer",
+            "jean hombre",
+        ],
+    },
+    "maui": {
+        "type": "category",  # Maui uses category paths
+        "categories": [
+            "hombre-vestuario",
+            "hombre-poleras",
+            "mujer-vestuario",
+            "mujer-poleras",
+        ],
+    },
+    "zara": {
+        "type": "category",  # Zara uses category slugs
+        "categories": [
+            "mujer",
+            "hombre",
+        ],
+    },
+}
+
+
 class ScraperRunner:
     """Runs scrapers on a schedule via Cloudflare Workers Cron."""
 
-    def __init__(self, env):
+    def __init__(self, env, max_products=30):
         self.env = env
         self.db = DatabaseService(env)
+        self.max_products = max_products
         self.scrapers = {
             "zara": ZaraScraper(),
             "paris": ParisScraper(),
@@ -24,7 +68,7 @@ class ScraperRunner:
     async def run_all_scrapers(self) -> dict:
         """Run all scrapers and return results."""
         results = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "scrapers": {},
         }
 
@@ -42,111 +86,117 @@ class ScraperRunner:
 
     async def _run_scraper(self, store_name: str, scraper) -> dict:
         """Run a single scraper and return results."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
+        rate_limit = RATE_LIMITS.get(store_name, 2.0)
+        store_config = STORE_CATEGORIES.get(store_name, {})
+
+        total_products = 0
+        total_new = 0
+        total_skipped = 0
+        total_errors = 0
 
         try:
-            categories = self._get_categories(store_name)
+            if store_config.get("type") == "search":
+                # Paris: search by queries
+                queries = store_config.get("queries", [])
+                for query in queries:
+                    try:
+                        products = await scraper.search_products(query, max_items=self.max_products)
+                        if len(products) < 5:
+                            print(f"[{store_name}] Query '{query}' returned only {len(products)} products (min 5)")
+                        total_products += len(products)
+                        for product in products:
+                            try:
+                                result = await self._ingest_product(store_name, product)
+                                if result["status"] == "created":
+                                    total_new += 1
+                                elif result["status"] == "error":
+                                    total_errors += 1
+                                    print(f"[{store_name}] Ingest error: {result.get('error')} for {result.get('product_name')}")
+                                else:
+                                    total_skipped += 1
+                            except Exception as e:
+                                total_errors += 1
+                                print(f"[{store_name}] Exception: {e}")
+                        await asyncio.sleep(rate_limit)
+                    except Exception:
+                        total_errors += 1
+            else:
+                # Maui/Zara: scrape by categories
+                categories = store_config.get("categories", [])
+                for category in categories:
+                    try:
+                        products = await scraper.scrape_category(category, max_items=self.max_products)
+                        if len(products) < 5:
+                            print(f"[{store_name}] Category '{category}' returned only {len(products)} products (min 5)")
+                        total_products += len(products)
+                        for product in products:
+                            try:
+                                result = await self._ingest_product(store_name, product)
+                                if result["status"] == "created":
+                                    total_new += 1
+                                elif result["status"] == "error":
+                                    total_errors += 1
+                                    print(f"[{store_name}] Ingest error: {result.get('error')} for {result.get('product_name')}")
+                                else:
+                                    total_skipped += 1
+                            except Exception as e:
+                                total_errors += 1
+                                print(f"[{store_name}] Exception: {e}")
+                        await asyncio.sleep(rate_limit)
+                    except Exception:
+                        total_errors += 1
 
-            total_products = 0
-            total_new = 0
-            total_skipped = 0
-            total_errors = 0
-
-            for category in categories:
-                try:
-                    products = await self._scrape_category(store_name, scraper, category)
-                    total_products += len(products)
-
-                    for product in products:
-                        try:
-                            result = await self._ingest_product(store_name, product)
-                            if result["status"] == "created":
-                                total_new += 1
-                            else:
-                                total_skipped += 1
-                        except Exception:
-                            total_errors += 1
-
-                except Exception:
-                    total_errors += 1
-
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             duration = (end_time - start_time).total_seconds()
 
             return {
                 "status": "completed",
-                "categories_scraped": len(categories),
                 "total_products": total_products,
                 "new_products": total_new,
                 "skipped_products": total_skipped,
                 "errors": total_errors,
-                "duration_seconds": duration,
+                "duration_seconds": round(duration, 1),
             }
 
         except Exception as e:
             return {"status": "failed", "error": str(e)}
 
-    async def _scrape_category(self, store_name: str, scraper, category: str) -> list:
-        """Scrape products from a category (all scrapers are now async)."""
-        if store_name == "zara":
-            return await scraper.scrape_category(category, max_items=50)
-        elif store_name == "paris":
-            return await scraper.scrape_category(category, max_items=50)
-        elif store_name == "maui":
-            return await scraper.scrape_category(category, max_items=50)
-        else:
-            return []
-
     async def _ingest_product(self, store_name: str, product) -> dict:
         """Ingest a scraped product into the database."""
+        # Check for existing product by external_id
         existing_products, _ = await self.db.get_products(
-            {"store": store_name}, page=1, limit=1000,
+            {"store": store_name},
+            page=1,
+            limit=1000,
         )
 
         for p in existing_products:
             if p.external_id == product.external_id:
                 return {"status": "skipped", "product_id": p.id}
 
-        created = await self.db.create_product({
-            "external_id": product.external_id,
-            "name": product.name,
-            "store": store_name,
-            "price": product.price,
-            "currency": product.currency,
-            "category": product.category,
-            "description": product.description,
-            "original_url": product.original_url,
-            "image_url": product.image_url,
-            "image_urls": [product.image_url] if product.image_url else [],
-            "sizes": product.sizes,
-            "colors": product.colors,
-            "availability": product.availability,
-        })
-
-        return {"status": "created", "product_id": created.id}
-
-    def _get_categories(self, store_name: str) -> list[str]:
-        """Get categories to scrape for a store."""
-        categories = {
-            "zara": [
-                "ropa-mujer",
-                "ropa-hombre",
-                "zapatos",
-                "accesorios",
-            ],
-            "paris": [
-                "mujer",
-                "hombre",
-                "calzado",
-                "accesorios",
-            ],
-            "maui": [
-                "hombre",
-                "mujer",
-                "accesorios",
-            ],
-        }
-        return categories.get(store_name, [])
+        # Create new product
+        try:
+            created = await self.db.create_product(
+                {
+                    "external_id": product.external_id,
+                    "name": product.name,
+                    "store": store_name,
+                    "price": product.price,
+                    "currency": product.currency,
+                    "category": product.category,
+                    "description": product.description,
+                    "original_url": product.original_url,
+                    "image_url": product.image_url,
+                    "image_urls": [product.image_url] if product.image_url else [],
+                    "sizes": product.sizes,
+                    "colors": product.colors,
+                    "availability": product.availability,
+                }
+            )
+            return {"status": "created", "product_id": created.id}
+        except Exception as e:
+            return {"status": "error", "error": str(e), "product_name": product.name}
 
     async def close(self):
         """Close all scrapers."""

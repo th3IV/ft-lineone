@@ -1,4 +1,4 @@
-"""Paris scraper using BeautifulSoup (Async HTTP)."""
+"""Paris scraper - Constructor.io search API + HTML fallback."""
 
 import re
 import httpx
@@ -24,154 +24,170 @@ class ParisProduct:
 
 
 class ParisScraper:
-    """Scraper for Paris (paris.cl) - Async HTTP-based, no browser needed."""
+    """Scraper for Paris (paris.cl) using Constructor.io search API."""
 
     BASE_URL = "https://www.paris.cl"
+    # Constructor.io API key from page source
+    CNSTRC_JS = "https://cnstrc.com/js/cust/cencosud_0BmS-e.js"
+    CNSTRC_API = "https://ac.cnstrc.com/search"
 
     def __init__(self):
         self.client = httpx.AsyncClient(
             timeout=30.0,
             headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "text/html,application/xhtml+xml",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                "Accept": "application/json",
                 "Accept-Language": "es-CL,es;q=0.9",
+                "Origin": "https://www.paris.cl",
+                "Referer": "https://www.paris.cl/",
             },
         )
+        self._cnstrc_key: Optional[str] = None
 
-    async def get_page(self, url: str) -> Optional[BeautifulSoup]:
-        """Fetch a page and return BeautifulSoup object."""
+    async def _get_cnstrc_key(self) -> str:
+        """Extract Constructor.io API key from JS bundle."""
+        if self._cnstrc_key:
+            return self._cnstrc_key
+        # Try known Constructor.io key patterns for paris.cl
         try:
-            response = await self.client.get(url)
-            response.raise_for_status()
-            return BeautifulSoup(response.text, "lxml")
+            resp = await self.client.get(self.CNSTRC_JS)
+            if resp.status_code == 200:
+                # Look for key in format: "key":"xxxxxxxxxx" or key='xxxxxxxxxx'
+                matches = re.findall(r'"key"\s*:\s*"([a-zA-Z0-9_-]{20,})"', resp.text)
+                if matches:
+                    self._cnstrc_key = matches[0]
+                    return self._cnstrc_key
+                # Alternative pattern
+                matches = re.findall(r"key[=:]['\"]?([a-zA-Z0-9]{32,})['\"]?", resp.text)
+                if matches:
+                    self._cnstrc_key = matches[0]
+                    return self._cnstrc_key
         except Exception:
-            return None
+            pass
+        # Fallback: try page source for cnstrc key
+        try:
+            resp = await self.client.get(self.BASE_URL)
+            if resp.status_code == 200:
+                match = re.search(r'cnstrc[^"\']*(?:key|token)[=:\'"]\s*([a-zA-Z0-9_-]{20,})', resp.text)
+                if match:
+                    self._cnstrc_key = match.group(1)
+                    return self._cnstrc_key
+        except Exception:
+            pass
+        return ""
 
-    async def scrape_category(
-        self, category: str, max_items: int = 50
-    ) -> list[ParisProduct]:
-        """Scrape products from a category page."""
+    async def search_products(self, query: str, max_items: int = 30) -> list[ParisProduct]:
+        """Search products via Constructor.io API."""
+        key = await self._get_cnstrc_key()
+        if not key:
+            return await self._search_html_fallback(query, max_items)
+
+        try:
+            resp = await self.client.get(
+                self.CNSTRC_API,
+                params={
+                    "key": key,
+                    "i": query,
+                    "num_results_per_page": min(max_items, 50),
+                    "section": "Products",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("response", {}).get("results", [])
+            return [self._parse_cnstrc(r) for r in results[:max_items]]
+        except Exception:
+            return await self._search_html_fallback(query, max_items)
+
+    async def scrape_category(self, category: str, max_items: int = 50) -> list[ParisProduct]:
+        """Scrape products from a category using search."""
+        return await self.search_products(category, max_items)
+
+    async def _search_html_fallback(self, query: str, max_items: int) -> list[ParisProduct]:
+        """Fallback: fetch search page and parse HTML."""
         products = []
-        url = f"{self.BASE_URL}/catalogo/{category}"
+        try:
+            resp = await self.client.get(
+                f"{self.BASE_URL}/search",
+                params={"q": query},
+            )
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
 
-        soup = await self.get_page(url)
-        if not soup:
-            return products
-
-        items = (
-            soup.select(".producto")
-            or soup.select(".product-item")
-            or soup.select("[data-product-id]")
-            or soup.select(".product-card")
-        )
-
-        for item in items[:max_items]:
-            try:
-                product = self._parse_product(item, category)
-                if product:
-                    products.append(product)
-            except Exception:
-                continue
-
+            # Extract __NEXT_DATA__ for product data
+            next_data = soup.select_one("script#__NEXT_DATA__")
+            if next_data:
+                import json
+                data = json.loads(next_data.string)
+                props = data.get("props", {}).get("pageProps", {})
+                items = props.get("products", props.get("items", []))
+                for item in items[:max_items]:
+                    product = self._parse_next_data(item)
+                    if product:
+                        products.append(product)
+        except Exception:
+            pass
         return products
 
-    async def search_products(
-        self, query: str, max_items: int = 30
-    ) -> list[ParisProduct]:
-        """Search products by keyword."""
-        products = []
-        url = f"{self.BASE_URL}/search?q={query}"
+    def _parse_cnstrc(self, result: dict) -> ParisProduct:
+        """Parse Constructor.io search result."""
+        data = result.get("data", {})
+        value = result.get("value", "")
+        id_ = result.get("id", "")
 
-        soup = await self.get_page(url)
-        if not soup:
-            return products
+        # Extract product URL
+        product_url = data.get("url", "")
+        if not product_url and id_:
+            product_url = f"{self.BASE_URL}/{id_}"
 
-        items = (
-            soup.select(".product-item")
-            or soup.select(".search-result-item")
-            or soup.select("[data-product-id]")
+        # Extract image
+        image_url = data.get("image_url", "")
+        if not image_url:
+            image_url = data.get("img", "")
+
+        # Extract price
+        price = 0.0
+        price_data = data.get("price", 0)
+        if isinstance(price_data, (int, float)):
+            price = float(price_data)
+        elif isinstance(price_data, str):
+            price = self._normalize_price(price_data)
+
+        # Check for sale price
+        sale_price = data.get("sale_price", 0)
+        if isinstance(sale_price, (int, float)) and sale_price > 0:
+            price = float(sale_price)
+
+        # Extract availability
+        availability = True
+        if "out_of_stock" in str(data).lower():
+            availability = False
+
+        return ParisProduct(
+            external_id=str(id_),
+            name=value or data.get("name", ""),
+            price=price,
+            currency="CLP",
+            image_url=image_url,
+            category=data.get("category", ""),
+            sizes=data.get("sizes", []),
+            colors=data.get("colors", []),
+            description=data.get("description", ""),
+            availability=availability,
+            original_url=product_url,
         )
 
-        for item in items[:max_items]:
-            try:
-                product = self._parse_product(item, "search")
-                if product:
-                    products.append(product)
-            except Exception:
-                continue
-
-        return products
-
-    def _parse_product(self, item: BeautifulSoup, category: str) -> Optional[ParisProduct]:
-        """Parse a product item from the page."""
-        name = ""
-        name_elem = (
-            item.select_one(".product-title a")
-            or item.select_one(".product-name")
-            or item.select_one("h2")
-            or item.select_one("h3")
-        )
-        if name_elem:
-            name = name_elem.get_text(strip=True)
-
+    def _parse_next_data(self, item: dict) -> Optional[ParisProduct]:
+        """Parse product from __NEXT_DATA__."""
+        name = item.get("name", item.get("title", ""))
         if not name:
             return None
 
-        price = 0.0
-        price_elem = (
-            item.select_one(".product-price .price")
-            or item.select_one("[data-price-value]")
-            or item.select_one(".price-current")
-        )
-        if price_elem:
-            price_text = price_elem.get_text(strip=True)
-            price = self._normalize_price(price_text)
-
-        product_id = ""
-        id_elem = item.select_one("[data-id]") or item.select_one("[data-product-id]")
-        if id_elem:
-            product_id = id_elem.get("data-id") or id_elem.get("data-product-id", "")
-
-        if not product_id:
-            product_id = re.sub(r'[^a-z0-9]', '-', name.lower())[:50]
-
-        image_url = ""
-        img_elem = (
-            item.select_one(".product-image img")
-            or item.select_one("img[src]")
-            or item.select_one("img[data-src]")
-        )
-        if img_elem:
-            image_url = img_elem.get("src") or img_elem.get("data-src", "")
-
-        sizes = []
-        size_elems = item.select(".size-variant, .size-option, .size-selector button")
-        for s in size_elems:
-            text = s.get_text(strip=True)
-            if text and text not in sizes:
-                sizes.append(text)
-
-        colors = []
-        color_elems = item.select(".color-variant, .color-option, .color-selector span")
-        for c in color_elems:
-            text = c.get_text(strip=True)
-            if text and text not in colors:
-                colors.append(text)
-
-        availability = True
-        stock_elem = item.select_one(".stock-status, .availability")
-        if stock_elem:
-            stock_text = stock_elem.get_text(strip=True).lower()
-            availability = "out" not in stock_text and "agotado" not in stock_text
-
-        link_elem = item.select_one("a[href]")
-        original_url = ""
-        if link_elem:
-            href = link_elem.get("href", "")
-            if href.startswith("http"):
-                original_url = href
-            elif href.startswith("/"):
-                original_url = f"{self.BASE_URL}{href}"
+        product_id = str(item.get("id", item.get("productId", "")))
+        price = float(item.get("price", item.get("salePrice", 0)) or 0)
+        image_url = item.get("imageUrl", item.get("image", ""))
+        if isinstance(image_url, list) and image_url:
+            image_url = image_url[0]
 
         return ParisProduct(
             external_id=product_id,
@@ -179,18 +195,18 @@ class ParisScraper:
             price=price,
             currency="CLP",
             image_url=image_url,
-            category=category,
-            sizes=sizes,
-            colors=colors,
-            description="",
-            availability=availability,
-            original_url=original_url,
+            category=item.get("category", ""),
+            sizes=item.get("sizes", []),
+            colors=item.get("colors", []),
+            description=item.get("description", ""),
+            availability=item.get("availability", True),
+            original_url=item.get("url", f"{self.BASE_URL}/product/{product_id}"),
         )
 
     def _normalize_price(self, price_str: str) -> float:
         """Normalize price string to float."""
-        cleaned = re.sub(r'[^\d.,]', '', price_str)
-        cleaned = cleaned.replace('.', '').replace(',', '.')
+        cleaned = re.sub(r"[^\d.,]", "", price_str)
+        cleaned = cleaned.replace(".", "").replace(",", ".")
         try:
             return float(cleaned)
         except ValueError:

@@ -1,9 +1,12 @@
 """FT-LineOne API - Cloudflare Workers Python Entry Point."""
 
 import os
-from typing import Any
+import json
+import time
 
-from fastapi import FastAPI, Response
+from workers import WorkerEntrypoint, Response
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 import asgi
@@ -54,26 +57,46 @@ async def root():
     }
 
 
-class Default:
+class Default(WorkerEntrypoint):
     """Cloudflare Workers Python entry point."""
 
-    def __init__(self, env: Any):
-        self.env = env
-
-    async def fetch(self, request: Any) -> Response:
+    async def on_fetch(self, request):
         """Handle incoming HTTP requests via ASGI bridge."""
-        # Attach env and db to app.state for route access
-        app.state.env = self.env
+        start = time.time()
         app.state.db = DatabaseService(self.env)
-        return await asgi.fetch(app, request, self.env)
+        app.state.env = self.env
 
-    async def scheduled(self, controller: Any, env: Any, ctx: Any) -> None:
+        try:
+            response = await asgi.fetch(app, request, self.env)
+            elapsed = round((time.time() - start) * 1000)
+            print(json.dumps({
+                "method": request.method,
+                "url": request.url,
+                "status": response.status if hasattr(response, "status") else 200,
+                "ms": elapsed,
+            }))
+            return response
+        except Exception as e:
+            elapsed = round((time.time() - start) * 1000)
+            print(json.dumps({
+                "method": request.method,
+                "url": request.url,
+                "error": str(e),
+                "ms": elapsed,
+            }))
+            raise
+
+    async def on_scheduled(self, controller):
         """Handle cron triggers for scraper scheduling."""
         from scrapers.scheduler import ScraperRunner
 
-        runner = ScraperRunner(env)
+        cron_expr = getattr(controller, "cron", "") or ""
+        max_products = 20
+
+        print(json.dumps({"event": "cron_start", "cron": cron_expr}))
+        runner = ScraperRunner(self.env, max_products=max_products)
         try:
             results = await runner.run_all_scrapers()
-            print(f"Cron completed: {results}")
+            print(json.dumps({"event": "cron_complete", "cron": cron_expr, "results": results}))
         finally:
             await runner.close()

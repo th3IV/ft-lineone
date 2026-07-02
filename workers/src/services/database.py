@@ -150,10 +150,11 @@ class DatabaseService:
 
         # Fetch page
         offset = (page - 1) * limit
-        rows = await self.db.prepare(
+        d1_result = await self.db.prepare(
             f"SELECT * FROM products WHERE {where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"
         ).bind(*params, limit, offset).all()
 
+        rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
         products = [ProductModel(row) for row in rows]
         return products, total
 
@@ -237,7 +238,24 @@ class DatabaseService:
 
     async def get_vton_history(self, user_id: str, limit: int = 20) -> list[VtonResultModel]:
         """Get VTON history for a user."""
-        rows = await self.db.prepare(
+        d1_result = await self.db.prepare(
             "SELECT * FROM vton_results WHERE user_id = ? ORDER BY created_at DESC LIMIT ?"
         ).bind(user_id, limit).all()
+        rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
         return [VtonResultModel(row) for row in rows]
+
+    async def update_vton_result(self, vton_id: str, data: dict) -> Optional[VtonResultModel]:
+        """Update a VTON result record."""
+        sets = []
+        params = []
+        for key in ("status", "output_image_url", "error_message", "completed_at"):
+            if key in data:
+                sets.append(f"{key} = ?")
+                params.append(data[key])
+        if not sets:
+            return None
+        params.append(vton_id)
+        await self.db.prepare(
+            f"UPDATE vton_results SET {', '.join(sets)} WHERE id = ?"
+        ).bind(*params).run()
+        return await self.get_vton_result(vton_id)

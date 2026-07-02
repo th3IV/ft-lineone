@@ -1,4 +1,4 @@
-"""Maui scraper using BeautifulSoup (Async HTTP)."""
+"""Maui scraper - Magento 2 HTML scraping with correct domain."""
 
 import re
 import httpx
@@ -24,17 +24,29 @@ class MauiProduct:
 
 
 class MauiScraper:
-    """Scraper for Maui (maui.cl) - Async HTTP-based, no browser needed."""
+    """Scraper for Maui & Sons (mauiandsons.cl) - Magento 2 platform."""
 
-    BASE_URL = "https://www.maui.cl"
+    BASE_URL = "https://mauiandsons.cl"
+
+    # Magento 2 category paths (verified working)
+    CATEGORY_PATHS = {
+        "hombre-vestuario": "/hombre/vestuario/poleras.html",
+        "hombre-poleras": "/hombre/vestuario/poleras.html",
+        "mujer-vestuario": "/mujer/vestuario/poleras.html",
+        "mujer-poleras": "/mujer/vestuario/poleras.html",
+        "hombre-parkas": "/hombre/vestuario/parkas-y-chaquetas.html",
+        "mujer-parkas": "/mujer/vestuario/parkas-y-chaquetas.html",
+    }
 
     def __init__(self):
         self.client = httpx.AsyncClient(
             timeout=30.0,
+            follow_redirects=True,
             headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "text/html,application/xhtml+xml",
-                "Accept-Language": "es-CL,es;q=0.9",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "es-CL,es;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
             },
         )
 
@@ -42,29 +54,32 @@ class MauiScraper:
         """Fetch a page and return BeautifulSoup object."""
         try:
             response = await self.client.get(url)
-            response.raise_for_status()
-            return BeautifulSoup(response.text, "lxml")
+            if response.status_code == 200:
+                return BeautifulSoup(response.text, "html.parser")
         except Exception:
-            return None
+            pass
+        return None
 
     async def scrape_category(
         self, category: str, max_items: int = 50
     ) -> list[MauiProduct]:
         """Scrape products from a category page."""
-        products = []
-        url = f"{self.BASE_URL}/categoria/{category}"
+        # Resolve category path
+        path = self.CATEGORY_PATHS.get(category, f"/{category}.html")
+        url = f"{self.BASE_URL}{path}"
 
         soup = await self.get_page(url)
         if not soup:
-            return products
+            return []
 
+        # Magento 2 product list selectors
         items = (
-            soup.select(".product")
-            or soup.select(".item")
-            or soup.select("[data-product-code]")
-            or soup.select(".product-card")
+            soup.select(".product-item-info")
+            or soup.select(".product-item")
+            or soup.select(".product.product-item")
         )
 
+        products = []
         for item in items[:max_items]:
             try:
                 product = self._parse_product(item, category)
@@ -78,38 +93,44 @@ class MauiScraper:
     async def search_products(
         self, query: str, max_items: int = 30
     ) -> list[MauiProduct]:
-        """Search products by keyword."""
+        """Search products by keyword using Magento 2 search."""
+        url = f"{self.BASE_URL}/catalogsearch/result/"
         products = []
-        url = f"{self.BASE_URL}/search?q={query}"
 
-        soup = await self.get_page(url)
-        if not soup:
-            return products
+        try:
+            response = await self.client.get(
+                url,
+                params={"q": query},
+            )
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
 
-        items = (
-            soup.select(".product")
-            or soup.select(".search-result-item")
-            or soup.select("[data-product-code]")
-        )
+            items = (
+                soup.select(".product-item-info")
+                or soup.select(".product-item")
+            )
 
-        for item in items[:max_items]:
-            try:
-                product = self._parse_product(item, "search")
-                if product:
-                    products.append(product)
-            except Exception:
-                continue
+            for item in items[:max_items]:
+                try:
+                    product = self._parse_product(item, "search")
+                    if product:
+                        products.append(product)
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
         return products
 
     def _parse_product(self, item: BeautifulSoup, category: str) -> Optional[MauiProduct]:
-        """Parse a product item from the page."""
+        """Parse a Magento 2 product item."""
+        # Product name
         name = ""
         name_elem = (
-            item.select_one(".productName")
+            item.select_one(".product-item-link")
+            or item.select_one(".product-name a")
             or item.select_one("[itemprop='name']")
-            or item.select_one(".product-name")
-            or item.select_one("h2")
+            or item.select_one("a.product-item-link")
         )
         if name_elem:
             name = name_elem.get_text(strip=True)
@@ -117,69 +138,101 @@ class MauiScraper:
         if not name:
             return None
 
+        # Price (Magento 2 price box)
         price = 0.0
         price_elem = (
-            item.select_one(".productPrice")
-            or item.select_one("[data-price]")
-            or item.select_one(".price-current")
+            item.select_one(".price-box .special-price .price")
+            or item.select_one(".price-box .price")
+            or item.select_one("[data-price-amount]")
+            or item.select_one(".price")
         )
         if price_elem:
-            price_text = price_elem.get_text(strip=True)
-            price = self._normalize_price(price_text)
+            # Try data attribute first
+            price_amount = price_elem.get("data-price-amount")
+            if price_amount:
+                try:
+                    price = float(price_amount)
+                except ValueError:
+                    pass
+            else:
+                price_text = price_elem.get_text(strip=True)
+                price = self._normalize_price(price_text)
 
+        # Product ID
         product_id = ""
         id_elem = (
-            item.select_one("[data-code]")
+            item.select_one("[data-product-id]")
+            or item.select_one("[data-product-sku]")
             or item.select_one("[data-product-code]")
-            or item.select_one("[data-product-id]")
         )
         if id_elem:
             product_id = (
-                id_elem.get("data-code")
-                or id_elem.get("data-product-code")
-                or id_elem.get("data-product-id", "")
+                id_elem.get("data-product-id")
+                or id_elem.get("data-product-sku")
+                or id_elem.get("data-product-code", "")
             )
 
         if not product_id:
-            product_id = re.sub(r'[^a-z0-9]', '-', name.lower())[:50]
+            # Extract from product URL
+            link = item.select_one("a[href]")
+            if link:
+                href = link.get("href", "")
+                match = re.search(r"/([^/]+)\.html$", href)
+                if match:
+                    product_id = match.group(1)
 
+        if not product_id:
+            product_id = re.sub(r"[^a-z0-9]", "-", name.lower())[:50]
+
+        # Image
         image_url = ""
         img_elem = (
-            item.select_one(".productImage img")
-            or item.select_one("img[data-src]")
-            or item.select_one("img[src]")
+            item.select_one(".product-image-photo")
+            or item.select_one(".product-image img")
+            or item.select_one("img.product-image-photo")
+            or item.select_one("img[src*='media']")
         )
         if img_elem:
-            image_url = img_elem.get("src") or img_elem.get("data-src", "")
+            image_url = img_elem.get("src", "")
+            if not image_url:
+                image_url = img_elem.get("data-src", "")
+            # Clean up Magento image URL
+            if image_url and "?" in image_url:
+                image_url = image_url.split("?")[0]
 
-        sizes = []
-        size_elems = item.select(".sizeList li, .size-option, .size-selector button")
-        for s in size_elems:
-            text = s.get_text(strip=True)
-            if text and text not in sizes:
-                sizes.append(text)
-
-        colors = []
-        color_elems = item.select(".colorSwatch span, .color-option, .color-selector span")
-        for c in color_elems:
-            text = c.get_text(strip=True)
-            if text and text not in colors:
-                colors.append(text)
-
-        availability = True
-        stock_elem = item.select_one(".stockStatus, .availability, .stock-status")
-        if stock_elem:
-            stock_text = stock_elem.get_text(strip=True).lower()
-            availability = "out" not in stock_text and "agotado" not in stock_text
-
-        link_elem = item.select_one("a[href]")
+        # Product URL
         original_url = ""
+        link_elem = item.select_one("a.product-item-link") or item.select_one("a[href]")
         if link_elem:
             href = link_elem.get("href", "")
             if href.startswith("http"):
                 original_url = href
             elif href.startswith("/"):
                 original_url = f"{self.BASE_URL}{href}"
+
+        # Sizes (from swatch or size list)
+        sizes = []
+        size_elems = item.select(".swatch-option.text[data-option-label], .size-option, .size-list li")
+        for s in size_elems:
+            label = s.get("data-option-label", "") or s.get_text(strip=True)
+            if label and label not in sizes:
+                sizes.append(label)
+
+        # Colors (from swatch)
+        colors = []
+        color_elems = item.select(".swatch-option.color[data-option-label], .color-option")
+        for c in color_elems:
+            label = c.get("data-option-label", "") or c.get_text(strip=True)
+            if label and label not in colors:
+                colors.append(label)
+
+        # Availability
+        availability = True
+        stock_elem = item.select_one(".stock, .availability, .out-of-stock")
+        if stock_elem:
+            stock_text = stock_elem.get_text(strip=True).lower()
+            if "out" in stock_text or "agotado" in stock_text or "sin stock" in stock_text:
+                availability = False
 
         return MauiProduct(
             external_id=product_id,
@@ -196,9 +249,21 @@ class MauiScraper:
         )
 
     def _normalize_price(self, price_str: str) -> float:
-        """Normalize price string to float."""
-        cleaned = re.sub(r'[^\d.,]', '', price_str)
-        cleaned = cleaned.replace('.', '').replace(',', '.')
+        """Normalize Chilean price string to float."""
+        # Handle formats: "$14.990", "14990", "$14.990 CLP"
+        cleaned = re.sub(r"[^\d.,]", "", price_str)
+        # Chile uses . as thousands separator and , as decimal
+        if "." in cleaned and "," in cleaned:
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        elif "." in cleaned:
+            # Could be thousands separator or decimal
+            parts = cleaned.split(".")
+            if len(parts) > 2:
+                # Multiple dots = thousands separator
+                cleaned = cleaned.replace(".", "")
+            elif len(parts[-1]) == 3:
+                # Likely thousands separator (e.g., "14.990")
+                cleaned = cleaned.replace(".", "")
         try:
             return float(cleaned)
         except ValueError:

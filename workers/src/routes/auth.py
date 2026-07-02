@@ -78,14 +78,18 @@ async def login(credentials: UserLogin, request: Request):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(refresh_token: str, request: Request):
+async def refresh_token(body: dict, request: Request):
     """Refresh access token."""
-    token_data = verify_token(refresh_token)
+    token = body.get("refresh_token", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="refresh_token required")
+
+    token_data = verify_token(token, expected_type="refresh")
     if not token_data:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     db = get_db(request)
-    user = await db.get_user_by_email(token_data.email)
+    user = await db.get_user_by_id(token_data.user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 

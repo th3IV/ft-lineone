@@ -1,15 +1,18 @@
 import api from "./api";
 
 export const login = async (email, password) => {
-  const response = await api.post("/auth/login", { email, password });
-  if (response.data.token) {
-    localStorage.setItem("token", response.data.token);
+  const response = await api.post("/api/v1/auth/login", { email, password });
+  if (response.data.access_token) {
+    localStorage.setItem("token", response.data.access_token);
   }
   return response.data;
 };
 
 export const register = async (data) => {
-  const response = await api.post("/auth/register", data);
+  const response = await api.post("/api/v1/auth/register", data);
+  if (response.data.access_token) {
+    localStorage.setItem("token", response.data.access_token);
+  }
   return response.data;
 };
 
@@ -18,14 +21,21 @@ export const logout = () => {
 };
 
 export const getCurrentUser = async () => {
-  const response = await api.get("/auth/me");
-  return response.data;
+  const token = localStorage.getItem("token");
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload;
+  } catch {
+    localStorage.removeItem("token");
+    return null;
+  }
 };
 
 export const refreshToken = async () => {
-  const response = await api.post("/auth/refresh");
-  if (response.data.token) {
-    localStorage.setItem("token", response.data.token);
+  const response = await api.post("/api/v1/auth/refresh");
+  if (response.data.access_token) {
+    localStorage.setItem("token", response.data.access_token);
   }
   return response.data;
 };

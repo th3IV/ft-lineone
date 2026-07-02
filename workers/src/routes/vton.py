@@ -67,6 +67,14 @@ async def try_on(
         user_id=user_id,
     )
 
+    # Update DB record with result
+    from datetime import datetime, timezone
+    await db.update_vton_result(vton_result.id, {
+        "status": result["status"],
+        "output_image_url": result.get("output_image_url"),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    })
+
     return {
         "vton_id": vton_result.id,
         "status": result["status"],
@@ -76,12 +84,14 @@ async def try_on(
 
 
 @router.get("/result/{vton_id}")
-async def get_result(request: Request, vton_id: str):
+async def get_result(request: Request, vton_id: str, user: dict = Depends(require_auth)):
     """Get the result of a VTON request."""
     db = get_db(request)
     result = await db.get_vton_result(vton_id)
     if not result:
         raise HTTPException(status_code=404, detail="VTON result not found")
+    if result.user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
 
     return {
         "id": result.id,

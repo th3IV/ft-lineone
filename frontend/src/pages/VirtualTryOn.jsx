@@ -44,12 +44,12 @@ function VirtualTryOn() {
       formData.append("user_image", userFile);
       formData.append("product_id", selectedProductId);
       const result = await requestTryOn(formData);
-      setResultImage(result.image_url);
+      setResultImage(result.output_image_url);
       const entry = {
         id: Date.now(),
         productId: selectedProductId,
         productName: selectedProduct?.name,
-        resultImage: result.image_url,
+        resultImage: result.output_image_url,
         timestamp: new Date().toISOString(),
       };
       const updated = [entry, ...history].slice(0, 10);

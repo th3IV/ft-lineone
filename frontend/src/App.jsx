@@ -6,6 +6,9 @@ import Catalog from "./pages/Catalog";
 import ProductDetail from "./pages/ProductDetail";
 import VirtualTryOn from "./pages/VirtualTryOn";
 import Profile from "./pages/Profile";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import NotFound from "./pages/NotFound";
 import ChatFlotante from "./components/ChatFlotante";
 import ModalVTON from "./components/ModalVTON";
 import { closeVtonModal } from "./store/uiSlice";
@@ -24,15 +27,16 @@ function App() {
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/virtual-try-on" element={<VirtualTryOn />} />
           <Route path="/profile" element={<Profile />} />
-          <Route path="/login" element={<Home />} />
-          <Route path="/register" element={<Home />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       <ChatFlotante />
       <ModalVTON
         product={vtonModal.product}
         isOpen={vtonModal.isOpen}
-        onClose={() => dispatch(closeVtonModal())}
+        onClose={() => dispatch(closeVtonModal)}
       />
     </div>
   );

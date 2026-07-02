@@ -18,7 +18,9 @@ function SidebarFiltros({
     filters.size ||
     filters.color ||
     filters.minPrice ||
-    filters.maxPrice;
+    filters.maxPrice ||
+    filters.store ||
+    filters.query;
 
   return (
     <>

@@ -45,9 +45,7 @@ function ModalVTON({ product, isOpen, onClose }) {
       formData.append("user_image", userFile);
       formData.append("product_id", product.id);
 
-      const res = await api.post("/vton/try-on", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const res = await api.post("/vton/try-on", formData);
 
       if (res.data?.output_image_url) {
         setResultImage(res.data.output_image_url);

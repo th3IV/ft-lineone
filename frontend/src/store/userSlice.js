@@ -77,7 +77,7 @@ const userSlice = createSlice({
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload.user;
-        state.token = action.payload.token;
+        state.token = action.payload.access_token;
         state.isAuthenticated = true;
         state.measurements = action.payload.measurements || null;
         state.preferences = action.payload.preferences || null;
@@ -92,9 +92,9 @@ const userSlice = createSlice({
       })
       .addCase(registerUser.fulfilled, (state, action) => {
         state.loading = false;
-        if (action.payload.token) {
+        if (action.payload.access_token) {
           state.user = action.payload.user;
-          state.token = action.payload.token;
+          state.token = action.payload.access_token;
           state.isAuthenticated = true;
         }
       })
