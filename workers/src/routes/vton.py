@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from models.vton_result import VtonResult, VtonStatus, VtonHistoryResponse
 from services.vton import VtonService, _validate_image
 from services.r2 import R2Service
+from services.image_compressor import ImageCompressor
 from middleware.security import require_auth
 
 router = APIRouter()
@@ -57,13 +58,6 @@ async def upload_image(
     """Upload user image to R2. Returns the public URL."""
     mime, image_bytes = _parse_data_url(body.image)
 
-    if len(image_bytes) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Image too large ({len(image_bytes) // 1024}KB). Maximum is 100KB. "
-                   "Please take a photo with simpler background or lower resolution.",
-        )
-
     if not _validate_image(image_bytes):
         raise HTTPException(
             status_code=400,
@@ -72,6 +66,19 @@ async def upload_image(
 
     user_id = user.user_id
     r2_service = R2Service(request.app.state.env)
+    compressor = ImageCompressor(max_bytes=MAX_UPLOAD_BYTES)
+
+    try:
+        image_bytes = compressor.compress(image_bytes)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {e}")
+
+    if len(image_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Image too large ({len(image_bytes) // 1024}KB) even after compression. "
+                   "Maximum is 100KB. Try a simpler photo with less detail.",
+        )
 
     key = f"vton/user-uploads/{user_id}/{uuid.uuid4().hex}.jpg"
     image_url = await r2_service.upload_image(
