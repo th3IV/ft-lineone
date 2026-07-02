@@ -36,7 +36,10 @@ export const fetchProfile = createAsyncThunk("user/fetchProfile", async (_, { re
 
 export const updateProfile = createAsyncThunk("user/updateProfile", async (data, { rejectWithValue }) => {
   try {
-    const response = await api.put("/users/profile", data);
+    const response = await api.put("/users/profile", {
+      name: data.name,
+      gender: data.gender,
+    });
     return response.data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.detail || "Failed to update profile");
@@ -134,18 +137,28 @@ const userSlice = createSlice({
         state.preferences = action.payload.preferences || action.payload.user?.preferences || null;
       })
       .addCase(updateMeasurements.fulfilled, (state, action) => {
-        state.measurements = action.payload.measurements || action.payload;
+        state.measurements = action.payload.measurements || {};
       })
       .addCase(updatePreferences.fulfilled, (state, action) => {
-        state.preferences = action.payload.preferences || action.payload;
+        state.preferences = action.payload.preferences || {};
       })
       .addCase(fetchProfile.fulfilled, (state, action) => {
-        state.user = action.payload.user || action.payload;
-        state.measurements = action.payload.measurements || action.payload.user?.body_measurements || null;
-        state.preferences = action.payload.preferences || action.payload.user?.preferences || null;
+        const data = action.payload;
+        state.user = {
+          id: data.id,
+          email: data.email,
+          name: data.name,
+          gender: data.gender || "",
+          created_at: data.created_at,
+        };
+        state.measurements = data.body_measurements || {};
+        state.preferences = data.preferences || {};
       })
       .addCase(updateProfile.fulfilled, (state, action) => {
-        state.user = action.payload.user || action.payload;
+        if (state.user) {
+          state.user.name = state.user.name;
+          state.user.gender = state.user.gender;
+        }
       });
   },
 });

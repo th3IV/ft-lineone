@@ -17,6 +17,7 @@ def get_db(request: Request):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
+    gender: Optional[str] = None
 
 
 class MeasurementsUpdate(BaseModel):
@@ -25,11 +26,11 @@ class MeasurementsUpdate(BaseModel):
     chest: Optional[float] = None
     waist: Optional[float] = None
     hips: Optional[float] = None
-    gender: Optional[str] = None
+    bodyShape: Optional[str] = None
 
 
 class PreferencesUpdate(BaseModel):
-    preferences: list[str] = []
+    preferences: dict = {}
 
 
 @router.get("/me")
@@ -40,13 +41,17 @@ async def get_current_user(request: Request, user: dict = Depends(require_auth))
     if not user_obj:
         raise HTTPException(status_code=404, detail="User not found")
 
+    measurements = user_obj.body_measurements or {}
+    gender = measurements.get("gender", "")
+
     return {
         "id": user_obj.id,
         "email": user_obj.email,
         "name": user_obj.name,
+        "gender": gender,
         "created_at": user_obj.created_at,
-        "body_measurements": user_obj.body_measurements or {},
-        "preferences": user_obj.preferences or [],
+        "body_measurements": measurements,
+        "preferences": user_obj.preferences or {},
     }
 
 
@@ -56,13 +61,18 @@ async def update_profile(
     request: Request,
     user: dict = Depends(require_auth),
 ):
-    """Update user profile (name, email)."""
+    """Update user profile (name, email, gender)."""
     db = get_db(request)
     updates = {}
     if body.name is not None:
         updates["name"] = body.name
     if body.email is not None:
         updates["email"] = body.email
+    if body.gender is not None:
+        user_obj = await db.get_user_by_id(user.user_id)
+        measurements = user_obj.body_measurements or {}
+        measurements["gender"] = body.gender
+        updates["body_measurements"] = measurements
 
     if updates:
         await db.update_user(user.user_id, updates)

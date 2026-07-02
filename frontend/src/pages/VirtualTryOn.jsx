@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
-import { Sparkles, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 import { fetchProducts } from "../store/productSlice";
 import { requestTryOn } from "../services/vton";
 import VirtualMirror from "../components/VirtualMirror";
@@ -19,7 +19,6 @@ function VirtualTryOn() {
   const [userImage, setUserImage] = useState(null);
   const [userFile, setUserFile] = useState(null);
   const [resultImage, setResultImage] = useState(null);
-  const [resultBlobUrl, setResultBlobUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [history, setHistory] = useState([]);
@@ -34,12 +33,6 @@ function VirtualTryOn() {
     }
   }, [dispatch]);
 
-  useEffect(() => {
-    return () => {
-      if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
-    };
-  }, [resultBlobUrl]);
-
   const selectedProduct = products.find(
     (p) => String(p.id) === selectedProductId
   );
@@ -51,13 +44,6 @@ function VirtualTryOn() {
     setError("");
   };
 
-  const blobToBase64 = (blob) =>
-    new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
-    });
-
   const handleGenerate = async () => {
     if (!userFile || !selectedProductId) return;
     setLoading(true);
@@ -66,19 +52,20 @@ function VirtualTryOn() {
       const formData = new FormData();
       formData.append("user_image", userFile);
       formData.append("product_id", selectedProductId);
-      const blob = await requestTryOn(formData);
+      const res = await requestTryOn(formData);
 
-      if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
-      const url = URL.createObjectURL(blob);
-      setResultBlobUrl(url);
-      setResultImage(url);
+      const imageUrl = res.output_image_url;
+      if (!imageUrl) {
+        throw new Error("No se pudo generar el resultado. Intenta con otra foto.");
+      }
 
-      const base64 = await blobToBase64(blob);
+      setResultImage(imageUrl);
+
       const entry = {
         id: Date.now(),
         productId: selectedProductId,
         productName: selectedProduct?.name,
-        resultImage: base64,
+        resultImage: imageUrl,
         timestamp: new Date().toISOString(),
       };
       const updated = [entry, ...history].slice(0, 10);

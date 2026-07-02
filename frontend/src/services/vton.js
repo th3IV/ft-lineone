@@ -2,11 +2,7 @@ import api from "./api";
 
 export const requestTryOn = async (formData) => {
   const response = await api.post("/vton/try-on", formData, {
-    responseType: "blob",
-    transformRequest: [(data, headers) => {
-      delete headers["Content-Type"];
-      return data;
-    }],
+    headers: { "Content-Type": "multipart/form-data" },
   });
   return response.data;
 };

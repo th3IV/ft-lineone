@@ -69,20 +69,43 @@ async def try_on(
     )
 
     from datetime import datetime, timezone
-    await db.update_vton_result(vton_result.id, {
-        "status": result["status"],
-        "completed_at": datetime.now(timezone.utc).isoformat(),
-    })
 
     if result["status"] == "failed":
+        await db.update_vton_result(vton_result.id, {
+            "status": "failed",
+            "error_message": result.get("error", "VTON processing failed"),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
         raise HTTPException(status_code=500, detail=result.get("error", "VTON processing failed"))
 
     image_bytes = result.get("image_bytes")
     if not image_bytes:
+        await db.update_vton_result(vton_result.id, {
+            "status": "failed",
+            "error_message": "No image data returned from VTON model",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
         raise HTTPException(status_code=500, detail="No image data returned from VTON model")
 
     content_type = result.get("content_type", "image/jpeg")
-    return Response(content=image_bytes, media_type=content_type)
+
+    output_image_url = await r2_service.upload_image(
+        key=r2_service.generate_vton_key(user_id, product_id, is_result=True),
+        data=image_bytes,
+        content_type=content_type,
+    )
+
+    await db.update_vton_result(vton_result.id, {
+        "status": "completed",
+        "output_image_url": output_image_url,
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    return {
+        "id": vton_result.id,
+        "status": "completed",
+        "output_image_url": output_image_url,
+    }
 
 
 @router.get("/result/{vton_id}")

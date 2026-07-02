@@ -24,7 +24,7 @@ export const getCurrentUser = async () => {
   const token = localStorage.getItem("token");
   if (!token) return null;
   try {
-    const response = await api.get("/auth/me");
+    const response = await api.get("/users/me");
     return response.data;
   } catch {
     // Fallback: decode JWT payload locally (won't have name/measurements)

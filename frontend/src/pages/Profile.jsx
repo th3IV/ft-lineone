@@ -1,19 +1,17 @@
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { User, Settings, Clock, Sparkles, LogOut, Camera } from "lucide-react";
-import { fetchProfile, updateProfile, updateMeasurements } from "../store/userSlice";
+import { User, Settings, Clock, Sparkles, Camera } from "lucide-react";
+import { fetchProfile, updateProfile, updateMeasurements, updatePreferences } from "../store/userSlice";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
 const MEASUREMENTS_DEFAULT = {
   height: "",
   weight: "",
-  bust: "",
+  chest: "",
   waist: "",
   hips: "",
-  preferredStyle: "",
   bodyShape: "",
-  undertone: "",
 };
 
 const PREFERENCES_DEFAULT = {
@@ -41,13 +39,14 @@ function Profile() {
   useEffect(() => {
     if (user) {
       setProfile(user);
-      if (user.measurements) setMeasurements(user.measurements);
+      if (user.body_measurements) setMeasurements(user.body_measurements);
       if (user.preferences) setPreferences(user.preferences);
     }
   }, [user]);
 
   const handleSave = async () => {
-    await dispatch(updateProfile({ ...profile, measurements, preferences }));
+    await dispatch(updateProfile({ name: profile.name, gender: profile.gender }));
+    await dispatch(updateMeasurements(measurements));
     setIsEditing(false);
   };
 
@@ -173,7 +172,7 @@ function Profile() {
             {Object.entries({
               height: "Altura (cm)",
               weight: "Peso (kg)",
-              bust: "Busto (cm)",
+              chest: "Busto (cm)",
               waist: "Cintura (cm)",
               hips: "Caderas (cm)",
             }).map(([key, label]) => (
@@ -331,7 +330,7 @@ function Profile() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <button onClick={handleSave} className="btn-primary">
+            <button onClick={() => dispatch(updatePreferences(preferences))} className="btn-primary">
               Guardar Preferencias
             </button>
           </div>
