@@ -2,7 +2,14 @@ import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Upload, Sparkles, Loader2, AlertCircle, Image } from "lucide-react";
-import api from "../services/api";
+import { uploadImage, requestTryOn } from "../services/vton";
+import { compressImage } from "../utils/compressImage";
+
+const PHOTO_TIPS = [
+  "Foto de cuerpo completo, de frente",
+  "Buena iluminacion, fondo claro",
+  "Maximo 100KB — se comprimira automaticamente",
+];
 
 function ModalVTON({ product, isOpen, onClose }) {
   const [userImage, setUserImage] = useState(null);
@@ -11,21 +18,18 @@ function ModalVTON({ product, isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const onDrop = useCallback((acceptedFiles) => {
+  const onDrop = useCallback(async (acceptedFiles) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
-      if (file.size > 10 * 1024 * 1024) {
-        setError("La imagen no puede superar 10MB.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setUserImage(e.target.result);
+      setError(null);
+      try {
+        const { dataUrl } = await compressImage(file);
+        setUserImage(dataUrl);
         setUserFile(file);
         setResultImage(null);
-        setError(null);
-      };
-      reader.readAsDataURL(file);
+      } catch {
+        setError("No se pudo procesar la imagen. Intenta con otra foto.");
+      }
     }
   }, []);
 
@@ -34,23 +38,25 @@ function ModalVTON({ product, isOpen, onClose }) {
     accept: { "image/*": [".png", ".jpg", ".jpeg"] },
     maxFiles: 1,
     multiple: false,
-    maxSize: 10 * 1024 * 1024,
+    maxSize: 100 * 1024,
   });
 
   const handleGenerate = async () => {
-    if (!userFile || !product) return;
+    if (!userImage || !product) return;
     setLoading(true);
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append("user_image", userFile);
-      formData.append("product_id", product.id);
+      const uploadRes = await uploadImage(userImage);
+      if (!uploadRes.image_url) {
+        setError("No se pudo subir la imagen. Intenta con otra foto.");
+        return;
+      }
 
-      const res = await api.post("/vton/try-on", formData);
+      const res = await requestTryOn(product.id, uploadRes.image_url);
 
-      if (res.data?.output_image_url) {
-        setResultImage(res.data.output_image_url);
+      if (res.output_image_url) {
+        setResultImage(res.output_image_url);
       } else {
         setError("No se pudo generar el resultado. Intenta con otra foto.");
       }
@@ -162,12 +168,22 @@ function ModalVTON({ product, isOpen, onClose }) {
                         />
                         <p className="text-xs text-editorial-gray">
                           {isDragActive
-                            ? "Suelta tu foto aquí"
-                            : "Sube tu foto (máx. 10MB)"}
+                            ? "Suelta tu foto aqui"
+                            : "Sube tu foto (max. 100KB)"}
                         </p>
                       </div>
                     )}
                   </div>
+                  {!userImage && (
+                    <ul className="mt-1.5 space-y-0.5">
+                      {PHOTO_TIPS.map((tip) => (
+                        <li key={tip} className="text-[10px] text-editorial-gray-light flex items-start gap-1">
+                          <span className="text-editorial-gray mt-px">·</span>
+                          {tip}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 {/* Result */}

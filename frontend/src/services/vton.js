@@ -1,8 +1,14 @@
 import api from "./api";
 
-export const requestTryOn = async (formData) => {
-  const response = await api.post("/vton/try-on", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+export const uploadImage = async (imageBase64) => {
+  const response = await api.post("/vton/upload", { image: imageBase64 });
+  return response.data;
+};
+
+export const requestTryOn = async (product_id, user_image_url) => {
+  const response = await api.post("/vton/try-on", {
+    product_id,
+    user_image_url,
   });
   return response.data;
 };

@@ -67,15 +67,14 @@ class VtonService:
                         error_msg = messages[0].get("message", error_msg)
                 return {"status": "failed", "error": error_msg}
 
-            import httpx
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                img_resp = await client.get(image_url)
-                if img_resp.status_code != 200:
-                    return {
-                        "status": "failed",
-                        "error": f"Failed to fetch result image: HTTP {img_resp.status_code}",
-                    }
-                image_bytes = img_resp.content
+            img_resp = await fetch(image_url)
+            if img_resp.status != 200:
+                return {
+                    "status": "failed",
+                    "error": f"Failed to fetch result image: HTTP {img_resp.status}",
+                }
+            image_bytes = await img_resp.arrayBuffer()
+            image_bytes = bytes(image_bytes)
 
             return {
                 "status": "completed",

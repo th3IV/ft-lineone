@@ -1,6 +1,13 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { Camera, Upload, Sparkles } from "lucide-react";
+import { Camera, Upload, Sparkles, AlertCircle } from "lucide-react";
+import { compressImage } from "../utils/compressImage";
+
+const PHOTO_TIPS = [
+  "Foto de cuerpo completo, de frente",
+  "Buena iluminacion, fondo claro",
+  "Maximo 100KB — se comprimira automaticamente",
+];
 
 function VirtualMirror({
   userImage,
@@ -10,13 +17,19 @@ function VirtualMirror({
   onUserImageUpload,
   onGenerate,
 }) {
+  const [error, setError] = useState(null);
+
   const onDrop = useCallback(
-    (acceptedFiles) => {
+    async (acceptedFiles) => {
       if (acceptedFiles.length > 0) {
         const file = acceptedFiles[0];
-        const reader = new FileReader();
-        reader.onload = (e) => onUserImageUpload(e.target.result, file);
-        reader.readAsDataURL(file);
+        setError(null);
+        try {
+          const { dataUrl } = await compressImage(file);
+          onUserImageUpload(dataUrl, file);
+        } catch {
+          setError("No se pudo procesar la imagen. Intenta con otra foto.");
+        }
       }
     },
     [onUserImageUpload]
@@ -27,6 +40,7 @@ function VirtualMirror({
     accept: { "image/*": [".png", ".jpg", ".jpeg"] },
     maxFiles: 1,
     multiple: false,
+    maxSize: 100 * 1024,
   });
 
   return (
@@ -66,6 +80,22 @@ function VirtualMirror({
               </div>
             )}
           </div>
+          {!userImage && (
+            <ul className="mt-2 space-y-0.5">
+              {PHOTO_TIPS.map((tip) => (
+                <li key={tip} className="text-[10px] text-editorial-gray-light flex items-start gap-1">
+                  <span className="text-editorial-gray mt-px">·</span>
+                  {tip}
+                </li>
+              ))}
+            </ul>
+          )}
+          {error && (
+            <div className="mt-2 flex items-start gap-1.5 text-[11px] text-red-500">
+              <AlertCircle size={12} className="mt-px flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
         </div>
 
         {/* Product */}

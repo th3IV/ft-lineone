@@ -1,8 +1,10 @@
 """Virtual Try-On routes."""
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Depends
-from fastapi.responses import Response
-from typing import Optional
+import base64
+import uuid
+from datetime import datetime, timezone
+from fastapi import APIRouter, HTTPException, Request, Depends
+from pydantic import BaseModel
 
 from models.vton_result import VtonResult, VtonStatus, VtonHistoryResponse
 from services.vton import VtonService, _validate_image
@@ -11,64 +13,109 @@ from middleware.security import require_auth
 
 router = APIRouter()
 
+MAX_UPLOAD_BYTES = 100 * 1024  # 100KB — small enough for Pyodide ASGI bridge
+
+
+class UploadRequest(BaseModel):
+    image: str  # data:image/jpeg;base64,...
+
+
+class TryOnRequest(BaseModel):
+    product_id: str
+    user_image_url: str  # R2 public URL from /upload
+
 
 def get_db(request: Request):
     """Get database service from request state."""
     return request.app.state.db
 
 
+def _parse_data_url(data_url: str) -> tuple:
+    """Parse a data URL and return (mime_type, image_bytes)."""
+    if not data_url.startswith("data:"):
+        raise HTTPException(status_code=400, detail="Invalid image format. Expected a data URL.")
+
+    header, encoded = data_url.split(",", 1)
+    mime = header.split(";")[0].replace("data:", "")
+    if not mime.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
+
+    try:
+        image_bytes = base64.b64decode(encoded)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 data.")
+
+    return mime, image_bytes
+
+
+@router.post("/upload")
+async def upload_image(
+    request: Request,
+    body: UploadRequest,
+    user: dict = Depends(require_auth),
+):
+    """Upload user image to R2. Returns the public URL."""
+    mime, image_bytes = _parse_data_url(body.image)
+
+    if len(image_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Image too large ({len(image_bytes) // 1024}KB). Maximum is 100KB. "
+                   "Please take a photo with simpler background or lower resolution.",
+        )
+
+    if not _validate_image(image_bytes):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid image format. Please upload a JPEG, PNG, or WebP file.",
+        )
+
+    user_id = user.user_id
+    r2_service = R2Service(request.app.state.env)
+
+    key = f"vton/user-uploads/{user_id}/{uuid.uuid4().hex}.jpg"
+    image_url = await r2_service.upload_image(
+        key=key,
+        data=image_bytes,
+        content_type=mime,
+    )
+
+    return {"image_url": image_url}
+
+
 @router.post("/try-on")
 async def try_on(
     request: Request,
-    user_image: UploadFile = File(...),
-    product_id: str = Form(...),
+    body: TryOnRequest,
     user: dict = Depends(require_auth),
 ):
-    """Process a virtual try-on request. Returns the result image directly as JPEG."""
-    if not user_image.content_type or not user_image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
-
-    contents = await user_image.read()
-    if len(contents) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
-
-    if not _validate_image(contents):
-        raise HTTPException(status_code=400, detail="Invalid image format. Please upload a JPEG, PNG, or WebP file.")
-
+    """Process a virtual try-on request. Accepts R2 URLs (tiny body)."""
     user_id = user.user_id
     db = get_db(request)
     vton_service = VtonService(request.app.state.env)
     r2_service = R2Service(request.app.state.env)
 
-    product = await db.get_product(product_id)
+    product = await db.get_product(body.product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
     if not product.image_url:
         raise HTTPException(status_code=400, detail="Product has no image available for try-on")
 
-    user_image_url = await r2_service.upload_image(
-        key=r2_service.generate_vton_key(user_id, product_id, is_result=False),
-        data=contents,
-        content_type=user_image.content_type or "image/jpeg",
-    )
-
     vton_result = await db.create_vton_result({
         "user_id": user_id,
-        "product_id": product_id,
+        "product_id": body.product_id,
         "status": "processing",
-        "input_image_url": user_image_url,
+        "input_image_url": body.user_image_url,
         "garment_image_url": product.image_url,
     })
 
     result = await vton_service.process_try_on(
-        user_image_url=user_image_url,
+        user_image_url=body.user_image_url,
         garment_image_url=product.image_url,
-        product_id=product_id,
+        product_id=body.product_id,
         user_id=user_id,
     )
-
-    from datetime import datetime, timezone
 
     if result["status"] == "failed":
         await db.update_vton_result(vton_result.id, {
@@ -78,8 +125,8 @@ async def try_on(
         })
         raise HTTPException(status_code=500, detail=result.get("error", "VTON processing failed"))
 
-    image_bytes = result.get("image_bytes")
-    if not image_bytes:
+    image_bytes_result = result.get("image_bytes")
+    if not image_bytes_result:
         await db.update_vton_result(vton_result.id, {
             "status": "failed",
             "error_message": "No image data returned from VTON model",
@@ -90,8 +137,8 @@ async def try_on(
     content_type = result.get("content_type", "image/jpeg")
 
     output_image_url = await r2_service.upload_image(
-        key=r2_service.generate_vton_key(user_id, product_id, is_result=True),
-        data=image_bytes,
+        key=r2_service.generate_vton_key(user_id, body.product_id, is_result=True),
+        data=image_bytes_result,
         content_type=content_type,
     )
 

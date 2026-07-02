@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
 import { Clock } from "lucide-react";
 import { fetchProducts } from "../store/productSlice";
-import { requestTryOn } from "../services/vton";
+import { uploadImage, requestTryOn } from "../services/vton";
 import VirtualMirror from "../components/VirtualMirror";
 import RevealOnScroll from "../components/RevealOnScroll";
 
@@ -45,14 +45,16 @@ function VirtualTryOn() {
   };
 
   const handleGenerate = async () => {
-    if (!userFile || !selectedProductId) return;
+    if (!userImage || !selectedProductId) return;
     setLoading(true);
     setError("");
     try {
-      const formData = new FormData();
-      formData.append("user_image", userFile);
-      formData.append("product_id", selectedProductId);
-      const res = await requestTryOn(formData);
+      const uploadRes = await uploadImage(userImage);
+      if (!uploadRes.image_url) {
+        throw new Error("No se pudo subir la imagen. Intenta con otra foto.");
+      }
+
+      const res = await requestTryOn(selectedProductId, uploadRes.image_url);
 
       const imageUrl = res.output_image_url;
       if (!imageUrl) {
@@ -73,11 +75,14 @@ function VirtualTryOn() {
       localStorage.setItem("tryOnHistory", JSON.stringify(updated));
     } catch (err) {
       console.error("Try-On failed:", err);
-      setError(
-        err.response?.data?.detail ||
-          err.message ||
-          "Try-on failed. Please try again."
-      );
+      const detail = err.response?.data?.detail;
+      if (detail) {
+        setError(detail);
+      } else if (err.message?.includes("network") || err.message?.includes("fetch")) {
+        setError("Error de conexion. Verifica tu internet y vuelve a intentar.");
+      } else {
+        setError(err.message || "Try-on failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

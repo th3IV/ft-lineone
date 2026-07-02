@@ -104,16 +104,33 @@ class Default(WorkerEntrypoint):
             return response
         except Exception as e:
             elapsed = round((time.time() - start) * 1000)
+            import traceback
             print(json.dumps({
                 "method": request.method,
                 "url": request.url,
                 "error": str(e),
+                "traceback": traceback.format_exc(),
                 "ms": elapsed,
             }))
             h = _cors_headers(origin)
             h["Content-Type"] = "application/json"
             return Response(
                 json.dumps({"detail": str(e)}).encode("utf-8"),
+                status=500,
+                headers=h,
+            )
+        except BaseException as e:
+            elapsed = round((time.time() - start) * 1000)
+            print(json.dumps({
+                "method": request.method,
+                "url": request.url,
+                "error": f"BaseException: {e}",
+                "ms": elapsed,
+            }))
+            h = _cors_headers(origin)
+            h["Content-Type"] = "application/json"
+            return Response(
+                json.dumps({"detail": "Internal server error"}).encode("utf-8"),
                 status=500,
                 headers=h,
             )
