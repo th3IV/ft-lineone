@@ -2,12 +2,14 @@
 
 Flow:
   1. POST /upload   — accepts base64, returns data URL (identity, for compatibility)
-  2. POST /try-on   — sends user photo + garment URL to YouCam, returns task id
-  3. GET  /result/{id} — polls YouCam for result
-  4. GET  /history  — user's VTON history
+  2. POST /try-on   — uploads user photo to freeimage.host, sends URL to YouCam
+  3. GET  /image/{id} — serves user photo as JPEG (for frontend history)
+  4. GET  /result/{id} — get VTON result status from D1
+  5. GET  /history  — user's VTON history
 """
 
 from fastapi import APIRouter, HTTPException, Request, Query, Depends
+from fastapi.responses import Response
 import base64
 import json
 from datetime import datetime
@@ -93,6 +95,31 @@ async def upload_image(request_body: dict):
     return {"image_url": image, "status": "uploaded"}
 
 
+@router.get("/image/{vton_id}")
+async def serve_image(vton_id: str, request: Request):
+    """Serve user photo as JPEG for YouCam to fetch. No auth (public endpoint)."""
+    import re as _re
+    from services.database import DatabaseService
+
+    env = getattr(request.app.state, "env", None)
+    if not env:
+        raise HTTPException(status_code=500, detail="Service unavailable")
+    db = DatabaseService(env)
+    vton_result = await db.get_vton_result(vton_id)
+    if not vton_result:
+        raise HTTPException(status_code=404, detail="Image not found")
+    if not vton_result.input_image_url:
+        raise HTTPException(status_code=404, detail="No image data")
+
+    data_url = vton_result.input_image_url
+    if data_url.startswith("data:image"):
+        header, b64data = data_url.split(",", 1)
+        img_bytes = base64.b64decode(b64data)
+        return Response(content=img_bytes, media_type="image/jpeg")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid image format")
+
+
 @router.post("/try-on")
 async def try_on(
     request_body: dict,
@@ -102,12 +129,13 @@ async def try_on(
     """Request virtual try-on via YouCam V3.0.
 
     Accepts: { product_id, user_image_url }
-    user_image_url is a data URL from the /upload endpoint.
+    user_image_url is a data URL — uploaded to freeimage.host for YouCam access.
 
-    V3.0 workflow (simplified — no File API, no byte uploads):
-      1. Get product image URL from DB
-      2. POST /v3.0/task/cloth with { src_file_url, ref_file_url, garment_category }
-      3. Return { id, status: "processing" } for frontend to poll
+    V3.0 workflow:
+      1. Upload user photo to freeimage.host (YouCam can't access Worker URLs)
+      2. Store user photo base64 in D1 for /image/{id} endpoint
+      3. POST /v3.0/task/cloth with { src_file_url, ref_file_url, garment_category }
+      4. Return { id, status: "processing" } for cron to poll
     """
     product_id = request_body.get("product_id")
     user_image_url = request_body.get("user_image_url")
@@ -119,6 +147,7 @@ async def try_on(
 
     user_id = user.user_id
     db = get_db(request)
+    env = get_env(request)
 
     try:
         # Get product
@@ -132,20 +161,28 @@ async def try_on(
 
         garment_category = _extract_garment_category(product)
 
-        # Create VTON result record
+        # Extract base64 from data URL and upload to freeimage.host
+        raw_b64 = user_image_url
+        if raw_b64.startswith("data:image"):
+            raw_b64 = raw_b64.split(",", 1)[1]
+
+        from services.image_upload import upload_user_photo
+        public_url = await upload_user_photo(raw_b64)
+
+        # Create VTON result record — store full data URL for /image serving
         vton_result = await db.create_vton_result({
             "user_id": user_id,
             "product_id": product_id,
             "status": "pending",
-            "input_image_url": user_image_url[:500] if user_image_url else None,
+            "input_image_url": user_image_url,
             "garment_image_url": garment_url[:500] if garment_url else None,
         })
         vton_id = vton_result.id
 
-        # Create YouCam task (V3.0 — direct URLs, no byte uploads)
-        youcam = YouCamService(env=get_env(request))
+        # Create YouCam task (V3.0 — use freeimage.host public URL)
+        youcam = YouCamService(env=env)
         task_id = await youcam.create_task(
-            src_url=user_image_url,
+            src_url=public_url,
             ref_url=garment_url,
             garment_category=garment_category,
         )
@@ -174,15 +211,43 @@ async def get_result(
     request: Request,
     user=Depends(require_auth),
 ):
-    """Get VTON result status. Cron worker handles YouCam polling in background."""
+    """Get VTON result status. Polls YouCam directly if task still processing."""
     user_id = user.user_id
     db = get_db(request)
+    env = get_env(request)
     vton_result = await db.get_vton_result(vton_id)
 
     if not vton_result:
         raise HTTPException(status_code=404, detail="VTON result not found")
     if vton_result.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    # If still processing, poll YouCam directly and update D1
+    if vton_result.status == "processing" and vton_result.youcam_task_id:
+        try:
+            youcam = YouCamService(env=env)
+            result = await youcam.poll_task(vton_result.youcam_task_id)
+
+            if result["status"] == "completed":
+                await db.update_vton_result(vton_id, {
+                    "status": "completed",
+                    "output_image_url": result.get("output_url"),
+                    "completed_at": datetime.utcnow().isoformat(),
+                })
+                vton_result.status = "completed"
+                vton_result.output_image_url = result.get("output_url")
+
+            elif result["status"] == "failed":
+                await db.update_vton_result(vton_id, {
+                    "status": "failed",
+                    "error_message": result.get("error", "YouCam task failed"),
+                    "completed_at": datetime.utcnow().isoformat(),
+                })
+                vton_result.status = "failed"
+                vton_result.error_message = result.get("error")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
 
     return {
         "status": vton_result.status,

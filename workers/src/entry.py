@@ -172,15 +172,18 @@ class Default(WorkerEntrypoint):
 
         print(json.dumps({"event": "cron_start", "cron": cron_expr}))
 
-        # Run scrapers
-        runner = ScraperRunner(self.env, max_products=max_products)
+        # Run scrapers (independent — failure doesn't block VTON)
         try:
-            results = await runner.run_all_scrapers()
-            print(json.dumps({"event": "cron_scrapers_complete", "cron": cron_expr, "results": results}))
-        finally:
-            await runner.close()
+            runner = ScraperRunner(self.env, max_products=max_products)
+            try:
+                results = await runner.run_all_scrapers()
+                print(json.dumps({"event": "cron_scrapers_complete", "cron": cron_expr, "results": results}))
+            finally:
+                await runner.close()
+        except Exception as e:
+            print(json.dumps({"event": "cron_scrapers_error", "error": str(e)}))
 
-        # Process pending VTON tasks
+        # Process pending VTON tasks (always runs, even if scrapers failed)
         try:
             vton_results = await process_pending_vton_tasks(self.env)
             print(json.dumps({"event": "cron_vton_complete", "cron": cron_expr, "results": vton_results}))

@@ -24,8 +24,9 @@ async def process_pending_vton_tasks(env):
     for task in pending_tasks:
         try:
             result = await youcam.poll_task(task.youcam_task_id)
+            status = result.get("status", "processing")
 
-            if result["status"] == "completed":
+            if status == "completed":
                 await db.update_vton_result(task.id, {
                     "status": "completed",
                     "output_image_url": result.get("output_url"),
@@ -33,13 +34,19 @@ async def process_pending_vton_tasks(env):
                 })
                 processed += 1
 
-            elif result["status"] == "failed":
+            elif status == "failed":
                 await db.update_vton_result(task.id, {
                     "status": "failed",
                     "error_message": result.get("error", "YouCam task failed"),
                     "completed_at": datetime.utcnow().isoformat(),
                 })
                 processed += 1
+                print(json.dumps({
+                    "event": "vton_task_failed",
+                    "task_id": task.id,
+                    "youcam_task_id": task.youcam_task_id,
+                    "error": result.get("error"),
+                }))
 
         except Exception as e:
             print(json.dumps({

@@ -97,7 +97,12 @@ class YouCamService:
         if status_code == 200 and task_status == "success":
             results = data.get("data", {}).get("results")
             if results:
-                output_url = results[0] if isinstance(results, list) else results
+                if isinstance(results, list):
+                    output_url = results[0]
+                elif isinstance(results, dict):
+                    output_url = results.get("url") or results.get("image_url") or ""
+                else:
+                    output_url = str(results)
                 return {"status": "completed", "output_url": output_url}
             return {"status": "completed", "output_url": None}
 

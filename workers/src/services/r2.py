@@ -28,54 +28,24 @@ class R2Service:
         data: bytes,
         content_type: str = "image/jpeg",
     ) -> str:
-        """Upload an image to R2 using multiple fallback strategies."""
+        """Upload an image to R2 using native JS types via fetch chain."""
         import js
-        from pyodide.ffi import to_js
+        import base64 as _b64
 
-        errors = []
+        b64str = _b64.b64encode(data).decode("ascii")
+        data_url = f"data:{content_type};base64,{b64str}"
 
-        # Strategy 1: to_js(list(data)) → Uint8Array.new()
-        # Converts bytes → Python list → JS Array of ints → native Uint8Array
-        try:
-            js_arr = to_js(list(data))
-            uint8 = js.Uint8Array.new(js_arr)
-            await self.r2.put(
-                key=key,
-                body=uint8,
-                httpMetadata={"contentType": content_type},
-            )
-            return self._get_public_url(key)
-        except Exception as e:
-            errors.append(f"Uint8Array: {e}")
+        # fetch → ArrayBuffer → Uint8Array (ArrayBufferView accepted by R2)
+        resp = await js.fetch(data_url)
+        buf = await resp.arrayBuffer()
+        uint8 = js.Uint8Array.new(buf)
 
-        # Strategy 2: Blob constructor
-        try:
-            buf = to_js(data)
-            blob = js.Blob.new([buf], {"type": content_type})
-            await self.r2.put(
-                key=key,
-                body=blob,
-                httpMetadata={"contentType": content_type},
-            )
-            return self._get_public_url(key)
-        except Exception as e:
-            errors.append(f"Blob: {e}")
-
-        # Strategy 3: Response.body → ReadableStream
-        try:
-            buf = to_js(data)
-            resp = js.Response.new(buf)
-            stream = resp.body
-            await self.r2.put(
-                key=key,
-                body=stream,
-                httpMetadata={"contentType": content_type},
-            )
-            return self._get_public_url(key)
-        except Exception as e:
-            errors.append(f"ReadableStream: {e}")
-
-        raise Exception(f"All R2 upload methods failed: {'; '.join(errors)}")
+        await self.r2.put(
+            key=key,
+            body=uint8,
+            httpMetadata={"contentType": content_type},
+        )
+        return self._get_public_url(key)
 
     async def get_image(self, key: str) -> Optional[bytes]:
         """Download an image from R2."""
