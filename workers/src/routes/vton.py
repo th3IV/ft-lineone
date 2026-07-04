@@ -15,14 +15,18 @@ from datetime import datetime
 from models.vton_result import VtonStatus
 from services.auth import verify_token
 from services.youcam import YouCamService
-from services.database import DatabaseService
 
 router = APIRouter()
 
 
-def get_db(request: Request) -> DatabaseService:
+def get_db(request: Request):
     """Get database service from request state."""
     return request.app.state.db
+
+
+def get_env(request: Request):
+    """Get Workers env binding from request state."""
+    return getattr(request.app.state, "env", None)
 
 
 def _parse_json_field(value):
@@ -124,10 +128,9 @@ async def try_on(
 
     try:
         db = get_db(request)
-        db_service = DatabaseService(db)
 
         # Get product
-        product = await db_service.get_product(product_id)
+        product = await db.get_product(product_id)
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
 
@@ -138,7 +141,7 @@ async def try_on(
         garment_category = _extract_garment_category(product)
 
         # Create VTON result record
-        vton_result = await db_service.create_vton_result({
+        vton_result = await db.create_vton_result({
             "user_id": user_id,
             "product_id": product_id,
             "status": "pending",
@@ -148,7 +151,7 @@ async def try_on(
         vton_id = vton_result.id
 
         # Create YouCam task (V3.0 — direct URLs, no byte uploads)
-        youcam = YouCamService(env=None)
+        youcam = YouCamService(env=get_env(request))
         task_id = await youcam.create_task(
             src_url=user_image_url,
             ref_url=garment_url,
@@ -156,7 +159,7 @@ async def try_on(
         )
 
         # Store task ID
-        await db_service.update_vton_result(vton_id, {
+        await db.update_vton_result(vton_id, {
             "youcam_task_id": task_id,
             "status": "processing",
         })
@@ -195,8 +198,8 @@ async def get_result(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     db = get_db(request)
-    db_service = DatabaseService(db)
-    vton_result = await db_service.get_vton_result(vton_id)
+    db = DatabaseService(db)
+    vton_result = await db.get_vton_result(vton_id)
 
     if not vton_result:
         raise HTTPException(status_code=404, detail="VTON result not found")
@@ -216,12 +219,12 @@ async def get_result(
         return {"status": "processing"}
 
     # Poll YouCam
-    youcam = YouCamService(env=None)
+    youcam = YouCamService(env=get_env(request))
     try:
         result = await youcam.poll_task(vton_result.youcam_task_id)
 
         if result["status"] == "completed":
-            await db_service.update_vton_result(vton_id, {
+            await db.update_vton_result(vton_id, {
                 "status": VtonStatus.COMPLETED.value,
                 "output_image_url": result["output_url"],
                 "completed_at": datetime.utcnow().isoformat(),
@@ -232,7 +235,7 @@ async def get_result(
             }
 
         if result["status"] == "failed":
-            await db_service.update_vton_result(vton_id, {
+            await db.update_vton_result(vton_id, {
                 "status": VtonStatus.FAILED.value,
                 "error_message": result.get("error", "YouCam task failed"),
                 "completed_at": datetime.utcnow().isoformat(),
@@ -270,8 +273,8 @@ async def get_user_history(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     db = get_db(request)
-    db_service = DatabaseService(db)
-    results = await db_service.get_vton_history(user_id, limit)
+    db = DatabaseService(db)
+    results = await db.get_vton_history(user_id, limit)
 
     response_results = []
     for r in results:
@@ -287,7 +290,7 @@ async def get_user_history(
         }
 
         if r.product_id:
-            product = await db_service.get_product(r.product_id)
+            product = await db.get_product(r.product_id)
             if product:
                 img = _extract_garment_url(product)
                 entry["product"] = {
