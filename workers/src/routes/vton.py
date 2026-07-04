@@ -94,15 +94,15 @@ def _extract_garment_category(product) -> str:
     # Shoes
     if any(k in combined for k in ["shoe", "sneaker", "boot", "sandal", "slipper", "tenis", "zapatilla"]):
         return "shoes"
+    # Full body (CHECK FIRST — "vest" is substring of "vestido")
+    if any(k in combined for k in ["dress", "suit", "overalls", "jumpsuit", "vestido", "enterizo", "mono"]):
+        return "full_body"
     # Lower body
     if any(k in combined for k in ["pant", "jean", "skirt", "trouser", "short", "legging", "bota", "falda", "bermuda", "cargo"]):
         return "lower_body"
     # Upper body
     if any(k in combined for k in ["shirt", "blouse", "polo", "sweater", "hoodie", "jacket", "vest", "top", "camisa", "polera", "polerón", "abrig", "chaqueta", "suéter", "cropped"]):
         return "upper_body"
-    # Full body
-    if any(k in combined for k in ["dress", "suit", "overalls", "jumpsuit", "vestido", "enterizo", "mono"]):
-        return "full_body"
 
     return "auto"
 
@@ -154,6 +154,35 @@ async def prefetch_image(
     return {"public_url": public_url, "status": "uploaded"}
 
 
+@router.post("/prefetch-garment")
+async def prefetch_garment(
+    request_body: dict,
+    request: Request,
+    user=Depends(require_auth),
+):
+    """Pre-upload garment image to freeimage.host before try-on.
+
+    Accepts: { url: "https://..." } (original garment URL)
+    Returns: { public_url: "https://iili.io/..." }
+
+    The Worker downloads the garment from the original CDN and re-uploads
+    to freeimage.host, because YouCam blocks most e-commerce CDNs.
+    """
+    garment_url = request_body.get("url")
+    if not garment_url:
+        raise HTTPException(status_code=400, detail="url is required")
+
+    from services.image_upload import upload_garment_image
+    try:
+        public_url = await upload_garment_image(garment_url)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Garment upload failed: {str(e)}"
+        )
+
+    return {"public_url": public_url, "status": "uploaded"}
+
+
 @router.get("/image/{vton_id}")
 async def serve_image(vton_id: str, request: Request):
     """Serve user photo as JPEG for YouCam to fetch. No auth (public endpoint)."""
@@ -186,15 +215,18 @@ async def try_on(
 ):
     """Request virtual try-on via YouCam V3.0.
 
-    Accepts: { product_id, user_image_url, public_url? }
+    Accepts: { product_id, user_image_url, public_url?, garment_public_url? }
     - user_image_url: data URL (stored for /image endpoint)
-    - public_url: pre-uploaded freeimage.host URL (optional, skips re-upload)
+    - public_url: pre-uploaded freeimage.host URL for user photo (optional)
+    - garment_public_url: pre-uploaded freeimage.host URL for garment (optional)
 
     If public_url is provided, skips the freeimage.host upload (~2-3 sec faster).
+    If garment_public_url is provided, skips garment download + upload (~3-5 sec faster).
     """
     product_id = request_body.get("product_id")
     user_image_url = request_body.get("user_image_url")
     public_url = request_body.get("public_url")  # Pre-uploaded URL
+    garment_public_url = request_body.get("garment_public_url")  # Pre-uploaded garment URL
 
     if not product_id or not user_image_url:
         raise HTTPException(
@@ -225,6 +257,11 @@ async def try_on(
             from services.image_upload import upload_user_photo
             public_url = await upload_user_photo(raw_b64)
 
+        # Use pre-uploaded garment URL, or download + re-upload (YouCam blocks e-commerce CDNs)
+        if not garment_public_url:
+            from services.image_upload import upload_garment_image
+            garment_public_url = await upload_garment_image(garment_url)
+
         # Create VTON result record
         vton_result = await db.create_vton_result({
             "user_id": user_id,
@@ -235,11 +272,11 @@ async def try_on(
         })
         vton_id = vton_result.id
 
-        # Create YouCam task (V3.0 — explicit garment_category saves ~1-2 sec)
+        # Create YouCam task (V3.0 — both URLs on freeimage.host)
         youcam = YouCamService(env=env)
         task_id = await youcam.create_task(
             src_url=public_url,
-            ref_url=garment_url,
+            ref_url=garment_public_url,
             garment_category=garment_category,
         )
 
@@ -295,6 +332,7 @@ async def youcam_webhook(request: Request):
         if not task_id:
             return {"status": "error", "detail": "No task_id"}
 
+        from services.database import DatabaseService
         db = DatabaseService(env)
 
         # Find VTON result by youcam_task_id
