@@ -1,5 +1,6 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
+import { useEffect } from "react";
 import Navbar from "./components/Navbar";
 import PageTransition from "./components/PageTransition";
 import Home from "./pages/Home";
@@ -13,6 +14,8 @@ import NotFound from "./pages/NotFound";
 import ChatFlotante from "./components/ChatFlotante";
 import ModalVTON from "./components/ModalVTON";
 import { closeVtonModal } from "./store/uiSlice";
+import { setUnauthorizedCallback } from "./services/api";
+import { logoutUser } from "./store/userSlice";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useSelector((state) => state.user);
@@ -24,7 +27,15 @@ function ProtectedRoute({ children }) {
 
 function App() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { vtonModal } = useSelector((state) => state.ui);
+
+  useEffect(() => {
+    setUnauthorizedCallback(() => {
+      dispatch(logoutUser());
+      navigate("/login");
+    });
+  }, [dispatch, navigate]);
 
   return (
     <div className="min-h-screen bg-editorial-cream">

@@ -2,6 +2,10 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import * as authService from "../services/auth";
 import api from "../services/api";
 
+export const logoutUser = createAsyncThunk("user/logout", async () => {
+  await authService.logout();
+});
+
 export const loginUser = createAsyncThunk("user/login", async ({ email, password }, { rejectWithValue }) => {
   try {
     const data = await authService.login(email, password);
@@ -84,21 +88,19 @@ const userSlice = createSlice({
     error: null,
   },
   reducers: {
-    logout(state) {
-      state.user = null;
-      state.token = null;
-      state.isAuthenticated = false;
-      state.measurements = null;
-      state.preferences = null;
-      localStorage.removeItem("token");
-      localStorage.removeItem("refresh_token");
-    },
     clearError(state) {
       state.error = null;
     },
   },
   extraReducers: (builder) => {
     builder
+      .addCase(logoutUser.fulfilled, (state) => {
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
+        state.measurements = null;
+        state.preferences = null;
+      })
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -163,5 +165,5 @@ const userSlice = createSlice({
   },
 });
 
-export const { logout, clearError } = userSlice.actions;
+export const { clearError } = userSlice.actions;
 export default userSlice.reducer;

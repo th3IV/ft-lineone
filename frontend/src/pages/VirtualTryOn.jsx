@@ -1,27 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
 import { Clock } from "lucide-react";
 import { fetchProducts } from "../store/productSlice";
-import { uploadImage, requestTryOn } from "../services/vton";
+import { useVtonPolling } from "../hooks/useVtonPolling";
 import VirtualMirror from "../components/VirtualMirror";
 import RevealOnScroll from "../components/RevealOnScroll";
 
 function VirtualTryOn() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
   const { products } = useSelector((state) => state.products);
+  const { isAuthenticated } = useSelector((state) => state.user);
 
   const [selectedProductId, setSelectedProductId] = useState(
     searchParams.get("product") || ""
   );
   const [userImage, setUserImage] = useState(null);
-  const [userFile, setUserFile] = useState(null);
-  const [resultImage, setResultImage] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [history, setHistory] = useState([]);
+
+  const { loading, error, resultImage, progress, generate, reset } =
+    useVtonPolling();
 
   useEffect(() => {
     dispatch(fetchProducts({ limit: 50 }));
@@ -29,40 +29,44 @@ function VirtualTryOn() {
     if (saved) {
       try {
         setHistory(JSON.parse(saved));
-      } catch {}
+      } catch {
+        localStorage.removeItem("tryOnHistory");
+      }
     }
   }, [dispatch]);
 
-  const selectedProduct = products.find(
-    (p) => String(p.id) === selectedProductId
+  const selectedProduct = useMemo(
+    () => products.find((p) => String(p.id) === selectedProductId),
+    [products, selectedProductId]
   );
 
-  const handleUserImageUpload = (dataUrl, file) => {
-    setUserImage(dataUrl);
-    setUserFile(file);
-    setResultImage(null);
-    setError("");
-  };
-
-  const handleGenerate = async () => {
-    if (!userImage || !selectedProductId) return;
-    setLoading(true);
-    setError("");
-    try {
-      const uploadRes = await uploadImage(userImage);
-      if (!uploadRes.image_url) {
-        throw new Error("No se pudo subir la imagen. Intenta con otra foto.");
+  const handleSelectProduct = useCallback(
+    (productId) => {
+      setSelectedProductId(productId);
+      reset();
+      if (productId) {
+        setSearchParams({ product: productId }, { replace: true });
+      } else {
+        setSearchParams({}, { replace: true });
       }
+    },
+    [reset, setSearchParams]
+  );
 
-      const res = await requestTryOn(selectedProductId, uploadRes.image_url);
+  const handleUserImageUpload = useCallback(
+    (dataUrl) => {
+      setUserImage(dataUrl);
+      reset();
+    },
+    [reset]
+  );
 
-      const imageUrl = res.output_image_url;
-      if (!imageUrl) {
-        throw new Error("No se pudo generar el resultado. Intenta con otra foto.");
-      }
+  const handleGenerate = useCallback(async () => {
+    if (!userImage || !selectedProductId || !isAuthenticated) return;
 
-      setResultImage(imageUrl);
+    const imageUrl = await generate(selectedProductId, userImage);
 
+    if (imageUrl) {
       const entry = {
         id: Date.now(),
         productId: selectedProductId,
@@ -70,28 +74,26 @@ function VirtualTryOn() {
         resultImage: imageUrl,
         timestamp: new Date().toISOString(),
       };
-      const updated = [entry, ...history].slice(0, 10);
-      setHistory(updated);
-      localStorage.setItem("tryOnHistory", JSON.stringify(updated));
-    } catch (err) {
-      console.error("Try-On failed:", err);
-      const detail = err.response?.data?.detail;
-      if (detail) {
-        setError(detail);
-      } else if (err.message?.includes("network") || err.message?.includes("fetch")) {
-        setError("Error de conexion. Verifica tu internet y vuelve a intentar.");
-      } else {
-        setError(err.message || "Try-on failed. Please try again.");
-      }
-    } finally {
-      setLoading(false);
+      setHistory((prev) => {
+        const updated = [entry, ...prev].slice(0, 5);
+        localStorage.setItem("tryOnHistory", JSON.stringify(updated));
+        return updated;
+      });
     }
-  };
+  }, [
+    userImage,
+    selectedProductId,
+    isAuthenticated,
+    generate,
+    selectedProduct,
+  ]);
 
-  const loadFromHistory = (entry) => {
-    setSelectedProductId(String(entry.productId));
-    setResultImage(entry.resultImage);
-  };
+  const loadFromHistory = useCallback(
+    (entry) => {
+      handleSelectProduct(String(entry.productId));
+    },
+    [handleSelectProduct]
+  );
 
   return (
     <div className="max-w-[1400px] mx-auto px-5 sm:px-8 py-10">
@@ -115,11 +117,7 @@ function VirtualTryOn() {
         <label className="editorial-label block mb-3">Seleccionar prenda</label>
         <select
           value={selectedProductId}
-          onChange={(e) => {
-            setSelectedProductId(e.target.value);
-            setResultImage(null);
-            setError("");
-          }}
+          onChange={(e) => handleSelectProduct(e.target.value)}
           className="w-full max-w-md border-b border-editorial-black/10 rounded-none px-0 py-3 text-sm bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
         >
           <option value="">Elige una prenda...</option>
@@ -134,6 +132,12 @@ function VirtualTryOn() {
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
           {error}
+        </div>
+      )}
+
+      {loading && progress.elapsed > 0 && (
+        <div className="mb-6 p-3 bg-editorial-cream border border-editorial-black/10 rounded-xl text-sm text-editorial-gray">
+          Generando... ({progress.elapsed}s transcurridos)
         </div>
       )}
 

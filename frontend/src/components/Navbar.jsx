@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, User, LogOut, Settings, Sparkles } from "lucide-react";
-import { loginUser, logout } from "../store/userSlice";
+import { loginUser, logoutUser } from "../store/userSlice";
 
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -46,7 +46,7 @@ function Navbar() {
   };
 
   const handleLogout = () => {
-    dispatch(logout());
+    dispatch(logoutUser());
     setUserMenuOpen(false);
     navigate("/");
   };

@@ -1,9 +1,9 @@
-import { useCallback, useState } from "react";
+import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Upload, Sparkles, Loader2, AlertCircle, Image } from "lucide-react";
-import { uploadImage, requestTryOn } from "../services/vton";
+import { X, Upload, Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { compressImage } from "../utils/compressImage";
+import { useVtonPolling } from "../hooks/useVtonPolling";
 
 const PHOTO_TIPS = [
   "Foto de cuerpo completo, de frente",
@@ -13,25 +13,24 @@ const PHOTO_TIPS = [
 
 function ModalVTON({ product, isOpen, onClose }) {
   const [userImage, setUserImage] = useState(null);
-  const [userFile, setUserFile] = useState(null);
-  const [resultImage, setResultImage] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const { loading, error, resultImage, progress, generate, reset } =
+    useVtonPolling();
 
-  const onDrop = useCallback(async (acceptedFiles) => {
-    if (acceptedFiles.length > 0) {
-      const file = acceptedFiles[0];
-      setError(null);
-      try {
-        const { dataUrl } = await compressImage(file);
-        setUserImage(dataUrl);
-        setUserFile(file);
-        setResultImage(null);
-      } catch {
-        setError("No se pudo procesar la imagen. Intenta con otra foto.");
+  const onDrop = useCallback(
+    async (acceptedFiles) => {
+      if (acceptedFiles.length > 0) {
+        const file = acceptedFiles[0];
+        try {
+          const { dataUrl } = await compressImage(file);
+          setUserImage(dataUrl);
+          reset();
+        } catch {
+          // error handled by parent
+        }
       }
-    }
-  }, []);
+    },
+    [reset]
+  );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -43,37 +42,12 @@ function ModalVTON({ product, isOpen, onClose }) {
 
   const handleGenerate = async () => {
     if (!userImage || !product) return;
-    setLoading(true);
-    setError(null);
-
-    try {
-      const uploadRes = await uploadImage(userImage);
-      if (!uploadRes.image_url) {
-        setError("No se pudo subir la imagen. Intenta con otra foto.");
-        return;
-      }
-
-      const res = await requestTryOn(product.id, uploadRes.image_url);
-
-      if (res.output_image_url) {
-        setResultImage(res.output_image_url);
-      } else {
-        setError("No se pudo generar el resultado. Intenta con otra foto.");
-      }
-    } catch (err) {
-      const msg = err.response?.data?.detail || "Error al procesar la imagen.";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    await generate(product.id, userImage);
   };
 
   const handleClose = () => {
     setUserImage(null);
-    setUserFile(null);
-    setResultImage(null);
-    setError(null);
-    setLoading(false);
+    reset();
     onClose();
   };
 
@@ -95,7 +69,6 @@ function ModalVTON({ product, isOpen, onClose }) {
             transition={{ duration: 0.3 }}
             className="relative bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto"
           >
-            {/* Header */}
             <div className="sticky top-0 bg-white/90 backdrop-blur-sm border-b border-editorial-gray-light px-6 py-4 flex items-center justify-between z-10">
               <h2 className="font-display text-lg font-semibold tracking-tight">
                 Virtual Try-On
@@ -109,7 +82,6 @@ function ModalVTON({ product, isOpen, onClose }) {
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Product info */}
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-sm overflow-hidden bg-editorial-gray-light flex-shrink-0">
                   <img
@@ -132,7 +104,6 @@ function ModalVTON({ product, isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* Error */}
               {error && (
                 <div className="flex items-start gap-2 text-sm text-red-500 bg-red-50 p-3">
                   <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
@@ -140,9 +111,13 @@ function ModalVTON({ product, isOpen, onClose }) {
                 </div>
               )}
 
-              {/* Image grid */}
+              {loading && progress.elapsed > 0 && (
+                <div className="text-xs text-editorial-gray text-center">
+                  Generando... ({progress.elapsed}s)
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* User photo upload */}
                 <div>
                   <p className="editorial-label">Tu foto</p>
                   <div
@@ -177,7 +152,10 @@ function ModalVTON({ product, isOpen, onClose }) {
                   {!userImage && (
                     <ul className="mt-1.5 space-y-0.5">
                       {PHOTO_TIPS.map((tip) => (
-                        <li key={tip} className="text-[10px] text-editorial-gray-light flex items-start gap-1">
+                        <li
+                          key={tip}
+                          className="text-[10px] text-editorial-gray-light flex items-start gap-1"
+                        >
                           <span className="text-editorial-gray mt-px">·</span>
                           {tip}
                         </li>
@@ -186,7 +164,6 @@ function ModalVTON({ product, isOpen, onClose }) {
                   )}
                 </div>
 
-                {/* Result */}
                 <div>
                   <p className="editorial-label">Resultado</p>
                   <div className="aspect-[3/4] bg-editorial-cream-light border border-editorial-gray-light flex items-center justify-center overflow-hidden">
@@ -215,7 +192,6 @@ function ModalVTON({ product, isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* CTA */}
               <button
                 onClick={handleGenerate}
                 disabled={!userImage || loading}
