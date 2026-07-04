@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS vton_results (
     output_image_url TEXT,
     garment_image_url TEXT,
     error_message TEXT,
+    youcam_task_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     completed_at DATETIME,
     FOREIGN KEY (user_id) REFERENCES users(id),

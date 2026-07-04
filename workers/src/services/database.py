@@ -52,6 +52,7 @@ class VtonResultModel:
         self.output_image_url = row.get("output_image_url")
         self.garment_image_url = row.get("garment_image_url")
         self.error_message = row.get("error_message")
+        self.youcam_task_id = row.get("youcam_task_id")
         self.created_at = row.get("created_at", datetime.utcnow().isoformat())
         self.completed_at = row.get("completed_at")
 
@@ -249,8 +250,8 @@ class DatabaseService:
 
         await self.db.prepare(
             """INSERT INTO vton_results
-               (id, user_id, product_id, status, input_image_url, output_image_url, garment_image_url, error_message, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+               (id, user_id, product_id, status, input_image_url, output_image_url, garment_image_url, error_message, youcam_task_id, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         ).bind(
             vton_id,
             data["user_id"],
@@ -260,6 +261,7 @@ class DatabaseService:
             data.get("output_image_url"),
             data.get("garment_image_url"),
             data.get("error_message"),
+            data.get("youcam_task_id"),
             now,
         ).run()
 
@@ -286,7 +288,7 @@ class DatabaseService:
         """Update a VTON result record."""
         sets = []
         params = []
-        for key in ("status", "output_image_url", "error_message", "completed_at"):
+        for key in ("status", "output_image_url", "error_message", "completed_at", "youcam_task_id"):
             if key in data:
                 sets.append(f"{key} = ?")
                 params.append(data[key])

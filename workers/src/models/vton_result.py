@@ -26,6 +26,7 @@ class VtonResult(BaseModel):
     output_image_url: Optional[str] = None
     garment_image_url: Optional[str] = None
     error_message: Optional[str] = None
+    youcam_task_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
 
