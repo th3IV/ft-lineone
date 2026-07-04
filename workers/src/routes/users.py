@@ -88,9 +88,12 @@ async def update_measurements(
 ):
     """Update user body measurements."""
     db = get_db(request)
-    measurements = {k: v for k, v in body.model_dump().items() if v is not None}
-    await db.update_user(user.user_id, {"body_measurements": measurements})
-    return {"status": "updated", "measurements": measurements}
+    user_obj = await db.get_user_by_id(user.user_id)
+    existing = user_obj.body_measurements if user_obj else {}
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    merged = {**(existing or {}), **updates}
+    await db.update_user(user.user_id, {"body_measurements": merged})
+    return {"status": "updated", "measurements": merged}
 
 
 @router.put("/preferences")

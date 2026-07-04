@@ -1,18 +1,33 @@
-"""Virtual Try-On service using Cloudflare Workers AI + Pruna P-Image-Try-On."""
+"""Virtual Try-On service using Replicate API (cuuupid/idm-vton)."""
 
-import base64
-import time
+import json
+import js
+from pyodide.ffi import to_js as _to_js
+from js import Object
 
 
-MODEL = "pruna/p-image-try-on"
+def to_js(obj):
+    """Convert Python objects to JS with dict_converter for proper dict→Object mapping."""
+    return _to_js(obj, dict_converter=Object.fromEntries)
+
+
+REPLICATE_VERSION = "0513734a452173b8173e907e3a59d19a36266e55b48528559432bd21c7d7e985"
+REPLICATE_API = "https://api.replicate.com/v1/predictions"
 
 
 class VtonService:
-    """VTON service using Pruna P-Image-Try-On via Workers AI."""
+    """VTON service calling Replicate IDM-VTON via REST API."""
 
     def __init__(self, env):
         self.env = env
-        self.ai = env.AI
+        self.token = env.REPLICATE_API_TOKEN
+
+    def _auth_headers(self):
+        """Build auth headers dict."""
+        return {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
 
     async def process_try_on(
         self,
@@ -20,77 +35,78 @@ class VtonService:
         garment_image_url: str,
         product_id: str,
         user_id: str,
+        category: str = "upper_body",
     ) -> dict:
-        """Process a virtual try-on request using Pruna P-Image-Try-On.
-
-        Args:
-            user_image_url: Public URL of the user's photo (from R2).
-            garment_image_url: Public URL of the garment image.
-            product_id: Product ID.
-            user_id: User ID.
-
-        Returns:
-            dict with status and image_bytes (raw JPEG).
-        """
-        try:
-            model_input = {
-                "person_image": user_image_url,
-                "garment_images": [garment_image_url],
-                "output_format": "jpg",
-                "preserve_input_size": True,
+        """Run virtual try-on: create prediction → poll → return output URL."""
+        body_json = json.dumps({
+            "version": REPLICATE_VERSION,
+            "input": {
+                "human_img": user_image_url,
+                "garm_img": garment_image_url,
+                "category": category,
             }
+        })
 
-            gateway_id = getattr(self.env, "CLOUDFLARE_AI_GATEWAY_ID", None)
-            options = {}
-            if gateway_id:
-                options["gateway"] = {"id": gateway_id}
+        # Create prediction
+        resp = await js.fetch(REPLICATE_API, to_js({
+            "method": "POST",
+            "headers": self._auth_headers(),
+            "body": body_json,
+        }))
+        text = await resp.text()
+        data = json.loads(text)
 
-            result = await self.ai.run(MODEL, model_input, options)
+        if int(resp.status) >= 400:
+            detail = data.get("detail") or data.get("error") or text
+            raise Exception(f"Replicate API error ({resp.status}): {detail}")
 
-            image_url = None
-            if result:
-                if isinstance(result, dict):
-                    inner = result.get("result") or result
-                    if isinstance(inner, dict):
-                        image_url = inner.get("image")
-                    if not image_url:
-                        image_url = result.get("image")
+        prediction_id = data.get("id")
+        status = data.get("status")
+        if not prediction_id:
+            raise Exception(f"No prediction ID returned: {data}")
 
-            if not image_url:
-                error_msg = "Pruna model did not return an image."
-                if result and isinstance(result, dict):
-                    errors = result.get("errors") or []
-                    messages = result.get("messages") or []
-                    if errors:
-                        error_msg = errors[0].get("message", error_msg)
-                    elif messages:
-                        error_msg = messages[0].get("message", error_msg)
-                return {"status": "failed", "error": error_msg}
+        # If already done (unlikely), return
+        if status == "succeeded":
+            output = data.get("output")
+            if isinstance(output, list) and len(output) > 0:
+                return {"status": "completed", "output_url": output[0]}
+            elif isinstance(output, str):
+                return {"status": "completed", "output_url": output}
+        if status == "failed":
+            raise Exception(data.get("error") or "Replicate prediction failed")
 
-            img_resp = await fetch(image_url)
-            if img_resp.status != 200:
-                return {
-                    "status": "failed",
-                    "error": f"Failed to fetch result image: HTTP {img_resp.status}",
-                }
-            image_bytes = await img_resp.arrayBuffer()
-            image_bytes = bytes(image_bytes)
+        # GET with Prefer: wait — blocks up to 60s until prediction completes
+        poll_url = f"{REPLICATE_API}/{prediction_id}"
+        poll_entries = to_js([["method", "GET"]])
+        poll_opts = js.Object.fromEntries(poll_entries)
+        poll_h = js.Headers.new()
+        poll_h.append("Authorization", f"Bearer {self.token}")
+        poll_h.append("Prefer", "wait")
+        poll_opts.headers = poll_h
+        poll_resp = await js.fetch(poll_url, poll_opts)
+        poll_text = await poll_resp.text()
+        data = json.loads(poll_text)
+        status = data.get("status")
 
-            return {
-                "status": "completed",
-                "image_bytes": image_bytes,
-                "content_type": "image/jpeg",
-            }
+        if status == "failed":
+            raise Exception(data.get("error") or "Replicate prediction failed")
+        if status == "canceled":
+            raise Exception("Replicate prediction was canceled")
+        if status != "succeeded":
+            raise Exception(f"Replicate prediction timed out (status={status})")
 
-        except Exception as e:
-            return {
-                "status": "failed",
-                "error": f"VTON processing failed: {str(e)}",
-            }
+        output = data.get("output")
+        if isinstance(output, list) and len(output) > 0:
+            output_url = output[0]
+        elif isinstance(output, str):
+            output_url = output
+        else:
+            raise Exception(f"No output URL in Replicate result (status={status})")
+
+        return {"status": "completed", "output_url": output_url}
 
 
 def _detect_content_type(image_bytes: bytes) -> str:
-    """Detect image content type from magic bytes."""
     if len(image_bytes) < 4:
         return "image/jpeg"
     header = image_bytes[:4]
@@ -104,7 +120,6 @@ def _detect_content_type(image_bytes: bytes) -> str:
 
 
 def _validate_image(image_bytes: bytes) -> bool:
-    """Validate image by checking magic bytes."""
     if len(image_bytes) < 4:
         return False
     header = image_bytes[:4]

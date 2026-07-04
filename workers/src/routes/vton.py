@@ -1,20 +1,38 @@
 """Virtual Try-On routes."""
 
 import base64
-import uuid
+import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
+import js
+from pyodide.ffi import to_js as _to_js
+from js import Object
+
+
+def to_js(obj):
+    """Convert Python objects to JS with dict_converter for proper dict→Object mapping."""
+    return _to_js(obj, dict_converter=Object.fromEntries)
 
 from models.vton_result import VtonResult, VtonStatus, VtonHistoryResponse
-from services.vton import VtonService, _validate_image
-from services.r2 import R2Service
+from services.vton import VtonService, _validate_image, _detect_content_type
 from services.image_compressor import ImageCompressor
 from middleware.security import require_auth
 
+
+def _map_category(product_category: str) -> str:
+    """Map product category to IDM-VTON category."""
+    cat = (product_category or "").lower()
+    if any(k in cat for k in ["pantalón", "pantalon", "bottom", "jean", "pant", "short", "bermuda"]):
+        return "lower_body"
+    if any(k in cat for k in ["vestido", "dress"]):
+        return "dresses"
+    return "upper_body"
+
+
 router = APIRouter()
 
-MAX_UPLOAD_BYTES = 100 * 1024  # 100KB — small enough for Pyodide ASGI bridge
+MAX_UPLOAD_BYTES = 100 * 1024  # 100KB
 
 
 class UploadRequest(BaseModel):
@@ -23,7 +41,7 @@ class UploadRequest(BaseModel):
 
 class TryOnRequest(BaseModel):
     product_id: str
-    user_image_url: str  # R2 public URL from /upload
+    user_image_url: str  # data URL from /upload
 
 
 def get_db(request: Request):
@@ -49,13 +67,36 @@ def _parse_data_url(data_url: str) -> tuple:
     return mime, image_bytes
 
 
+def _bytes_to_data_url(data: bytes, content_type: str) -> str:
+    """Convert raw bytes back to a data URL."""
+    b64 = base64.b64encode(data).decode("ascii")
+    return f"data:{content_type};base64,{b64}"
+
+
+async def _fetch_garment_as_data_url(image_url: str) -> str:
+    """Download garment image from external CDN and return as data URL.
+
+    CDNs like Zara block non-browser requests to Replicate, so we download
+    the image on our server and pass it as a data URL instead.
+    Converts via JSON.stringify(Uint8Array) → Python list of ints → bytes.
+    """
+    resp = await js.fetch(image_url, to_js({"method": "GET"}))
+    if resp.status != 200:
+        raise Exception(f"Failed to fetch garment image: HTTP {resp.status}")
+    buf = await resp.arrayBuffer()
+    # .to_py() is a method on JsProxy, not a standalone import
+    py_bytes = bytes(buf.to_py())
+    b64 = base64.b64encode(py_bytes).decode("ascii")
+    return f"data:image/jpeg;base64,{b64}"
+
+
 @router.post("/upload")
 async def upload_image(
     request: Request,
     body: UploadRequest,
     user: dict = Depends(require_auth),
 ):
-    """Upload user image to R2. Returns the public URL."""
+    """Compress user image and return a data URL. No R2 storage needed."""
     mime, image_bytes = _parse_data_url(body.image)
 
     if not _validate_image(image_bytes):
@@ -64,8 +105,6 @@ async def upload_image(
             detail="Invalid image format. Please upload a JPEG, PNG, or WebP file.",
         )
 
-    user_id = user.user_id
-    r2_service = R2Service(request.app.state.env)
     compressor = ImageCompressor(max_bytes=MAX_UPLOAD_BYTES)
 
     try:
@@ -80,20 +119,8 @@ async def upload_image(
                    "Maximum is 100KB. Try a simpler photo with less detail.",
         )
 
-    key = f"vton/user-uploads/{user_id}/{uuid.uuid4().hex}.jpg"
-    try:
-        image_url = await r2_service.upload_image(
-            key=key,
-            data=image_bytes,
-            content_type=mime,
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to upload image to storage. Please try again. ({e})",
-        )
-
-    return {"image_url": image_url}
+    data_url = _bytes_to_data_url(image_bytes, mime)
+    return {"image_url": data_url}
 
 
 @router.post("/try-on")
@@ -102,11 +129,10 @@ async def try_on(
     body: TryOnRequest,
     user: dict = Depends(require_auth),
 ):
-    """Process a virtual try-on request. Accepts R2 URLs (tiny body)."""
+    """Process virtual try-on. Passes data URL directly to Replicate."""
     user_id = user.user_id
     db = get_db(request)
     vton_service = VtonService(request.app.state.env)
-    r2_service = R2Service(request.app.state.env)
 
     product = await db.get_product(body.product_id)
     if not product:
@@ -115,26 +141,47 @@ async def try_on(
     if not product.image_url:
         raise HTTPException(status_code=400, detail="Product has no image available for try-on")
 
+    # Download garment image as data URL (CDNs block Replicate's servers)
+    try:
+        garment_data_url = await _fetch_garment_as_data_url(product.image_url)
+    except Exception as e:
+        import traceback
+        print(json.dumps({"step": "fetch_garment", "error": str(e), "traceback": traceback.format_exc()}))
+        raise HTTPException(status_code=500, detail=f"Failed to fetch product image: {e}")
+
     try:
         vton_result = await db.create_vton_result({
             "user_id": user_id,
             "product_id": body.product_id,
             "status": "processing",
             "input_image_url": body.user_image_url,
-            "garment_image_url": product.image_url,
+            "garment_image_url": garment_data_url[:100] + "...",
         })
+    except Exception as e:
+        import traceback
+        print(json.dumps({"step": "create_vton_result", "error": str(e), "traceback": traceback.format_exc()}))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create try-on record. Please try again. ({e})",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to create try-on record. Please try again. ({e})",
         )
 
-    result = await vton_service.process_try_on(
-        user_image_url=body.user_image_url,
-        garment_image_url=product.image_url,
-        product_id=body.product_id,
-        user_id=user_id,
-    )
+    try:
+        result = await vton_service.process_try_on(
+            user_image_url=body.user_image_url,
+            garment_image_url=garment_data_url,
+            product_id=body.product_id,
+            user_id=user_id,
+            category=_map_category(product.category),
+        )
+    except Exception as e:
+        import traceback
+        print(json.dumps({"step": "process_try_on", "error": str(e), "traceback": traceback.format_exc()}))
+        raise HTTPException(status_code=500, detail=f"VTON processing failed: {e}")
 
     if result["status"] == "failed":
         await db.update_vton_result(vton_result.id, {
@@ -144,33 +191,15 @@ async def try_on(
         })
         raise HTTPException(status_code=500, detail=result.get("error", "VTON processing failed"))
 
-    image_bytes_result = result.get("image_bytes")
-    if not image_bytes_result:
+    # Use the Replicate output URL directly — no R2 re-upload
+    output_image_url = result.get("output_url")
+    if not output_image_url:
         await db.update_vton_result(vton_result.id, {
             "status": "failed",
-            "error_message": "No image data returned from VTON model",
+            "error_message": "No output URL returned from VTON model",
             "completed_at": datetime.now(timezone.utc).isoformat(),
         })
-        raise HTTPException(status_code=500, detail="No image data returned from VTON model")
-
-    content_type = result.get("content_type", "image/jpeg")
-
-    try:
-        output_image_url = await r2_service.upload_image(
-            key=r2_service.generate_vton_key(user_id, body.product_id, is_result=True),
-            data=image_bytes_result,
-            content_type=content_type,
-        )
-    except Exception as e:
-        await db.update_vton_result(vton_result.id, {
-            "status": "failed",
-            "error_message": f"Failed to store result: {e}",
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        })
-        raise HTTPException(
-            status_code=500,
-            detail=f"Try-on succeeded but failed to save result. Please try again. ({e})",
-        )
+        raise HTTPException(status_code=500, detail="No output URL returned from VTON model")
 
     await db.update_vton_result(vton_result.id, {
         "status": "completed",

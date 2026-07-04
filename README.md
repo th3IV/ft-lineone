@@ -21,7 +21,7 @@ La plataforma extrae productos desde los principales retailers de Chile, los pro
 
 Monorepo con **2 capas** que se comunican vía HTTP/JSON, todo desplegado en Cloudflare Workers:
 
-```
+```text
 Frontend React (TailwindCSS + Redux)
     └── HTTP/JSON ──► API (Cloudflare Workers Python / FastAPI + ASGI)
                           ├── Cloudflare D1 (base de datos SQL)

@@ -53,6 +53,9 @@ docker-compose.override.yml
 .env
 .env.*.local
 
+# Workers Python dependencies (10MB+, not needed in repo)
+workers/python_modules/
+
 # Legacy (removed)
 # scrapers/data/
 # scrapers/__pycache__/

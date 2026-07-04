@@ -46,7 +46,6 @@ function Profile() {
 
   const handleSave = async () => {
     await dispatch(updateProfile({ name: profile.name, gender: profile.gender }));
-    await dispatch(updateMeasurements(measurements));
     setIsEditing(false);
   };
 

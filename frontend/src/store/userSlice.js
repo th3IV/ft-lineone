@@ -40,7 +40,7 @@ export const updateProfile = createAsyncThunk("user/updateProfile", async (data,
       name: data.name,
       gender: data.gender,
     });
-    return response.data;
+    return { ...response.data, name: data.name, gender: data.gender };
   } catch (err) {
     return rejectWithValue(err.response?.data?.detail || "Failed to update profile");
   }
@@ -156,8 +156,8 @@ const userSlice = createSlice({
       })
       .addCase(updateProfile.fulfilled, (state, action) => {
         if (state.user) {
-          state.user.name = state.user.name;
-          state.user.gender = state.user.gender;
+          if (action.payload.name) state.user.name = action.payload.name;
+          if (action.payload.gender !== undefined) state.user.gender = action.payload.gender;
         }
       });
   },

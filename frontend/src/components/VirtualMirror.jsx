@@ -6,7 +6,7 @@ import { compressImage } from "../utils/compressImage";
 const PHOTO_TIPS = [
   "Foto de cuerpo completo, de frente",
   "Buena iluminacion, fondo claro",
-  "Maximo 100KB — se comprimira automaticamente",
+  "Maximo 10MB — se comprimira automaticamente",
 ];
 
 function VirtualMirror({
@@ -40,7 +40,7 @@ function VirtualMirror({
     accept: { "image/*": [".png", ".jpg", ".jpeg"] },
     maxFiles: 1,
     multiple: false,
-    maxSize: 100 * 1024,
+    maxSize: 10 * 1024 * 1024,
   });
 
   return (

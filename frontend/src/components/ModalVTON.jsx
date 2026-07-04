@@ -8,7 +8,7 @@ import { compressImage } from "../utils/compressImage";
 const PHOTO_TIPS = [
   "Foto de cuerpo completo, de frente",
   "Buena iluminacion, fondo claro",
-  "Maximo 100KB — se comprimira automaticamente",
+  "Maximo 10MB — se comprimira automaticamente",
 ];
 
 function ModalVTON({ product, isOpen, onClose }) {
@@ -38,7 +38,7 @@ function ModalVTON({ product, isOpen, onClose }) {
     accept: { "image/*": [".png", ".jpg", ".jpeg"] },
     maxFiles: 1,
     multiple: false,
-    maxSize: 100 * 1024,
+    maxSize: 10 * 1024 * 1024,
   });
 
   const handleGenerate = async () => {
@@ -169,7 +169,7 @@ function ModalVTON({ product, isOpen, onClose }) {
                         <p className="text-xs text-editorial-gray">
                           {isDragActive
                             ? "Suelta tu foto aqui"
-                            : "Sube tu foto (max. 100KB)"}
+                            : "Sube tu foto (max. 10MB)"}
                         </p>
                       </div>
                     )}

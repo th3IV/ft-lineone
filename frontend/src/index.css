@@ -85,4 +85,9 @@
   .editorial-card {
     @apply bg-editorial-white rounded-2xl overflow-hidden transition-all duration-500;
   }
+
+  .input-line {
+    @apply border-b border-editorial-black/20 bg-transparent py-2 px-1 text-sm
+           focus:outline-none focus:border-editorial-black transition-colors;
+  }
 }
