@@ -41,10 +41,14 @@ def _parse_json_field(value):
 
 def _extract_garment_url(product) -> str:
     """Extract first image URL from a product model or row dict."""
-    if hasattr(product, "images"):
-        images = product.images
+    if hasattr(product, "image_urls") and product.image_urls:
+        images = product.image_urls
+    elif hasattr(product, "image_url") and product.image_url:
+        return str(product.image_url)
+    elif isinstance(product, dict):
+        images = product.get("image_urls") or product.get("image_url")
     else:
-        images = product.get("images") if isinstance(product, dict) else None
+        return ""
     if not images:
         return ""
     if isinstance(images, str):
