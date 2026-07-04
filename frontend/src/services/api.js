@@ -1,4 +1,5 @@
 import axios from "axios";
+import { refreshToken } from "./auth";
 
 let onUnauthorized = null;
 
@@ -28,32 +29,36 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const config = error.config;
+    const originalRequest = error.config;
 
-    if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("refresh_token");
-      if (onUnauthorized) {
-        onUnauthorized();
-      } else {
-        window.location.href = "/login";
+    if (error.response?.status === 401 && !originalRequest.__isRefreshRetry) {
+      originalRequest.__isRefreshRetry = true;
+      try {
+        await refreshToken();
+        return api(originalRequest);
+      } catch {
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
+        if (onUnauthorized) {
+          onUnauthorized();
+        } else {
+          window.location.href = "/login";
+        }
+        return Promise.reject(error);
       }
-      return Promise.reject(error);
     }
 
     if (
-      !config.__isRetry &&
-      (error.response?.status >= 500 ||
-        error.code === "ECONNABORTED" ||
-        error.code === "ERR_NETWORK")
+      !originalRequest.__isRetry &&
+      (error.code === "ECONNABORTED" || error.code === "ERR_NETWORK")
     ) {
-      config.__isRetry = true;
-      const retryCount = config.__retryCount || 0;
-      if (retryCount < 2) {
-        config.__retryCount = retryCount + 1;
-        const delay = Math.pow(2, retryCount) * 1000;
+      const newConfig = { ...originalRequest };
+      newConfig.__isRetry = true;
+      newConfig.__retryCount = (originalRequest.__retryCount || 0) + 1;
+      if (newConfig.__retryCount <= 2) {
+        const delay = Math.pow(2, newConfig.__retryCount - 1) * 1000;
         await new Promise((resolve) => setTimeout(resolve, delay));
-        return api(config);
+        return api(newConfig);
       }
     }
 

@@ -20,7 +20,7 @@ function VirtualTryOn() {
   const [userImage, setUserImage] = useState(null);
   const [history, setHistory] = useState([]);
 
-  const { loading, error, resultImage, progress, generate, reset } =
+  const { loading, error, resultImage, progress, generate, reset, setError } =
     useVtonPolling();
 
   useEffect(() => {
@@ -62,7 +62,11 @@ function VirtualTryOn() {
   );
 
   const handleGenerate = useCallback(async () => {
-    if (!userImage || !selectedProductId || !isAuthenticated) return;
+    if (!userImage || !selectedProductId) return;
+    if (!isAuthenticated) {
+      setError("Debes iniciar sesion para usar el Try-On.");
+      return;
+    }
 
     const imageUrl = await generate(selectedProductId, userImage);
 

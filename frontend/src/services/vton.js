@@ -1,15 +1,9 @@
 import api from "./api";
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const POLL_INTERVAL = 4000;
 const POLL_TIMEOUT = 120000;
 
 export const uploadImage = async (imageBase64) => {
-  if (imageBase64 && imageBase64.length > MAX_IMAGE_BYTES * 1.37) {
-    throw new Error(
-      "La imagen es demasiado grande. Usa una imagen de menor resolución."
-    );
-  }
   const response = await api.post("/vton/upload", { image: imageBase64 });
   return response.data;
 };

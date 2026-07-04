@@ -23,64 +23,91 @@ export function useVtonPolling() {
     setProgress({ attempt: 0, elapsed: 0 });
     cancelledRef.current = false;
 
+    let uploadRes;
     try {
-      const uploadRes = await uploadImage(userImage);
-      if (cancelledRef.current) return;
+      uploadRes = await uploadImage(userImage);
+    } catch (err) {
+      if (cancelledRef.current) return null;
+      console.error("[VTON] Upload failed:", err);
+      const detail = err.response?.data?.detail;
+      setError(detail || "No se pudo subir la imagen. Intenta con otra foto.");
+      setLoading(false);
+      return null;
+    }
 
-      if (!uploadRes.image_url) {
-        throw new Error("No se pudo subir la imagen. Intenta con otra foto.");
+    if (cancelledRef.current) return null;
+    if (!uploadRes.image_url) {
+      setError("No se pudo subir la imagen. Intenta con otra foto.");
+      setLoading(false);
+      return null;
+    }
+
+    let tryOnRes;
+    try {
+      tryOnRes = await requestTryOn(productId, uploadRes.image_url);
+    } catch (err) {
+      if (cancelledRef.current) return null;
+      console.error("[VTON] Try-on request failed:", {
+        status: err.response?.status,
+        detail: err.response?.data?.detail,
+        url: err.config?.url,
+        message: err.message,
+      });
+      const detail = err.response?.data?.detail;
+      if (detail) {
+        setError(detail);
+      } else if (err.response?.status === 500) {
+        setError("Error del servidor. Intenta de nuevo mas tarde.");
+      } else if (err.code === "ERR_NETWORK") {
+        setError("Error de conexion. Verifica tu internet.");
+      } else {
+        setError(err.message || "Error al procesar el try-on.");
       }
+      setLoading(false);
+      return null;
+    }
 
-      const tryOnRes = await requestTryOn(productId, uploadRes.image_url);
-      if (cancelledRef.current) return;
+    if (cancelledRef.current) return null;
 
-      const vtonId = tryOnRes.id || tryOnRes.vton_id || tryOnRes.request_id;
+    const vtonId = tryOnRes.id || tryOnRes.vton_id || tryOnRes.request_id;
 
-      if (vtonId) {
-        const finalResult = await pollResult(vtonId, (p) => {
+    if (vtonId) {
+      let finalResult;
+      try {
+        finalResult = await pollResult(vtonId, (p) => {
           if (!cancelledRef.current) {
             setProgress(p);
           }
         });
-        if (cancelledRef.current) return;
-
-        const imageUrl = finalResult.output_image_url || finalResult.image_url;
-        if (!imageUrl) {
-          throw new Error(
-            "No se pudo generar el resultado. Intenta con otra foto."
-          );
-        }
-        setResultImage(imageUrl);
-        return imageUrl;
-      } else {
-        const imageUrl = tryOnRes.output_image_url || tryOnRes.image_url;
-        if (!imageUrl) {
-          throw new Error(
-            "No se pudo generar el resultado. Intenta con otra foto."
-          );
-        }
-        setResultImage(imageUrl);
-        return imageUrl;
-      }
-    } catch (err) {
-      if (cancelledRef.current) return;
-
-      const detail = err.response?.data?.detail;
-      if (detail) {
-        setError(detail);
-      } else if (
-        err.code === "ERR_NETWORK" ||
-        err.message?.includes("network")
-      ) {
-        setError("Error de conexion. Verifica tu internet y vuelve a intentar.");
-      } else {
-        setError(err.message || "Try-on failed. Please try again.");
-      }
-      return null;
-    } finally {
-      if (!cancelledRef.current) {
+      } catch (err) {
+        if (cancelledRef.current) return null;
+        console.error("[VTON] Polling failed:", err);
+        setError(err.message || "Error al esperar el resultado.");
         setLoading(false);
+        return null;
       }
+
+      if (cancelledRef.current) return null;
+
+      const imageUrl = finalResult.output_image_url || finalResult.image_url;
+      if (!imageUrl) {
+        setError("No se pudo generar el resultado. Intenta con otra foto.");
+        setLoading(false);
+        return null;
+      }
+      setResultImage(imageUrl);
+      setLoading(false);
+      return imageUrl;
+    } else {
+      const imageUrl = tryOnRes.output_image_url || tryOnRes.image_url;
+      if (!imageUrl) {
+        setError("No se pudo generar el resultado. Intenta con otra foto.");
+        setLoading(false);
+        return null;
+      }
+      setResultImage(imageUrl);
+      setLoading(false);
+      return imageUrl;
     }
   }, []);
 
@@ -92,5 +119,5 @@ export function useVtonPolling() {
     setProgress({ attempt: 0, elapsed: 0 });
   }, []);
 
-  return { loading, error, resultImage, progress, generate, reset };
+  return { loading, error, resultImage, progress, generate, reset, setError };
 }
