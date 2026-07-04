@@ -17,7 +17,7 @@ from services.auth import verify_token
 from services.youcam import YouCamService
 from services.database import DatabaseService
 
-router = APIRouter(prefix="/api/v1/vton", tags=["VTON"])
+router = APIRouter()
 
 
 def get_db(request: Request) -> DatabaseService:
