@@ -7,7 +7,7 @@ Flow:
   4. GET  /history  — user's VTON history
 """
 
-from fastapi import APIRouter, HTTPException, Request, Query
+from fastapi import APIRouter, HTTPException, Request, Query, Depends
 import base64
 import json
 from datetime import datetime
@@ -15,6 +15,7 @@ from datetime import datetime
 from models.vton_result import VtonStatus
 from services.auth import verify_token
 from services.youcam import YouCamService
+from middleware.security import require_auth
 
 router = APIRouter()
 
@@ -92,6 +93,7 @@ async def upload_image(request_body: dict):
 async def try_on(
     request_body: dict,
     request: Request,
+    user=Depends(require_auth),
 ):
     """Request virtual try-on via YouCam V3.0.
 
@@ -111,24 +113,10 @@ async def try_on(
             status_code=400, detail="product_id and user_image_url are required"
         )
 
-    # Auth
-    auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="No token provided")
-    token = auth_header.split(" ", 1)[1]
-    try:
-        token_data = verify_token(token)
-        if not token_data:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-        user_id = token_data.user_id
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user_id = user.user_id
+    db = get_db(request)
 
     try:
-        db = get_db(request)
-
         # Get product
         product = await db.get_product(product_id)
         if not product:
@@ -180,25 +168,11 @@ async def try_on(
 async def get_result(
     vton_id: str,
     request: Request,
+    user=Depends(require_auth),
 ):
     """Poll YouCam task status. Frontend calls this every 4s."""
-    # Auth
-    auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="No token provided")
-    token = auth_header.split(" ", 1)[1]
-    try:
-        token_data = verify_token(token)
-        if not token_data:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-        user_id = token_data.user_id
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
+    user_id = user.user_id
     db = get_db(request)
-    db = DatabaseService(db)
     vton_result = await db.get_vton_result(vton_id)
 
     if not vton_result:
@@ -255,25 +229,11 @@ async def get_result(
 async def get_user_history(
     request: Request,
     limit: int = Query(10, ge=1, le=50),
+    user=Depends(require_auth),
 ):
     """Get user's VTON results."""
-    # Auth
-    auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="No token provided")
-    token = auth_header.split(" ", 1)[1]
-    try:
-        token_data = verify_token(token)
-        if not token_data:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-        user_id = token_data.user_id
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
+    user_id = user.user_id
     db = get_db(request)
-    db = DatabaseService(db)
     results = await db.get_vton_history(user_id, limit)
 
     response_results = []
