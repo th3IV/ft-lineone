@@ -299,3 +299,11 @@ class DatabaseService:
             f"UPDATE vton_results SET {', '.join(sets)} WHERE id = ?"
         ).bind(*params).run()
         return await self.get_vton_result(vton_id)
+
+    async def get_pending_vton_tasks(self, limit: int = 10) -> list[VtonResultModel]:
+        """Get VTON results with status 'processing' that have a YouCam task ID."""
+        d1_result = await self.db.prepare(
+            "SELECT * FROM vton_results WHERE status = 'processing' AND youcam_task_id IS NOT NULL ORDER BY created_at ASC LIMIT ?"
+        ).bind(limit).all()
+        rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
+        return [VtonResultModel(row) for row in rows]

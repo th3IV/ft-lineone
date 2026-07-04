@@ -163,16 +163,26 @@ class Default(WorkerEntrypoint):
             )
 
     async def on_scheduled(self, controller):
-        """Handle cron triggers for scraper scheduling."""
+        """Handle cron triggers for scraper scheduling and VTON polling."""
         from scrapers.scheduler import ScraperRunner
+        from cron import process_pending_vton_tasks
 
         cron_expr = getattr(controller, "cron", "") or ""
         max_products = 20
 
         print(json.dumps({"event": "cron_start", "cron": cron_expr}))
+
+        # Run scrapers
         runner = ScraperRunner(self.env, max_products=max_products)
         try:
             results = await runner.run_all_scrapers()
-            print(json.dumps({"event": "cron_complete", "cron": cron_expr, "results": results}))
+            print(json.dumps({"event": "cron_scrapers_complete", "cron": cron_expr, "results": results}))
         finally:
             await runner.close()
+
+        # Process pending VTON tasks
+        try:
+            vton_results = await process_pending_vton_tasks(self.env)
+            print(json.dumps({"event": "cron_vton_complete", "cron": cron_expr, "results": vton_results}))
+        except Exception as e:
+            print(json.dumps({"event": "cron_vton_error", "error": str(e)}))

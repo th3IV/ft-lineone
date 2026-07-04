@@ -174,7 +174,7 @@ async def get_result(
     request: Request,
     user=Depends(require_auth),
 ):
-    """Poll YouCam task status. Frontend calls this every 4s."""
+    """Get VTON result status. Cron worker handles YouCam polling in background."""
     user_id = user.user_id
     db = get_db(request)
     vton_result = await db.get_vton_result(vton_id)
@@ -184,49 +184,11 @@ async def get_result(
     if vton_result.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    # Already terminal — return cached
-    if vton_result.status in (VtonStatus.COMPLETED.value, VtonStatus.FAILED.value):
-        return {
-            "status": vton_result.status,
-            "output_image_url": vton_result.output_image_url,
-            "error": vton_result.error_message,
-        }
-
-    # No YouCam task yet — still pending
-    if not vton_result.youcam_task_id:
-        return {"status": "processing"}
-
-    # Poll YouCam
-    youcam = YouCamService(env=get_env(request))
-    try:
-        result = await youcam.poll_task(vton_result.youcam_task_id)
-
-        if result["status"] == "completed":
-            await db.update_vton_result(vton_id, {
-                "status": VtonStatus.COMPLETED.value,
-                "output_image_url": result["output_url"],
-                "completed_at": datetime.utcnow().isoformat(),
-            })
-            return {
-                "status": VtonStatus.COMPLETED.value,
-                "output_image_url": result["output_url"],
-            }
-
-        if result["status"] == "failed":
-            await db.update_vton_result(vton_id, {
-                "status": VtonStatus.FAILED.value,
-                "error_message": result.get("error", "YouCam task failed"),
-                "completed_at": datetime.utcnow().isoformat(),
-            })
-            return {
-                "status": VtonStatus.FAILED.value,
-                "error": result.get("error", "YouCam task failed"),
-            }
-
-        return {"status": "processing"}
-
-    except Exception:
-        return {"status": "processing"}
+    return {
+        "status": vton_result.status,
+        "output_image_url": vton_result.output_image_url,
+        "error": vton_result.error_message,
+    }
 
 
 @router.get("/history")

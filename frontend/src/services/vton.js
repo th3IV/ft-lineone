@@ -1,7 +1,7 @@
 import api from "./api";
 
-const POLL_INTERVAL = 4000;
-const POLL_TIMEOUT = 120000;
+const POLL_INTERVAL = 5000;
+const POLL_TIMEOUT = 300000;
 
 export const uploadImage = async (imageBase64) => {
   const response = await api.post("/vton/upload", { image: imageBase64 });
