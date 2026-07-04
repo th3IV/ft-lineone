@@ -1,11 +1,12 @@
 """Virtual Try-On API routes — YouCam AI Clothes V3.0 integration.
 
-Flow:
-  1. POST /upload   — accepts base64, returns data URL (identity, for compatibility)
-  2. POST /try-on   — uploads user photo to freeimage.host, sends URL to YouCam
-  3. GET  /image/{id} — serves user photo as JPEG (for frontend history)
-  4. GET  /result/{id} — get VTON result status from D1
-  5. GET  /history  — user's VTON history
+Optimized Flow:
+  1. POST /prefetch  — upload user photo to freeimage.host (call before try-on)
+  2. POST /try-on    — create YouCam task with pre-uploaded URL
+  3. POST /webhook   — receive YouCam completion notification (no polling needed)
+  4. GET  /result/{id} — get result (fallback if webhook missed)
+  5. GET  /image/{id} — serves user photo as JPEG
+  6. GET  /history   — user's VTON history
 """
 
 from fastapi import APIRouter, HTTPException, Request, Query, Depends
@@ -64,21 +65,45 @@ def _extract_garment_url(product) -> str:
 
 
 def _extract_garment_category(product) -> str:
-    """Infer garment category from product tags."""
-    if hasattr(product, "tags"):
+    """Infer garment category from product tags and name."""
+    tags = []
+    if hasattr(product, "tags") and product.tags:
         tags = product.tags
-    else:
-        tags = product.get("tags") if isinstance(product, dict) else None
-    if not tags:
-        return "auto"
+    elif isinstance(product, dict):
+        tags = product.get("tags", [])
+
+    name = ""
+    if hasattr(product, "name"):
+        name = product.name.lower()
+    elif isinstance(product, dict):
+        name = product.get("name", "").lower()
+
+    category = ""
+    if hasattr(product, "category"):
+        category = product.category.lower() if product.category else ""
+    elif isinstance(product, dict):
+        category = product.get("category", "").lower()
+
+    combined = ""
     if isinstance(tags, str):
         tags = _parse_json_field(tags)
-    tag_lower = " ".join([t.lower() for t in tags if isinstance(t, str)])
+    if tags:
+        combined = " ".join([t.lower() for t in tags if isinstance(t, str)])
+    combined += f" {name} {category}"
 
-    if any(k in tag_lower for k in ["shoe", "sneaker", "boot", "sandal", "slipper"]):
+    # Shoes
+    if any(k in combined for k in ["shoe", "sneaker", "boot", "sandal", "slipper", "tenis", "zapatilla"]):
         return "shoes"
-    if any(k in tag_lower for k in ["pant", "jean", "skirt", "trouser", "short", "legging"]):
+    # Lower body
+    if any(k in combined for k in ["pant", "jean", "skirt", "trouser", "short", "legging", "bota", "falda", "bermuda", "cargo"]):
         return "lower_body"
+    # Upper body
+    if any(k in combined for k in ["shirt", "blouse", "polo", "sweater", "hoodie", "jacket", "vest", "top", "camisa", "polera", "polerón", "abrig", "chaqueta", "suéter", "cropped"]):
+        return "upper_body"
+    # Full body
+    if any(k in combined for k in ["dress", "suit", "overalls", "jumpsuit", "vestido", "enterizo", "mono"]):
+        return "full_body"
+
     return "auto"
 
 
@@ -95,10 +120,43 @@ async def upload_image(request_body: dict):
     return {"image_url": image, "status": "uploaded"}
 
 
+@router.post("/prefetch")
+async def prefetch_image(
+    request_body: dict,
+    request: Request,
+    user=Depends(require_auth),
+):
+    """Pre-upload user photo to freeimage.host before try-on.
+
+    Call this when user selects a photo, BEFORE clicking "try on".
+    Returns public URL that YouCam can access.
+
+    Accepts: { image: "data:image/jpeg;base64,..." or raw base64 }
+    Returns: { public_url: "https://iili.io/..." }
+    """
+    image = request_body.get("image")
+    if not image:
+        raise HTTPException(status_code=400, detail="image is required")
+
+    # Extract base64 from data URL
+    raw_b64 = image
+    if raw_b64.startswith("data:image"):
+        raw_b64 = raw_b64.split(",", 1)[1]
+
+    from services.image_upload import upload_user_photo
+    try:
+        public_url = await upload_user_photo(raw_b64)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Image upload failed: {str(e)}"
+        )
+
+    return {"public_url": public_url, "status": "uploaded"}
+
+
 @router.get("/image/{vton_id}")
 async def serve_image(vton_id: str, request: Request):
     """Serve user photo as JPEG for YouCam to fetch. No auth (public endpoint)."""
-    import re as _re
     from services.database import DatabaseService
 
     env = getattr(request.app.state, "env", None)
@@ -128,17 +186,15 @@ async def try_on(
 ):
     """Request virtual try-on via YouCam V3.0.
 
-    Accepts: { product_id, user_image_url }
-    user_image_url is a data URL — uploaded to freeimage.host for YouCam access.
+    Accepts: { product_id, user_image_url, public_url? }
+    - user_image_url: data URL (stored for /image endpoint)
+    - public_url: pre-uploaded freeimage.host URL (optional, skips re-upload)
 
-    V3.0 workflow:
-      1. Upload user photo to freeimage.host (YouCam can't access Worker URLs)
-      2. Store user photo base64 in D1 for /image/{id} endpoint
-      3. POST /v3.0/task/cloth with { src_file_url, ref_file_url, garment_category }
-      4. Return { id, status: "processing" } for cron to poll
+    If public_url is provided, skips the freeimage.host upload (~2-3 sec faster).
     """
     product_id = request_body.get("product_id")
     user_image_url = request_body.get("user_image_url")
+    public_url = request_body.get("public_url")  # Pre-uploaded URL
 
     if not product_id or not user_image_url:
         raise HTTPException(
@@ -161,15 +217,15 @@ async def try_on(
 
         garment_category = _extract_garment_category(product)
 
-        # Extract base64 from data URL and upload to freeimage.host
-        raw_b64 = user_image_url
-        if raw_b64.startswith("data:image"):
-            raw_b64 = raw_b64.split(",", 1)[1]
+        # If no pre-uploaded URL, upload now (slower path)
+        if not public_url:
+            raw_b64 = user_image_url
+            if raw_b64.startswith("data:image"):
+                raw_b64 = raw_b64.split(",", 1)[1]
+            from services.image_upload import upload_user_photo
+            public_url = await upload_user_photo(raw_b64)
 
-        from services.image_upload import upload_user_photo
-        public_url = await upload_user_photo(raw_b64)
-
-        # Create VTON result record — store full data URL for /image serving
+        # Create VTON result record
         vton_result = await db.create_vton_result({
             "user_id": user_id,
             "product_id": product_id,
@@ -179,7 +235,7 @@ async def try_on(
         })
         vton_id = vton_result.id
 
-        # Create YouCam task (V3.0 — use freeimage.host public URL)
+        # Create YouCam task (V3.0 — explicit garment_category saves ~1-2 sec)
         youcam = YouCamService(env=env)
         task_id = await youcam.create_task(
             src_url=public_url,
@@ -203,6 +259,76 @@ async def try_on(
         raise HTTPException(
             status_code=500, detail=f"VTON request failed: {str(e)}"
         )
+
+
+@router.post("/webhook")
+async def youcam_webhook(request: Request):
+    """Receive YouCam webhook notification when task completes.
+
+    No auth required — YouCam calls this endpoint directly.
+    Verifies webhook signature, then updates D1.
+    """
+    body = await request.body()
+    payload = body.decode("utf-8")
+
+    # Get webhook headers
+    signature = request.headers.get("webhook-signature", "")
+    webhook_id = request.headers.get("webhook-id", "")
+    webhook_ts = request.headers.get("webhook-timestamp", "")
+
+    env = getattr(request.app.state, "env", None)
+    if not env:
+        return {"status": "error", "detail": "Service unavailable"}
+
+    # Verify webhook signature (if YOUCAM_WEBHOOK_SECRET is configured)
+    webhook_secret = getattr(env, "YOUCAM_WEBHOOK_SECRET", "")
+    if webhook_secret:
+        signing_input = f"{webhook_id}.{webhook_ts}.{payload}"
+        if not YouCamService.verify_webhook_signature(payload, signature, webhook_secret):
+            return {"status": "error", "detail": "Invalid signature"}
+
+    try:
+        data = json.loads(payload)
+        task_id = data.get("data", {}).get("task_id")
+        task_status = data.get("data", {}).get("task_status")
+
+        if not task_id:
+            return {"status": "error", "detail": "No task_id"}
+
+        db = DatabaseService(env)
+
+        # Find VTON result by youcam_task_id
+        vton_result = await db.get_vton_by_task_id(task_id)
+        if not vton_result:
+            return {"status": "ok", "detail": "Task not found in D1 (may be old)"}
+
+        if task_status == "success":
+            results = data.get("data", {}).get("results", {})
+            output_url = ""
+            if isinstance(results, dict):
+                output_url = results.get("url") or results.get("image_url") or ""
+            elif isinstance(results, list) and results:
+                output_url = results[0]
+
+            await db.update_vton_result(vton_result.id, {
+                "status": "completed",
+                "output_image_url": output_url,
+                "completed_at": datetime.utcnow().isoformat(),
+            })
+        elif task_status == "error":
+            error = data.get("data", {}).get("error", "YouCam task failed")
+            await db.update_vton_result(vton_result.id, {
+                "status": "failed",
+                "error_message": error,
+                "completed_at": datetime.utcnow().isoformat(),
+            })
+
+        return {"status": "ok"}
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "detail": str(e)}
 
 
 @router.get("/result/{vton_id}")

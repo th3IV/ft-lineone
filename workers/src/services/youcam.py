@@ -9,6 +9,9 @@ Just pass image URLs directly.
 """
 
 import json
+import hmac
+import hashlib
+import base64
 import js
 from pyodide.ffi import to_js as _to_js
 from js import Object
@@ -117,3 +120,35 @@ class YouCamService:
             return {"status": "failed", "error": "YouCam API key invalid"}
 
         return {"status": "processing"}
+
+    @staticmethod
+    def verify_webhook_signature(
+        payload: str,
+        signature_header: str,
+        webhook_secret: str,
+    ) -> bool:
+        """Verify YouCam webhook signature using HMAC-SHA256.
+
+        YouCam follows Standard Webhooks spec:
+          - signature header format: "v1,<base64-hmac>"
+          - signing input: "{webhook_id}.{webhook_timestamp}.{body}"
+        """
+        if not signature_header or not webhook_secret:
+            return False
+
+        parts = signature_header.split(",")
+        if len(parts) != 2 or parts[0] != "v1":
+            return False
+
+        expected_sig = parts[1]
+
+        # Remove whsec_ prefix from secret if present
+        secret_bytes = webhook_secret
+        if secret_bytes.startswith("whsec_"):
+            secret_bytes = secret_bytes[6:]
+        secret_bytes = base64.b64decode(secret_bytes)
+
+        computed = hmac.new(secret_bytes, payload.encode("utf-8"), hashlib.sha256)
+        computed_b64 = base64.b64encode(computed.digest()).decode("utf-8")
+
+        return hmac.compare_digest(computed_b64, expected_sig)

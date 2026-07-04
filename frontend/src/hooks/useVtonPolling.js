@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { uploadImage, requestTryOn, pollResult } from "../services/vton";
+import { uploadImage, prefetchImage, requestTryOn, pollResult } from "../services/vton";
 
 export function useVtonPolling() {
   const [loading, setLoading] = useState(false);
@@ -23,6 +23,7 @@ export function useVtonPolling() {
     setProgress({ attempt: 0, elapsed: 0 });
     cancelledRef.current = false;
 
+    // Step 1: Get data URL for storage + upload to freeimage.host in parallel
     let uploadRes;
     try {
       uploadRes = await uploadImage(userImage);
@@ -42,9 +43,25 @@ export function useVtonPolling() {
       return null;
     }
 
+    // Step 2: Pre-upload to freeimage.host (YouCam can't access Worker URLs)
+    let prefetchRes;
+    try {
+      prefetchRes = await prefetchImage(userImage);
+    } catch (err) {
+      if (cancelledRef.current) return null;
+      console.error("[VTON] Prefetch failed:", err);
+      // Continue without pre-fetch — /try-on will upload anyway (slower path)
+      prefetchRes = null;
+    }
+
+    if (cancelledRef.current) return null;
+
+    const publicUrl = prefetchRes?.public_url || undefined;
+
+    // Step 3: Create YouCam task (with pre-uploaded URL if available)
     let tryOnRes;
     try {
-      tryOnRes = await requestTryOn(productId, uploadRes.image_url);
+      tryOnRes = await requestTryOn(productId, uploadRes.image_url, publicUrl);
     } catch (err) {
       if (cancelledRef.current) return null;
       console.error("[VTON] Try-on request failed:", {

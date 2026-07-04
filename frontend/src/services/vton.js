@@ -1,6 +1,6 @@
 import api from "./api";
 
-const POLL_INTERVAL = 5000;
+const POLL_INTERVAL = 3000; // Reduced from 5s to 3s
 const POLL_TIMEOUT = 300000;
 
 export const uploadImage = async (imageBase64) => {
@@ -8,10 +8,16 @@ export const uploadImage = async (imageBase64) => {
   return response.data;
 };
 
-export const requestTryOn = async (product_id, user_image_url) => {
+export const prefetchImage = async (imageBase64) => {
+  const response = await api.post("/vton/prefetch", { image: imageBase64 });
+  return response.data;
+};
+
+export const requestTryOn = async (product_id, user_image_url, public_url) => {
   const response = await api.post("/vton/try-on", {
     product_id,
     user_image_url,
+    public_url,
   });
   return response.data;
 };

@@ -307,3 +307,12 @@ class DatabaseService:
         ).bind(limit).all()
         rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
         return [VtonResultModel(row) for row in rows]
+
+    async def get_vton_by_task_id(self, youcam_task_id: str) -> Optional[VtonResultModel]:
+        """Get VTON result by YouCam task ID (used by webhook)."""
+        result = await self.db.prepare(
+            "SELECT * FROM vton_results WHERE youcam_task_id = ? LIMIT 1"
+        ).bind(youcam_task_id).first()
+        if result:
+            return VtonResultModel(result)
+        return None
