@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { uploadImage, prefetchImage, requestTryOn, pollResult } from "../services/vton";
+import { uploadImage, prefetchImage, fetchGarmentAsBase64, prefetchGarment, requestTryOn, pollResult } from "../services/vton";
 
 export function useVtonPolling() {
   const [loading, setLoading] = useState(false);
@@ -14,7 +14,7 @@ export function useVtonPolling() {
     };
   }, []);
 
-  const generate = useCallback(async (productId, userImage) => {
+  const generate = useCallback(async (productId, userImage, garmentUrl) => {
     if (!productId || !userImage) return;
 
     setLoading(true);
@@ -23,45 +23,74 @@ export function useVtonPolling() {
     setProgress({ attempt: 0, elapsed: 0 });
     cancelledRef.current = false;
 
-    // Step 1: Get data URL for storage + upload to freeimage.host in parallel
-    let uploadRes;
-    try {
-      uploadRes = await uploadImage(userImage);
-    } catch (err) {
-      if (cancelledRef.current) return null;
-      console.error("[VTON] Upload failed:", err);
-      const detail = err.response?.data?.detail;
-      setError(detail || "No se pudo subir la imagen. Intenta con otra foto.");
-      setLoading(false);
-      return null;
-    }
+    // Step 1+2: Upload user photo to freeimage.host AND prefetch garment image (in parallel)
+    let uploadRes = null;
+    let garmentB64 = null;
 
-    if (cancelledRef.current) return null;
+    const uploadPromise = (async () => {
+      try {
+        uploadRes = await uploadImage(userImage);
+      } catch (err) {
+        if (cancelledRef.current) return;
+        console.error("[VTON] Upload failed:", err);
+        const detail = err.response?.data?.detail;
+        setError(detail || "No se pudo subir la imagen. Intenta con otra foto.");
+        setLoading(false);
+        uploadRes = { error: true };
+      }
+    })();
+
+    const garmentPromise = (async () => {
+      if (garmentUrl) {
+        garmentB64 = await fetchGarmentAsBase64(garmentUrl);
+      }
+    })();
+
+    await Promise.all([uploadPromise, garmentPromise]);
+
+    if (cancelledRef.current || !uploadRes || uploadRes.error) return null;
     if (!uploadRes.image_url) {
       setError("No se pudo subir la imagen. Intenta con otra foto.");
       setLoading(false);
       return null;
     }
 
-    // Step 2: Pre-upload to freeimage.host (YouCam can't access Worker URLs)
-    let prefetchRes;
-    try {
-      prefetchRes = await prefetchImage(userImage);
-    } catch (err) {
-      if (cancelledRef.current) return null;
-      console.error("[VTON] Prefetch failed:", err);
-      // Continue without pre-fetch — /try-on will upload anyway (slower path)
-      prefetchRes = null;
-    }
+    // Step 3: Pre-upload to freeimage.host (YouCam can't access Worker URLs)
+    let prefetchRes = null;
+    let garmentPrefetchRes = null;
+
+    const prefetchUserPromise = (async () => {
+      try {
+        prefetchRes = await prefetchImage(userImage);
+      } catch (err) {
+        if (cancelledRef.current) return;
+        console.error("[VTON] Prefetch user failed:", err);
+        prefetchRes = null;
+      }
+    })();
+
+    const prefetchGarmentPromise = (async () => {
+      if (garmentB64 && garmentUrl) {
+        try {
+          garmentPrefetchRes = await prefetchGarment(garmentUrl);
+        } catch (err) {
+          console.error("[VTON] Prefetch garment failed:", err);
+          garmentPrefetchRes = null;
+        }
+      }
+    })();
+
+    await Promise.all([prefetchUserPromise, prefetchGarmentPromise]);
 
     if (cancelledRef.current) return null;
 
     const publicUrl = prefetchRes?.public_url || undefined;
+    const garmentPublicUrl = garmentPrefetchRes?.public_url || undefined;
 
-    // Step 3: Create YouCam task (with pre-uploaded URL if available)
+    // Step 4: Create YouCam task (with pre-uploaded URLs if available)
     let tryOnRes;
     try {
-      tryOnRes = await requestTryOn(productId, uploadRes.image_url, publicUrl);
+      tryOnRes = await requestTryOn(productId, uploadRes.image_url, publicUrl, garmentPublicUrl);
     } catch (err) {
       if (cancelledRef.current) return null;
       console.error("[VTON] Try-on request failed:", {

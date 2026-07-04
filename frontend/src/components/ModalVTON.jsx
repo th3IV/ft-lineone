@@ -42,7 +42,7 @@ function ModalVTON({ product, isOpen, onClose }) {
 
   const handleGenerate = async () => {
     if (!userImage || !product) return;
-    await generate(product.id, userImage);
+    await generate(product.id, userImage, product.image_url);
   };
 
   const handleClose = () => {

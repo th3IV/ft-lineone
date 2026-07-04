@@ -13,11 +13,42 @@ export const prefetchImage = async (imageBase64) => {
   return response.data;
 };
 
-export const requestTryOn = async (product_id, user_image_url, public_url) => {
+export const prefetchGarment = async (garmentUrl) => {
+  const response = await api.post("/vton/prefetch-garment", { url: garmentUrl });
+  return response.data;
+};
+
+/**
+ * Fetch a garment image as base64 from its URL (browser-side).
+ * Works if the CDN sends CORS headers. Falls back to empty on error.
+ */
+export const fetchGarmentAsBase64 = async (garmentUrl) => {
+  try {
+    const resp = await fetch(garmentUrl, { mode: "cors" });
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result;
+        // Return just the base64 part
+        const b64 = dataUrl?.split?.(",")?.[1] || null;
+        resolve(b64);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
+
+export const requestTryOn = async (product_id, user_image_url, public_url, garment_public_url) => {
   const response = await api.post("/vton/try-on", {
     product_id,
     user_image_url,
     public_url,
+    garment_public_url,
   });
   return response.data;
 };

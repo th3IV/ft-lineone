@@ -68,7 +68,7 @@ function VirtualTryOn() {
       return;
     }
 
-    const imageUrl = await generate(selectedProductId, userImage);
+    const imageUrl = await generate(selectedProductId, userImage, selectedProduct?.image_url);
 
     if (imageUrl) {
       const entry = {
