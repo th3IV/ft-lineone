@@ -7,6 +7,9 @@ from scrapers.zara import ZaraScraper
 from scrapers.paris import ParisScraper
 from scrapers.maui import MauiScraper
 from scrapers.falabella import FalabellaScraper
+from scrapers.hm import HMScraper
+from scrapers.hites import HitesScraper
+from scrapers.fashionpark import FashionParkScraper
 from services.database import DatabaseService
 
 
@@ -16,6 +19,9 @@ RATE_LIMITS = {
     "maui": 2.0,
     "zara": 3.0,
     "falabella": 1.5,
+    "hm": 1.5,
+    "hites": 2.0,
+    "fashionpark": 1.0,
 }
 
 # Real categories/search terms per store
@@ -60,6 +66,69 @@ STORE_CATEGORIES = {
     },
     "falabella": {
         "type": "search",  # Falabella uses search queries
+        "queries": [
+            "polera mujer",
+            "polera hombre",
+            "camisa mujer",
+            "camisa hombre",
+            "pantalon mujer",
+            "pantalon hombre",
+            "jean mujer",
+            "jean hombre",
+            "vestido mujer",
+            "chaqueta mujer",
+            "chaqueta hombre",
+            "falda mujer",
+            "short mujer",
+            "short hombre",
+            "poleron hombre",
+            "poleron mujer",
+        ],
+    },
+    "hm": {
+        "type": "search",  # H&M uses VTEX search
+        "queries": [
+            "polera mujer",
+            "polera hombre",
+            "camisa mujer",
+            "camisa hombre",
+            "pantalon mujer",
+            "pantalon hombre",
+            "jean mujer",
+            "jean hombre",
+            "vestido mujer",
+            "chaqueta mujer",
+            "chaqueta hombre",
+            "falda mujer",
+            "short mujer",
+            "short hombre",
+            "poleron hombre",
+            "poleron mujer",
+        ],
+    },
+    "hites": {
+        "type": "search",  # Hites uses HTML search
+        "queries": [
+            "polera mujer",
+            "polera hombre",
+            "camisa mujer",
+            "camisa hombre",
+            "pantalon mujer",
+            "pantalon hombre",
+            "jean mujer",
+            "jean hombre",
+            "vestido mujer",
+            "chaqueta mujer",
+            "chaqueta hombre",
+            "falda mujer",
+            "short mujer",
+            "short hombre",
+            "poleron hombre",
+            "poleron mujer",
+        ],
+    },
+    "fashionpark": {
+        "type": "search",  # Fashion Park uses Shopify search
         "queries": [
             "polera mujer",
             "polera hombre",

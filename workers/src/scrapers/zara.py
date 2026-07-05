@@ -1,8 +1,12 @@
-"""Zara scraper - Internal API extraction (Chile locale).
+"""Zara scraper — Internal API extraction (Chile locale).
 
 Uses Zara's internal category + product API:
-  GET /cl/es/categories?ajax=true          → category tree
   GET /cl/es/category/{id}/products?ajax=true → products per leaf category
+
+The ?ajax=true endpoint returns full product JSON without bot detection
+when using the correct internal category IDs (2509xxx range).
+
+Key: Do NOT fetch the HTML pages (Akamai bot detection). Only use ?ajax=true.
 """
 
 import json
@@ -27,19 +31,14 @@ class ZaraProduct:
     original_url: str = ""
 
 
-# Top-level Zara Chile category IDs (from /cl/es/categories?ajax=true)
-SECTION_IDS = {
-    "mujer": 1009502,
-    "hombre": 1009547,
-}
-
-# Leaf subcategories we want to scrape (clothing only, no accessories)
-# Verified against live API — some old IDs were stale
+# Internal Zara Chile category IDs (confirmed working via ?ajax=true)
+# These are NOT the same as URL slug IDs (l1009, etc.)
 LEAF_CATEGORIES = {
     "mujer": [
+        2509505,   # CAMISETAS MANGA CORTA (37 products)
+        2509498,   # CAMISETAS/POLERAS (146 products)
+        2509501,   # TOPS (97 products)
         2509382,   # VESTIDOS
-        2509505,   # CAMISETAS MANGA CORTA
-        2509497,   # CAMISETAS MANGA LARGA
         2509523,   # PANTALONES
         2509574,   # JEANS
         2725920,   # FALDAS|SHORTS
@@ -87,7 +86,6 @@ class ZaraScraper:
     """Scraper for Zara (zara.com/cl/es) using internal JSON API."""
 
     BASE_URL = "https://www.zara.com/cl/es"
-    CATEGORIES_URL = "https://www.zara.com/cl/es/categories?ajax=true"
     PRODUCTS_URL = "https://www.zara.com/cl/es/category/{cat_id}/products?ajax=true"
 
     def __init__(self):
@@ -98,24 +96,11 @@ class ZaraScraper:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/plain, */*",
                 "Accept-Language": "es-CL,es;q=0.9,en;q=0.8",
-                "Accept-Encoding": "gzip, deflate, br",
-                "X-Requested-With": "XMLHttpRequest",
-                "Referer": "https://www.zara.com/cl/es/",
             },
         )
 
-    async def get_category_tree(self) -> list[dict]:
-        """Fetch full category tree from Zara API."""
-        try:
-            resp = await self.client.get(self.CATEGORIES_URL)
-            if resp.status_code == 200:
-                return resp.json()
-        except Exception:
-            pass
-        return []
-
     async def get_products_for_category(self, cat_id: int) -> list[dict]:
-        """Fetch products for a specific category ID."""
+        """Fetch products for a specific internal category ID via ?ajax=true."""
         url = self.PRODUCTS_URL.format(cat_id=cat_id)
         try:
             resp = await self.client.get(url)
@@ -134,7 +119,6 @@ class ZaraScraper:
         for group in product_groups:
             elements = group.get("elements", [])
             for element in elements:
-                # commercialComponents contains the actual product data
                 components = element.get("commercialComponents", [])
                 for comp in components:
                     product = self._parse_component(comp, gender)
@@ -147,7 +131,6 @@ class ZaraScraper:
     def _parse_component(self, comp: dict, gender: str) -> Optional[ZaraProduct]:
         """Parse a single commercialComponent into a ZaraProduct."""
         try:
-            # Skip non-product types (bundles, marketing, etc.)
             kind = comp.get("kind", "")
             if kind in ("Bundle", "Marketing", "Editorial"):
                 return None
@@ -156,14 +139,11 @@ class ZaraScraper:
             if not name:
                 return None
 
-            # ID
             product_id = str(comp.get("id", ""))
-            reference = comp.get("reference", "")
 
-            # Price (in CLP, minor units — divide by 100)
+            # Price (in CLP)
             price_raw = comp.get("price", 0)
             if isinstance(price_raw, dict):
-                # Try discountedPrice first, then regular price
                 price = float(
                     price_raw.get("discountedAmount", 0)
                     or price_raw.get("value", 0)
@@ -178,9 +158,9 @@ class ZaraScraper:
             # Image URL from detail.colors[].xmedia[]
             image_url = ""
             detail = comp.get("detail", {})
-            colors = detail.get("colors", [])
-            if colors:
-                first_color = colors[0]
+            colors_data = detail.get("colors", [])
+            if colors_data:
+                first_color = colors_data[0]
                 xmedia = first_color.get("xmedia", [])
                 if xmedia:
                     media = xmedia[0]
@@ -188,7 +168,7 @@ class ZaraScraper:
                     if url_template:
                         image_url = url_template.replace("{width}", "800")
 
-            # SEO URL — use seoProductId for correct URL
+            # SEO URL
             seo = comp.get("seo", {})
             keyword = seo.get("keyword", "")
             seo_product_id = seo.get("seoProductId", "")
@@ -203,7 +183,7 @@ class ZaraScraper:
             else:
                 original_url = ""
 
-            # Sizes from detail.sizes
+            # Sizes
             sizes = []
             for s in detail.get("sizes", []):
                 size_name = s.get("name", "")
@@ -212,7 +192,7 @@ class ZaraScraper:
 
             # Colors
             color_names = []
-            for c in colors:
+            for c in colors_data:
                 cname = c.get("name", "")
                 if cname:
                     color_names.append(cname)
@@ -230,7 +210,7 @@ class ZaraScraper:
                 availability = False
 
             return ZaraProduct(
-                external_id=product_id or reference,
+                external_id=product_id,
                 name=name,
                 price=price,
                 currency="CLP",
@@ -250,14 +230,9 @@ class ZaraScraper:
 
         Fetches all leaf subcategories and deduplicates products.
         """
-        cat_id = SECTION_IDS.get(category)
-        if not cat_id:
-            return []
-
         leaf_ids = LEAF_CATEGORIES.get(category, [])
         if not leaf_ids:
-            # Fallback: fetch the section itself
-            leaf_ids = [cat_id]
+            return []
 
         all_products = []
         seen_ids = set()
@@ -279,13 +254,22 @@ class ZaraScraper:
 
         return all_products[:max_items]
 
-    async def scrape_all(self, max_per_category: int = 20) -> list[ZaraProduct]:
-        """Scrape both mujer and hombre categories."""
-        all_products = []
-        for category in SECTION_IDS:
-            products = await self.scrape_category(category, max_per_category)
-            all_products.extend(products)
-        return all_products
+    async def search_products(self, query: str, max_items: int = 30) -> list[ZaraProduct]:
+        """Search is not directly supported by the ?ajax=true endpoint.
+
+        Fallback: scrape mujer + hombre categories and filter by query keywords.
+        """
+        all_products = await self.scrape_category("mujer", max_items)
+        all_products.extend(await self.scrape_category("hombre", max_items))
+
+        # Filter by query keywords
+        q = query.lower()
+        filtered = []
+        for p in all_products:
+            if q in p.name.lower():
+                filtered.append(p)
+
+        return filtered[:max_items] if filtered else all_products[:max_items]
 
     async def close(self):
         """Close the HTTP client."""

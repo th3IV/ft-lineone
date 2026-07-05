@@ -12,28 +12,16 @@ import RevealOnScroll, {
 } from "../components/RevealOnScroll";
 
 const stores = [
-  {
-    name: "Paris",
-    slug: "paris",
-    description: "Elegancia chilena",
-    image:
-      "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=600&q=80",
-  },
-  {
-    name: "Maui",
-    slug: "maui",
-    description: "Estilo playero premium",
-    image:
-      "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=600&q=80",
-  },
-  {
-    name: "Zara",
-    slug: "zara",
-    description: "Tendencia global",
-    image:
-      "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&q=80",
-  },
+    // Tiendas existentes...
+    { name: 'Paris', image: '/images/paris.png' },
+    { name: 'Maui', image: '/images/maui.png' },
+    { name: 'Zara', image: '/images/zara.png' },
+    { name: 'Falabella', image: '/images/falabella.png' }, // Nuevo
+    { name: 'H&M', image: '/images/hm.png' }, // Nuevo
+    { name: 'Hites', image: '/images/hites.png' }, // Nuevo
+    { name: 'Fashion Park', image: '/images/fashionpark.png' }, // Nuevo
 ];
+
 
 function Home() {
   const dispatch = useDispatch();

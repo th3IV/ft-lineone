@@ -3,7 +3,10 @@
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
-
+from ..scrapers.falabella import FalabellaScraper
+from ..scrapers.hites import HitesScraper
+from ..scrapers.fashionpark import FashionParkScraper
+from ..scrapers.hm import HMScraper
 from models.product import ProductCreate
 from middleware.security import require_auth
 
@@ -129,6 +132,10 @@ async def run_single_scraper(store: str, request: Request, user: dict = Depends(
         "zara": ZaraScraper,
         "paris": ParisScraper,
         "maui": MauiScraper,
+        "falabella": FalabellaScraper,
+        "hites": HitesScraper,
+        "fashionpark": FashionParkScraper,
+        "hm": HMScraper,
     }
 
     if store not in scraper_map:

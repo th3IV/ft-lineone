@@ -1,7 +1,12 @@
 const tiendas = [
-  { nombre: "Paris", clase: "bg-editorial-black" },
-  { nombre: "Maui", clase: "bg-teal-500" },
-  { nombre: "Zara", clase: "bg-black" },
+  { nombre: "Paris", clase: "bg-editorial-blue-light text-white hover:bg-editorial-blue-dark transition-colors" },
+  { nombre: "Maui", clase: "bg-teal-500 text-white hover:bg-teal-600 transition-colors" },
+  { nombre: "Zara", clase: "bg-black text-white hover:bg-gray-800 transition-colors" },
+  { nombre: "Falabella", clase: "bg-green-600 text-white hover:bg-green-700 transition-colors" },
+  { nombre: "H&M", clase: "bg-red-600 text-white hover:bg-red-700 transition-colors" },
+  { nombre: "Hites", clase: "bg-blue-600 text-white hover:bg-blue-700 transition-colors" },
+  { nombre: "Fashion Park", clase: "bg-pink-500 text-white hover:bg-pink-600 transition-colors" },
+  { nombre: "H&M", clase: "bg-red-600 text-white hover:bg-red-700 transition-colors" }
 ];
 
 function FiltroTiendas({ selected, onChange }) {
