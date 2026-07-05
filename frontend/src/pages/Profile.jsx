@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { User, Settings, Clock, Sparkles, Camera } from "lucide-react";
+import { User, Settings, Clock, Sparkles, Heart } from "lucide-react";
 import { fetchProfile, updateProfile, updateMeasurements, updatePreferences } from "../store/userSlice";
+import { fetchFavorites } from "../store/favoritesSlice";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import ProductGrid from "../components/ProductGrid";
+import VtonHistory from "../components/VtonHistory";
 
 const MEASUREMENTS_DEFAULT = {
   height: "",
@@ -25,6 +28,7 @@ function Profile() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user, loading } = useSelector((state) => state.user);
+  const { products: favoriteProducts, loading: favLoading } = useSelector((state) => state.favorites);
 
   const [profile, setProfile] = useState(user || {});
   const [measurements, setMeasurements] = useState(MEASUREMENTS_DEFAULT);
@@ -34,6 +38,7 @@ function Profile() {
 
   useEffect(() => {
     dispatch(fetchProfile());
+    dispatch(fetchFavorites());
   }, [dispatch]);
 
   useEffect(() => {
@@ -53,6 +58,7 @@ function Profile() {
     { id: "profile", label: "Perfil", icon: User },
     { id: "measurements", label: "Medidas", icon: Settings },
     { id: "preferences", label: "Preferencias", icon: Sparkles },
+    { id: "favorites", label: "Favoritos", icon: Heart },
     { id: "history", label: "Historial", icon: Clock },
   ];
 
@@ -336,25 +342,44 @@ function Profile() {
         </motion.div>
       )}
 
+      {/* Favorites Tab */}
+      {activeTab === "favorites" && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          {favLoading ? (
+            <div className="flex justify-center py-16">
+              <div className="w-8 h-8 rounded-full border-2 border-editorial-black/10 border-t-editorial-black animate-spin" />
+            </div>
+          ) : favoriteProducts.length > 0 ? (
+            <ProductGrid products={favoriteProducts} loading={false} />
+          ) : (
+            <div className="text-center py-16">
+              <Heart size={40} className="mx-auto text-editorial-gray-light mb-4" />
+              <p className="text-editorial-gray text-sm">
+                Todavia no tienes favoritos. Explora el catalogo y guarda las prendas que te gusten.
+              </p>
+              <button
+                onClick={() => navigate("/catalog")}
+                className="btn-primary mt-6"
+              >
+                Explorar catalogo
+              </button>
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* History Tab */}
       {activeTab === "history" && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="text-center py-16"
         >
-          <Clock size={40} className="mx-auto text-editorial-gray-light mb-4" />
-          <p className="text-editorial-gray text-sm">
-            Tu historial de pruebas virtuales aparecerá aquí.
-          </p>
-          <button
-            onClick={() => navigate("/virtual-try-on")}
-            className="btn-primary mt-6 inline-flex items-center gap-2"
-          >
-            <Camera size={14} />
-            Probar con IA
-          </button>
+          <VtonHistory />
         </motion.div>
       )}
     </motion.div>

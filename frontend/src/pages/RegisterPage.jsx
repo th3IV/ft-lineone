@@ -17,7 +17,7 @@ function RegisterPage() {
     dispatch(clearError());
     const result = await dispatch(registerUser({ name, email, password }));
     if (registerUser.fulfilled.match(result)) {
-      navigate("/catalog");
+      navigate("/onboarding");
     }
   };
 

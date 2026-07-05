@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 import asgi
 
-from routes import auth, products, vton, recommendations, scrapers, users
+from routes import auth, products, vton, recommendations, scrapers, users, favorites
 from services.database import DatabaseService
 
 app = FastAPI(
@@ -86,6 +86,7 @@ app.include_router(products.router, prefix="/api/v1/products", tags=["Products"]
 app.include_router(vton.router, prefix="/api/v1/vton", tags=["VTON"])
 app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"])
 app.include_router(scrapers.router, prefix="/api/v1/scrapers", tags=["Scrapers"])
+app.include_router(favorites.router, prefix="/api/v1/favorites", tags=["Favorites"])
 
 
 @app.get("/health")

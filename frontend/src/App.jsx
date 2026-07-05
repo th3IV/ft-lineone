@@ -10,12 +10,14 @@ import VirtualTryOn from "./pages/VirtualTryOn";
 import Profile from "./pages/Profile";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import OnboardingQuiz from "./pages/OnboardingQuiz";
 import NotFound from "./pages/NotFound";
 import ChatFlotante from "./components/ChatFlotante";
 import ModalVTON from "./components/ModalVTON";
 import { closeVtonModal } from "./store/uiSlice";
 import { setUnauthorizedCallback } from "./services/api";
 import { logoutUser } from "./store/userSlice";
+import { fetchFavorites } from "./store/favoritesSlice";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useSelector((state) => state.user);
@@ -29,6 +31,7 @@ function App() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { vtonModal } = useSelector((state) => state.ui);
+  const { isAuthenticated } = useSelector((state) => state.user);
 
   useEffect(() => {
     setUnauthorizedCallback(() => {
@@ -36,6 +39,12 @@ function App() {
       navigate("/login");
     });
   }, [dispatch, navigate]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      dispatch(fetchFavorites());
+    }
+  }, [dispatch, isAuthenticated]);
 
   return (
     <div className="min-h-screen bg-editorial-cream">
@@ -64,6 +73,14 @@ function App() {
             />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <OnboardingQuiz />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </PageTransition>

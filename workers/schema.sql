@@ -47,6 +47,17 @@ CREATE TABLE IF NOT EXISTS vton_results (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
+-- Favorites table
+CREATE TABLE IF NOT EXISTS favorites (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    user_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    UNIQUE(user_id, product_id)
+);
+
 -- Indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_products_store ON products(store);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
@@ -55,3 +66,5 @@ CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_vton_results_user_id ON vton_results(user_id);
 CREATE INDEX IF NOT EXISTS idx_vton_results_product_id ON vton_results(product_id);
+CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
+CREATE INDEX IF NOT EXISTS idx_favorites_product_id ON favorites(product_id);

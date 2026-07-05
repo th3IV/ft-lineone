@@ -40,7 +40,9 @@ async def get_recommendations(
     }
     if user_obj:
         if user_obj.preferences:
-            user_preferences["clothing_type"] = user_obj.preferences
+            user_preferences["clothing_type"] = user_obj.preferences.get("styles", [])
+            user_preferences["colors"] = user_obj.preferences.get("colors", [])
+            user_preferences["occasions"] = user_obj.preferences.get("occasions", [])
         if user_obj.body_measurements:
             user_preferences["gender"] = user_obj.body_measurements.get("gender")
 
@@ -62,6 +64,7 @@ async def get_recommendations(
         user_preferences=user_preferences,
         available_products=products_dict,
         query=query,
+        user_id=user.user_id,
     )
 
     # Build lookup dict to avoid N+1 queries
@@ -118,10 +121,30 @@ async def style_chat(
             product_name = product.name
             product_category = product.category
 
+    # Build user context from preferences if authenticated
+    user_context = ""
+    if user:
+        user_obj = await db.get_user_by_id(user.user_id)
+        if user_obj and user_obj.preferences:
+            styles = user_obj.preferences.get("styles", [])
+            colors = user_obj.preferences.get("colors", [])
+            occasions = user_obj.preferences.get("occasions", [])
+            parts = []
+            if styles:
+                parts.append(f"estilos={styles}")
+            if colors:
+                parts.append(f"colores favoritos={colors}")
+            if occasions:
+                parts.append(f"ocasiones={occasions}")
+            if parts:
+                user_context = f"\nPreferencias del usuario: {', '.join(parts)}"
+
     advice = await llm_service.get_style_advice(
         product_name=product_name,
         product_category=product_category,
         user_question=body.question,
+        user_context=user_context,
+        user_id=user.user_id if user else None,
     )
 
     return {"advice": advice, "product_id": body.product_id}

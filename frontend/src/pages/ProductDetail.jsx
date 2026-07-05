@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Sparkles, Heart, Share2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Heart, Share2, ExternalLink } from "lucide-react";
 import { fetchProductById } from "../store/productSlice";
 import { fetchRecommendations } from "../store/recommendationSlice";
+import { toggleFavorite, fetchFavorites } from "../store/favoritesSlice";
 import { openVtonModal } from "../store/uiSlice";
 import ProductGrid from "../components/ProductGrid";
 import RevealOnScroll from "../components/RevealOnScroll";
@@ -14,15 +15,22 @@ function ProductDetail() {
   const dispatch = useDispatch();
   const { selectedProduct, loading } = useSelector((state) => state.products);
   const { recommendations } = useSelector((state) => state.recommendations);
+  const { favorites } = useSelector((state) => state.favorites);
+  const { isAuthenticated } = useSelector((state) => state.user);
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedImage, setSelectedImage] = useState(0);
 
+  const isFav = favorites.includes(id);
+
   useEffect(() => {
     dispatch(fetchProductById(id));
     dispatch(fetchRecommendations(id));
+    if (isAuthenticated) {
+      dispatch(fetchFavorites());
+    }
     window.scrollTo(0, 0);
-  }, [dispatch, id]);
+  }, [dispatch, id, isAuthenticated]);
 
   useEffect(() => {
     if (selectedProduct) {
@@ -34,6 +42,12 @@ function ProductDetail() {
   const handleTryOn = () => {
     if (selectedProduct) {
       dispatch(openVtonModal(selectedProduct));
+    }
+  };
+
+  const handleToggleFavorite = () => {
+    if (isAuthenticated) {
+      dispatch(toggleFavorite(id));
     }
   };
 
@@ -190,14 +204,28 @@ function ProductDetail() {
               Probar con IA Try-On
             </button>
             <div className="flex gap-3">
-              <button className="btn-outline flex-1 flex items-center justify-center gap-2">
-                <Heart size={16} />
-                Favoritos
-              </button>
-              <button className="btn-outline flex-1 flex items-center justify-center gap-2">
-                <Share2 size={16} />
-                Compartir
-              </button>
+              {isAuthenticated && (
+                <button
+                  onClick={handleToggleFavorite}
+                  className={`btn-outline flex-1 flex items-center justify-center gap-2 ${
+                    isFav ? "border-red-500 text-red-500" : ""
+                  }`}
+                >
+                  <Heart size={16} className={isFav ? "fill-red-500" : ""} />
+                  {isFav ? "En Favoritos" : "Favoritos"}
+                </button>
+              )}
+              {selectedProduct.original_url && (
+                <a
+                  href={selectedProduct.original_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-outline flex-1 flex items-center justify-center gap-2"
+                >
+                  <ExternalLink size={16} />
+                  Ver prenda
+                </a>
+              )}
             </div>
           </div>
 

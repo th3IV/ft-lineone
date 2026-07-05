@@ -6,7 +6,7 @@ Optimized Flow:
   3. POST /webhook   — receive YouCam completion notification (no polling needed)
   4. GET  /result/{id} — get result (fallback if webhook missed)
   5. GET  /image/{id} — serves user photo as JPEG
-  6. GET  /history   — user's VTON history
+  6. GET  /history   — user's VTON history (images stored in R2)
 """
 
 from fastapi import APIRouter, HTTPException, Request, Query, Depends
@@ -126,19 +126,11 @@ async def prefetch_image(
     request: Request,
     user=Depends(require_auth),
 ):
-    """Pre-upload user photo to freeimage.host before try-on.
-
-    Call this when user selects a photo, BEFORE clicking "try on".
-    Returns public URL that YouCam can access.
-
-    Accepts: { image: "data:image/jpeg;base64,..." or raw base64 }
-    Returns: { public_url: "https://iili.io/..." }
-    """
+    """Pre-upload user photo to freeimage.host before try-on."""
     image = request_body.get("image")
     if not image:
         raise HTTPException(status_code=400, detail="image is required")
 
-    # Extract base64 from data URL
     raw_b64 = image
     if raw_b64.startswith("data:image"):
         raw_b64 = raw_b64.split(",", 1)[1]
@@ -160,14 +152,7 @@ async def prefetch_garment(
     request: Request,
     user=Depends(require_auth),
 ):
-    """Pre-upload garment image to freeimage.host before try-on.
-
-    Accepts: { url: "https://..." } (original garment URL)
-    Returns: { public_url: "https://iili.io/..." }
-
-    The Worker downloads the garment from the original CDN and re-uploads
-    to freeimage.host, because YouCam blocks most e-commerce CDNs.
-    """
+    """Pre-upload garment image to freeimage.host before try-on."""
     garment_url = request_body.get("url")
     if not garment_url:
         raise HTTPException(status_code=400, detail="url is required")
@@ -213,20 +198,11 @@ async def try_on(
     request: Request,
     user=Depends(require_auth),
 ):
-    """Request virtual try-on via YouCam V3.0.
-
-    Accepts: { product_id, user_image_url, public_url?, garment_public_url? }
-    - user_image_url: data URL (stored for /image endpoint)
-    - public_url: pre-uploaded freeimage.host URL for user photo (optional)
-    - garment_public_url: pre-uploaded freeimage.host URL for garment (optional)
-
-    If public_url is provided, skips the freeimage.host upload (~2-3 sec faster).
-    If garment_public_url is provided, skips garment download + upload (~3-5 sec faster).
-    """
+    """Request virtual try-on via YouCam V3.0."""
     product_id = request_body.get("product_id")
     user_image_url = request_body.get("user_image_url")
-    public_url = request_body.get("public_url")  # Pre-uploaded URL
-    garment_public_url = request_body.get("garment_public_url")  # Pre-uploaded garment URL
+    public_url = request_body.get("public_url")
+    garment_public_url = request_body.get("garment_public_url")
 
     if not product_id or not user_image_url:
         raise HTTPException(
@@ -238,7 +214,6 @@ async def try_on(
     env = get_env(request)
 
     try:
-        # Get product
         product = await db.get_product(product_id)
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
@@ -249,7 +224,6 @@ async def try_on(
 
         garment_category = _extract_garment_category(product)
 
-        # If no pre-uploaded URL, upload now (slower path)
         if not public_url:
             raw_b64 = user_image_url
             if raw_b64.startswith("data:image"):
@@ -257,12 +231,10 @@ async def try_on(
             from services.image_upload import upload_user_photo
             public_url = await upload_user_photo(raw_b64)
 
-        # Use pre-uploaded garment URL, or download + re-upload (YouCam blocks e-commerce CDNs)
         if not garment_public_url:
             from services.image_upload import upload_garment_image
             garment_public_url = await upload_garment_image(garment_url)
 
-        # Create VTON result record
         vton_result = await db.create_vton_result({
             "user_id": user_id,
             "product_id": product_id,
@@ -272,7 +244,6 @@ async def try_on(
         })
         vton_id = vton_result.id
 
-        # Create YouCam task (V3.0 — both URLs on freeimage.host)
         youcam = YouCamService(env=env)
         task_id = await youcam.create_task(
             src_url=public_url,
@@ -280,7 +251,6 @@ async def try_on(
             garment_category=garment_category,
         )
 
-        # Store task ID
         await db.update_vton_result(vton_id, {
             "youcam_task_id": task_id,
             "status": "processing",
@@ -300,15 +270,10 @@ async def try_on(
 
 @router.post("/webhook")
 async def youcam_webhook(request: Request):
-    """Receive YouCam webhook notification when task completes.
-
-    No auth required — YouCam calls this endpoint directly.
-    Verifies webhook signature, then updates D1.
-    """
+    """Receive YouCam webhook notification when task completes."""
     body = await request.body()
     payload = body.decode("utf-8")
 
-    # Get webhook headers
     signature = request.headers.get("webhook-signature", "")
     webhook_id = request.headers.get("webhook-id", "")
     webhook_ts = request.headers.get("webhook-timestamp", "")
@@ -317,10 +282,8 @@ async def youcam_webhook(request: Request):
     if not env:
         return {"status": "error", "detail": "Service unavailable"}
 
-    # Verify webhook signature (if YOUCAM_WEBHOOK_SECRET is configured)
     webhook_secret = getattr(env, "YOUCAM_WEBHOOK_SECRET", "")
     if webhook_secret:
-        signing_input = f"{webhook_id}.{webhook_ts}.{payload}"
         if not YouCamService.verify_webhook_signature(payload, signature, webhook_secret):
             return {"status": "error", "detail": "Invalid signature"}
 
@@ -335,7 +298,6 @@ async def youcam_webhook(request: Request):
         from services.database import DatabaseService
         db = DatabaseService(env)
 
-        # Find VTON result by youcam_task_id
         vton_result = await db.get_vton_by_task_id(task_id)
         if not vton_result:
             return {"status": "ok", "detail": "Task not found in D1 (may be old)"}
@@ -348,9 +310,13 @@ async def youcam_webhook(request: Request):
             elif isinstance(results, list) and results:
                 output_url = results[0]
 
+            # Save output to R2 for persistent storage
+            from services.r2 import save_vton_output_to_r2
+            r2_url = await save_vton_output_to_r2(env, vton_result.user_id, vton_result.id, output_url)
+
             await db.update_vton_result(vton_result.id, {
                 "status": "completed",
-                "output_image_url": output_url,
+                "output_image_url": r2_url,
                 "completed_at": datetime.utcnow().isoformat(),
             })
         elif task_status == "error":
@@ -393,13 +359,19 @@ async def get_result(
             result = await youcam.poll_task(vton_result.youcam_task_id)
 
             if result["status"] == "completed":
+                output_url = result.get("output_url", "")
+
+                # Save output to R2 for persistent storage
+                from services.r2 import save_vton_output_to_r2
+                r2_url = await save_vton_output_to_r2(env, user_id, vton_id, output_url)
+
                 await db.update_vton_result(vton_id, {
                     "status": "completed",
-                    "output_image_url": result.get("output_url"),
+                    "output_image_url": r2_url,
                     "completed_at": datetime.utcnow().isoformat(),
                 })
                 vton_result.status = "completed"
-                vton_result.output_image_url = result.get("output_url")
+                vton_result.output_image_url = r2_url
 
             elif result["status"] == "failed":
                 await db.update_vton_result(vton_id, {
@@ -423,13 +395,14 @@ async def get_result(
 @router.get("/history")
 async def get_user_history(
     request: Request,
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(20, ge=1, le=100),
+    page: int = Query(1, ge=1),
     user=Depends(require_auth),
 ):
-    """Get user's VTON results."""
+    """Get user's VTON results (images stored in R2)."""
     user_id = user.user_id
     db = get_db(request)
-    results = await db.get_vton_history(user_id, limit)
+    results = await db.get_vton_history(user_id, limit=limit)
 
     response_results = []
     for r in results:
@@ -452,7 +425,10 @@ async def get_user_history(
                     "id": product.id,
                     "name": product.name,
                     "image": img,
+                    "store": product.store,
+                    "price": product.price,
+                    "original_url": product.original_url,
                 }
         response_results.append(entry)
 
-    return {"results": response_results}
+    return {"results": response_results, "total": len(response_results)}

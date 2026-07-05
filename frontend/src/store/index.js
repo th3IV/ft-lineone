@@ -3,6 +3,7 @@ import userReducer from "./userSlice";
 import productsReducer from "./productSlice";
 import recommendationsReducer from "./recommendationSlice";
 import uiReducer from "./uiSlice";
+import favoritesReducer from "./favoritesSlice";
 
 const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ const store = configureStore({
     products: productsReducer,
     recommendations: recommendationsReducer,
     ui: uiReducer,
+    favorites: favoritesReducer,
   },
 });
 

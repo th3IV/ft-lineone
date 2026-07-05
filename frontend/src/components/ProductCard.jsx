@@ -1,7 +1,14 @@
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
+import { toggleFavorite } from "../store/favoritesSlice";
 
 function ProductCard({ product, onTryOn, index = 0 }) {
+  const dispatch = useDispatch();
+  const { favorites } = useSelector((state) => state.favorites);
+  const { isAuthenticated } = useSelector((state) => state.user);
+  const isFav = favorites.includes(product.id);
+
   return (
     <div
       className="group editorial-card card-shadow animate-fade-in"
@@ -27,14 +34,22 @@ function ProductCard({ product, onTryOn, index = 0 }) {
         </div>
 
         {/* Heart Button */}
-        <button
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-editorial-white/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-editorial-white"
-          onClick={(e) => {
-            e.preventDefault();
-          }}
-        >
-          <Heart size={14} className="text-editorial-gray hover:text-red-500 transition-colors" />
-        </button>
+        {isAuthenticated && (
+          <button
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-editorial-white/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-editorial-white"
+            onClick={(e) => {
+              e.preventDefault();
+              dispatch(toggleFavorite(product.id));
+            }}
+          >
+            <Heart
+              size={14}
+              className={`transition-colors ${
+                isFav ? "text-red-500 fill-red-500" : "text-editorial-gray hover:text-red-500"
+              }`}
+            />
+          </button>
+        )}
 
         {/* Try-On Button */}
         <button

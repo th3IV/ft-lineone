@@ -308,6 +308,50 @@ class DatabaseService:
         rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
         return [VtonResultModel(row) for row in rows]
 
+    # ── Favorites ──────────────────────────────────────────────
+
+    async def add_favorite(self, user_id: str, product_id: str) -> None:
+        """Add a product to user's favorites. Ignores duplicate."""
+        import sqlite3
+        try:
+            await self.db.prepare(
+                "INSERT OR IGNORE INTO favorites (id, user_id, product_id) VALUES (?, ?, ?)"
+            ).bind(str(uuid.uuid4()), user_id, product_id).run()
+        except Exception:
+            pass
+
+    async def remove_favorite(self, user_id: str, product_id: str) -> None:
+        """Remove a product from user's favorites."""
+        await self.db.prepare(
+            "DELETE FROM favorites WHERE user_id = ? AND product_id = ?"
+        ).bind(user_id, product_id).run()
+
+    async def is_favorite(self, user_id: str, product_id: str) -> bool:
+        """Check if a product is in user's favorites."""
+        result = await self.db.prepare(
+            "SELECT 1 FROM favorites WHERE user_id = ? AND product_id = ? LIMIT 1"
+        ).bind(user_id, product_id).first()
+        return result is not None
+
+    async def get_favorites(self, user_id: str, page: int = 1, limit: int = 20):
+        """Get user's favorite products with pagination."""
+        count_result = await self.db.prepare(
+            "SELECT COUNT(*) as total FROM favorites WHERE user_id = ?"
+        ).bind(user_id).first()
+        total = count_result["total"] if count_result else 0
+
+        offset = (page - 1) * limit
+        d1_result = await self.db.prepare(
+            """SELECT p.* FROM products p
+               INNER JOIN favorites f ON f.product_id = p.id
+               WHERE f.user_id = ?
+               ORDER BY f.created_at DESC LIMIT ? OFFSET ?"""
+        ).bind(user_id, limit, offset).all()
+
+        rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
+        products = [ProductModel(row) for row in rows]
+        return products, total
+
     async def get_vton_by_task_id(self, youcam_task_id: str) -> Optional[VtonResultModel]:
         """Get VTON result by YouCam task ID (used by webhook)."""
         result = await self.db.prepare(
