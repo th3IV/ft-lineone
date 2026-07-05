@@ -48,6 +48,25 @@ class FalabellaScraper:
     BASE_URL = "https://www.falabella.com"
     SEARCH_URL = "https://www.falabella.com/falabella-cl/search?Ntt={query}"
 
+    # Infer clothing type from search query keywords
+    CATEGORY_KEYWORDS = {
+        "polera": "Poleras",
+        "camiseta": "Poleras",
+        "camisa": "Camisas",
+        "pantalon": "Pantalones",
+        "jean": "Pantalones",
+        "short": "Shorts",
+        "bermuda": "Shorts",
+        "chaqueta": "Chaquetas",
+        "parka": "Chaquetas",
+        "abrigo": "Chaquetas",
+        "vestido": "Vestidos",
+        "falda": "Faldas",
+        "poleron": "Polerones",
+        "buzo": "Polerones",
+        "sudadera": "Polerones",
+    }
+
     def __init__(self):
         self._client = None
 
@@ -75,21 +94,32 @@ class FalabellaScraper:
         url = self.SEARCH_URL.format(query=query)
         products = []
 
+        # Infer category from query for products missing GSCCategoryId
+        inferred_category = self._infer_category(query)
+
         try:
             resp = await client.get(url)
             if resp.status_code != 200:
                 return []
-            products = self._parse_ssr_data(resp.text, max_items)
+            products = self._parse_ssr_data(resp.text, max_items, inferred_category)
         except Exception:
             pass
 
         return products[:max_items]
 
+    def _infer_category(self, query: str) -> str:
+        """Infer frontend category from search query keywords."""
+        q = query.lower()
+        for keyword, category in self.CATEGORY_KEYWORDS.items():
+            if keyword in q:
+                return category
+        return ""
+
     async def scrape_category(self, category: str, max_items: int = 50) -> list[FalabellaProduct]:
         """Scrape products from a category using search."""
         return await self.search_products(category, max_items)
 
-    def _parse_ssr_data(self, html: str, max_items: int) -> list[FalabellaProduct]:
+    def _parse_ssr_data(self, html: str, max_items: int, inferred_category: str = "") -> list[FalabellaProduct]:
         """Parse Falabella SSR JSON payload to extract products."""
         products = []
 
@@ -105,7 +135,7 @@ class FalabellaScraper:
                     continue
 
                 for item in results[:max_items]:
-                    product = self._parse_falabella_product(item)
+                    product = self._parse_falabella_product(item, inferred_category)
                     if product and product.name:
                         products.append(product)
 
@@ -115,7 +145,7 @@ class FalabellaScraper:
 
         return products[:max_items]
 
-    def _parse_falabella_product(self, item: dict) -> Optional[FalabellaProduct]:
+    def _parse_falabella_product(self, item: dict, inferred_category: str = "") -> Optional[FalabellaProduct]:
         """Parse a single Falabella product from SSR data."""
         if not isinstance(item, dict):
             return None
@@ -153,9 +183,9 @@ class FalabellaScraper:
         if isinstance(media_urls, list):
             images = [u for u in media_urls if isinstance(u, str) and u.startswith("http")]
 
-        # Extract category from GSCCategoryId
+        # Extract category from GSCCategoryId, fallback to inferred from query
         gsc_id = item.get("GSCCategoryId", "")
-        category = CATEGORY_MAP.get(gsc_id, "")
+        category = CATEGORY_MAP.get(gsc_id, "") or inferred_category
 
         # Extract colors and sizes from variants
         # CORRECT path: variants[type="COLOR"].options[*].sizes[*]["value"]

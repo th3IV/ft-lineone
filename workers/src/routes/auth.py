@@ -78,7 +78,7 @@ async def login(credentials: UserLogin, request: Request):
             name=user.name,
             created_at=user.created_at,
             body_measurements=user.body_measurements,
-            preferences=user.preferences or [],
+            preferences=user.preferences or {},
         ),
     )
 

@@ -15,7 +15,7 @@ class UserModel:
         self.name = row.get("name", "")
         self.password_hash = row.get("password_hash", "")
         self.body_measurements = json.loads(row["body_measurements"]) if row.get("body_measurements") else None
-        self.preferences = json.loads(row["preferences"]) if row.get("preferences") else []
+        self.preferences = json.loads(row["preferences"]) if row.get("preferences") else {}
         self.created_at = row.get("created_at", datetime.utcnow().isoformat())
 
 
