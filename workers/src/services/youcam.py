@@ -49,7 +49,7 @@ class YouCamService:
 
         src_url: user photo URL (data URL or public HTTP URL)
         ref_url: garment image URL (public HTTP URL from CDN)
-        garment_category: auto | upper_body | lower_body | full_body | shoes
+        garment_category: auto | upper_body | lower_body | full_body
         """
         body = json.dumps({
             "src_file_url": src_url,

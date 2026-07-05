@@ -108,7 +108,7 @@ function OnboardingQuiz() {
       occasions: selections.occasions,
       colors: selections.colors,
       styles: selections.styles,
-      sizes: user?.preferences?.sizes || { upper: "", lower: "", shoes: "" },
+      sizes: user?.preferences?.sizes || { upper: "", lower: "" },
       brands: user?.preferences?.brands || [],
     };
 
@@ -230,7 +230,14 @@ function OnboardingQuiz() {
                     { key: "chest", label: "Busto (cm)", type: "number" },
                     { key: "waist", label: "Cintura (cm)", type: "number" },
                     { key: "hips", label: "Caderas (cm)", type: "number" },
-                  ].map((field) => (
+                  ]
+                    .filter((field) => {
+                      if (user?.gender === "masculino") {
+                        return !["chest", "waist"].includes(field.key);
+                      }
+                      return true;
+                    })
+                    .map((field) => (
                     <div key={field.key}>
                       <label className="text-[10px] uppercase tracking-widest text-editorial-gray-light mb-1 block">
                         {field.label}

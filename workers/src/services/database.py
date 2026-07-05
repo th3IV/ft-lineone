@@ -142,8 +142,25 @@ class DatabaseService:
             return ProductModel(result)
         return None
 
+    # Frontend clothing type label → SQL LIKE keywords for category column
+    CLOTHING_TYPE_MAP = {
+        "Poleras": ["polera", "camiseta"],
+        "Camisas": ["camisa"],
+        "Pantalones": ["pantalon", "jean", "trouser", "pantalón"],
+        "Shorts": ["short", "bermuda"],
+        "Chaquetas": ["chaqueta", "parka", "abrigo", "cazadora"],
+        "Vestidos": ["vestido", "mono"],
+        "Faldas": ["falda"],
+        "Polerones": ["polerón", "buzo", "sudadera"],
+    }
+
     async def get_products(self, filters: dict, page: int = 1, limit: int = 20):
-        """Get products with filters."""
+        """Get products with filters.
+
+        Clothing type and gender filters use OR across keywords and are
+        case-insensitive.  Multi-select values (comma-separated) are also
+        handled via OR so that "Poleras,Vestidos" matches either keyword.
+        """
         conditions = []
         params = []
 
@@ -151,8 +168,8 @@ class DatabaseService:
             conditions.append("store = ?")
             params.append(filters["store"])
         if filters.get("category"):
-            conditions.append("category = ?")
-            params.append(filters["category"])
+            conditions.append("LOWER(category) LIKE LOWER(?)")
+            params.append(f"%{filters['category']}%")
         if filters.get("min_price") is not None:
             conditions.append("price >= ?")
             params.append(float(filters["min_price"]))
@@ -162,14 +179,31 @@ class DatabaseService:
         if filters.get("query"):
             conditions.append("name LIKE ?")
             params.append(f"%{filters['query']}%")
-        # Gender filter: stored in category column as prefix (e.g., "mujer/camisetas")
+
+        # Gender filter — split comma-separated values, match any
         if filters.get("gender"):
-            conditions.append("category LIKE ?")
-            params.append(f"%{filters['gender']}%")
-        # Clothing type filter: stored in category column
+            gender_values = [g.strip().lower() for g in filters["gender"].split(",") if g.strip()]
+            if gender_values:
+                gender_conds = []
+                for gv in gender_values:
+                    gender_conds.append("LOWER(category) LIKE ?")
+                    params.append(f"%{gv}%")
+                conditions.append(f"({' OR '.join(gender_conds)})")
+
+        # Clothing type filter — map frontend labels to SQL LIKE keywords
         if filters.get("clothing_type"):
-            conditions.append("category LIKE ?")
-            params.append(f"%{filters['clothing_type']}%")
+            ct_values = [c.strip() for c in filters["clothing_type"].split(",") if c.strip()]
+            ct_keywords = []
+            for ct in ct_values:
+                keywords = self.CLOTHING_TYPE_MAP.get(ct, [ct.lower()])
+                ct_keywords.extend(keywords)
+            if ct_keywords:
+                ct_conds = []
+                for kw in ct_keywords:
+                    ct_conds.append("LOWER(category) LIKE ?")
+                    params.append(f"%{kw}%")
+                conditions.append(f"({' OR '.join(ct_conds)})")
+
         # Size filter: stored in JSON array column
         if filters.get("size"):
             conditions.append("sizes LIKE ?")

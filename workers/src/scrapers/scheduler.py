@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from scrapers.zara import ZaraScraper
 from scrapers.paris import ParisScraper
 from scrapers.maui import MauiScraper
+from scrapers.falabella import FalabellaScraper
 from services.database import DatabaseService
 
 
@@ -14,6 +15,7 @@ RATE_LIMITS = {
     "paris": 1.5,
     "maui": 2.0,
     "zara": 3.0,
+    "falabella": 1.5,
 }
 
 # Real categories/search terms per store
@@ -23,23 +25,30 @@ STORE_CATEGORIES = {
         "queries": [
             "polera mujer",
             "jean mujer",
-            "zapatilla hombre",
             "polera hombre",
             "vestido mujer",
             "chaqueta hombre",
             "falda mujer",
             "buzo hombre",
-            "zapatilla mujer",
             "jean hombre",
+            "camisa mujer",
+            "pantalon hombre",
         ],
     },
     "maui": {
-        "type": "category",  # Maui uses category paths
+        "type": "category",  # Maui uses category slugs
         "categories": [
-            "hombre-vestuario",
             "hombre-poleras",
-            "mujer-vestuario",
             "mujer-poleras",
+            "hombre-camisas",
+            "mujer-camisas",
+            "hombre-pantalones",
+            "mujer-pantalones",
+            "hombre-chaquetas",
+            "mujer-chaquetas",
+            "mujer-vestidos",
+            "mujer-faldas",
+            "hombre-polerones",
         ],
     },
     "zara": {
@@ -47,6 +56,27 @@ STORE_CATEGORIES = {
         "categories": [
             "mujer",
             "hombre",
+        ],
+    },
+    "falabella": {
+        "type": "search",  # Falabella uses search queries
+        "queries": [
+            "polera mujer",
+            "polera hombre",
+            "camisa mujer",
+            "camisa hombre",
+            "pantalon mujer",
+            "pantalon hombre",
+            "jean mujer",
+            "jean hombre",
+            "vestido mujer",
+            "chaqueta mujer",
+            "chaqueta hombre",
+            "falda mujer",
+            "short mujer",
+            "short hombre",
+            "poleron hombre",
+            "poleron mujer",
         ],
     },
 }
@@ -63,6 +93,7 @@ class ScraperRunner:
             "zara": ZaraScraper(),
             "paris": ParisScraper(),
             "maui": MauiScraper(),
+            "falabella": FalabellaScraper(),
         }
 
     async def run_all_scrapers(self) -> dict:

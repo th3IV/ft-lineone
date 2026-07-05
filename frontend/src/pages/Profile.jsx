@@ -18,7 +18,7 @@ const MEASUREMENTS_DEFAULT = {
 };
 
 const PREFERENCES_DEFAULT = {
-  sizes: { upper: "", lower: "", shoes: "" },
+  sizes: { upper: "", lower: "" },
   brands: [],
   colors: [],
   styles: [],
@@ -180,7 +180,14 @@ function Profile() {
               chest: "Busto (cm)",
               waist: "Cintura (cm)",
               hips: "Caderas (cm)",
-            }).map(([key, label]) => (
+            })
+              .filter(([key]) => {
+                if (profile.gender === "masculino") {
+                  return !["chest", "waist"].includes(key);
+                }
+                return true;
+              })
+              .map(([key, label]) => (
               <div key={key}>
                 <label className="editorial-label">{label}</label>
                 <input
@@ -237,11 +244,10 @@ function Profile() {
         >
           <div>
             <label className="editorial-label">Tallas preferidas</label>
-            <div className="grid grid-cols-3 gap-4 mt-2">
+            <div className="grid grid-cols-2 gap-4 mt-2">
               {Object.entries({
                 upper: "Parte superior",
                 lower: "Parte inferior",
-                shoes: "Zapatos",
               }).map(([key, label]) => (
                 <div key={key}>
                   <span className="text-[10px] uppercase tracking-widest text-editorial-gray-light mb-1 block">

@@ -7,8 +7,6 @@ const tipos = [
   "Vestidos",
   "Faldas",
   "Polerones",
-  "Accesorios",
-  "Calzado",
 ];
 
 function FiltroTipoRopa({ selected, onChange }) {

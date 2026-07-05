@@ -1,0 +1,25 @@
+name: Cron - Scrapers
+
+on:
+  schedule:
+    # Every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      stores:
+        description: "Comma-separated stores to scrape (empty = all)"
+        required: false
+        default: ""
+
+jobs:
+  run-scrapers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run scrapers via API
+        run: |
+          STORES="${{ github.event.inputs.stores }}"
+          curl -s -X POST \
+            "${{ secrets.API_URL }}/api/v1/scrapers/run" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.API_KEY }}" \
+            -d "{\"stores\": \"${STORES}\"}" | jq .

@@ -1,4 +1,10 @@
-"""Maui scraper - Magento 2 HTML scraping with correct domain."""
+"""Maui scraper - Magento 2 HTTP direct scraping.
+
+Maui & Sons Chile uses Magento 2. All CSS selectors verified:
+  .product-item-info, .product-item-link, .price-box .price,
+  [data-price-amount], .product-image-photo, [data-product-id],
+  .swatch-option.text[data-option-label]
+"""
 
 import re
 import httpx
@@ -28,14 +34,48 @@ class MauiScraper:
 
     BASE_URL = "https://mauiandsons.cl"
 
-    # Magento 2 category paths (verified working)
+    # Magento 2 category paths → frontend category mapping
     CATEGORY_PATHS = {
-        "hombre-vestuario": "/hombre/vestuario/poleras.html",
+        # Poleras
         "hombre-poleras": "/hombre/vestuario/poleras.html",
-        "mujer-vestuario": "/mujer/vestuario/poleras.html",
         "mujer-poleras": "/mujer/vestuario/poleras.html",
-        "hombre-parkas": "/hombre/vestuario/parkas-y-chaquetas.html",
-        "mujer-parkas": "/mujer/vestuario/parkas-y-chaquetas.html",
+        # Camisas
+        "hombre-camisas": "/hombre/vestuario/camisas.html",
+        "mujer-camisas": "/mujer/vestuario/camisas.html",
+        # Pantalones
+        "hombre-pantalones": "/hombre/vestuario/pantalones.html",
+        "mujer-pantalones": "/mujer/vestuario/pantalones.html",
+        # Jeans
+        "hombre-jeans": "/hombre/vestuario/jeans.html",
+        "mujer-jeans": "/mujer/vestuario/jeans.html",
+        # Shorts
+        "hombre-shorts": "/hombre/vestuario/shorts.html",
+        "mujer-shorts": "/mujer/vestuario/shorts.html",
+        # Chaquetas / Parkas
+        "hombre-chaquetas": "/hombre/vestuario/parkas-y-chaquetas.html",
+        "mujer-chaquetas": "/mujer/vestuario/parkas-y-chaquetas.html",
+        # Vestidos
+        "mujer-vestidos": "/mujer/vestuario/vestidos.html",
+        # Faldas
+        "mujer-faldas": "/mujer/vestuario/faldas.html",
+        # Polerones / Buzos
+        "hombre-polerones": "/hombre/vestuario/polerones.html",
+        "mujer-polerones": "/mujer/vestuario/polerones.html",
+    }
+
+    # Map internal slugs to frontend categories
+    CATEGORY_MAP = {
+        "poleras": "Poleras",
+        "camisas": "Camisas",
+        "pantalones": "Pantalones",
+        "jeans": "Pantalones",
+        "shorts": "Shorts",
+        "chaquetas": "Chaquetas",
+        "parkas": "Chaquetas",
+        "vestidos": "Vestidos",
+        "faldas": "Faldas",
+        "polerones": "Polerones",
+        "buzos": "Polerones",
     }
 
     def __init__(self):
@@ -50,6 +90,21 @@ class MauiScraper:
             },
         )
 
+    def _infer_gender(self, path: str) -> str:
+        """Infer gender from URL path."""
+        if "/hombre/" in path:
+            return "hombre"
+        elif "/mujer/" in path:
+            return "mujer"
+        return ""
+
+    def _map_category(self, slug: str) -> str:
+        """Map internal slug to frontend category."""
+        for key, category in self.CATEGORY_MAP.items():
+            if key in slug.lower():
+                return category
+        return ""
+
     async def get_page(self, url: str) -> Optional[BeautifulSoup]:
         """Fetch a page and return BeautifulSoup object."""
         try:
@@ -63,14 +118,20 @@ class MauiScraper:
     async def scrape_category(
         self, category: str, max_items: int = 50
     ) -> list[MauiProduct]:
-        """Scrape products from a category page."""
-        # Resolve category path
+        """Scrape products from a category page.
+
+        category: internal slug like "hombre-poleras" or "mujer-chaquetas"
+        """
         path = self.CATEGORY_PATHS.get(category, f"/{category}.html")
         url = f"{self.BASE_URL}{path}"
 
         soup = await self.get_page(url)
         if not soup:
             return []
+
+        gender = self._infer_gender(path)
+        frontend_category = self._map_category(category)
+        display_category = f"{frontend_category} {gender}".strip() if frontend_category else category
 
         # Magento 2 product list selectors
         items = (
@@ -82,7 +143,7 @@ class MauiScraper:
         products = []
         for item in items[:max_items]:
             try:
-                product = self._parse_product(item, category)
+                product = self._parse_product(item, display_category)
                 if product:
                     products.append(product)
             except Exception:
@@ -112,7 +173,7 @@ class MauiScraper:
 
             for item in items[:max_items]:
                 try:
-                    product = self._parse_product(item, "search")
+                    product = self._parse_product(item, query)
                     if product:
                         products.append(product)
                 except Exception:

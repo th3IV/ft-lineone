@@ -91,14 +91,11 @@ def _extract_garment_category(product) -> str:
         combined = " ".join([t.lower() for t in tags if isinstance(t, str)])
     combined += f" {name} {category}"
 
-    # Shoes
-    if any(k in combined for k in ["shoe", "sneaker", "boot", "sandal", "slipper", "tenis", "zapatilla"]):
-        return "shoes"
     # Full body (CHECK FIRST — "vest" is substring of "vestido")
     if any(k in combined for k in ["dress", "suit", "overalls", "jumpsuit", "vestido", "enterizo", "mono"]):
         return "full_body"
     # Lower body
-    if any(k in combined for k in ["pant", "jean", "skirt", "trouser", "short", "legging", "bota", "falda", "bermuda", "cargo"]):
+    if any(k in combined for k in ["pant", "jean", "skirt", "trouser", "short", "legging", "falda", "bermuda", "cargo"]):
         return "lower_body"
     # Upper body
     if any(k in combined for k in ["shirt", "blouse", "polo", "sweater", "hoodie", "jacket", "vest", "top", "camisa", "polera", "polerón", "abrig", "chaqueta", "suéter", "cropped"]):
@@ -166,6 +163,71 @@ async def prefetch_garment(
         )
 
     return {"public_url": public_url, "status": "uploaded"}
+
+
+@router.post("/debug-garment")
+async def debug_garment(
+    request_body: dict,
+    request: Request,
+):
+    """Test whether YouCam accepts a garment URL.
+
+    Sends the garment URL to YouCam with a transparent 1x1 PNG placeholder
+    user image. Returns whether the task was accepted or rejected, and why.
+    No auth required (debug endpoint).
+    """
+    garment_url = request_body.get("garment_url")
+    if not garment_url:
+        raise HTTPException(status_code=400, detail="garment_url is required")
+
+    env = getattr(request.app.state, "env", None)
+    if not env:
+        raise HTTPException(status_code=500, detail="Service unavailable")
+
+    # Use a transparent 1x1 PNG as placeholder user image
+    placeholder_user_url = "https://upload.wikimedia.org/wikipedia/commons/c/c0/Transparent_base64.png"
+
+    try:
+        # Upload garment to freeimage.host first
+        from services.image_upload import upload_garment_image
+        garment_public_url = await upload_garment_image(garment_url)
+    except Exception as e:
+        return {
+            "accepted": False,
+            "error": f"Garment upload to freeimage.host failed: {str(e)}",
+            "garment_url": garment_url,
+            "garment_public_url": None,
+        }
+
+    try:
+        youcam = YouCamService(env=env)
+        task_id = await youcam.create_task(
+            src_url=placeholder_user_url,
+            ref_url=garment_public_url,
+            garment_category="auto",
+        )
+
+        # Poll immediately to check if task was rejected
+        import asyncio
+        await asyncio.sleep(2)
+        result = await youcam.poll_task(task_id)
+
+        return {
+            "accepted": result["status"] != "failed",
+            "task_id": task_id,
+            "status": result["status"],
+            "error": result.get("error"),
+            "garment_url": garment_url,
+            "garment_public_url": garment_public_url,
+        }
+
+    except Exception as e:
+        return {
+            "accepted": False,
+            "error": f"YouCam API error: {str(e)}",
+            "garment_url": garment_url,
+            "garment_public_url": garment_public_url,
+        }
 
 
 @router.get("/image/{vton_id}")

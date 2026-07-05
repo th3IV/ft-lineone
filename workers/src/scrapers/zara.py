@@ -34,32 +34,52 @@ SECTION_IDS = {
 }
 
 # Leaf subcategories we want to scrape (clothing only, no accessories)
+# Verified against live API — some old IDs were stale
 LEAF_CATEGORIES = {
     "mujer": [
-        2509383,   # VESTIDOS | MONOS
         2509382,   # VESTIDOS
         2509505,   # CAMISETAS MANGA CORTA
         2509497,   # CAMISETAS MANGA LARGA
-        2510965,   # CAMISETAS
         2509523,   # PANTALONES
         2509574,   # JEANS
-        2509558,   # FALDAS
-        2509611,   # ABRIGOS Y MONOS
-        2509608,   # ABRIGOS
-        2509548,   # FUNDAS
+        2725920,   # FALDAS|SHORTS
+        2510408,   # CAZADORAS|CHAQUETAS
+        2510443,   # ABRIGOS|TRENCH
         2509635,   # SUDADERAS
         2509623,   # BUZOS
     ],
     "hombre": [
         2510635,   # CAMISETAS
-        2510640,   # POLOS
-        2510650,   # PANTALONES
-        2510657,   # JEANS
-        2510670,   # ABRIGOS
-        2510664,   # SUDADERAS
-        2510673,   # BUZOS
-        2510695,   # CHAQUETAS
+        2510691,   # POLOS
+        2510591,   # PANTALONES
+        2510594,   # JEANS
+        2510654,   # ABRIGOS
+        2510658,   # CAZADORAS|CHAQUETAS
+        2510703,   # POLERONES
     ],
+}
+
+# Map Zara familyName to frontend categories
+CATEGORY_MAP = {
+    "VESTIDOS": "Vestidos",
+    "VESTIDOS | MONOS": "Vestidos",
+    "MONOS": "Vestidos",
+    "CAMISETAS": "Poleras",
+    "CAMISETAS MANGA CORTA": "Poleras",
+    "CAMISETAS MANGA LARGA": "Poleras",
+    "POLOS": "Poleras",
+    "PANTALONES": "Pantalones",
+    "JEANS": "Pantalones",
+    "FALDAS": "Faldas",
+    "SHORTS": "Shorts",
+    "CHAQUETAS": "Chaquetas",
+    "CAZADORAS": "Chaquetas",
+    "ABRIGOS": "Chaquetas",
+    "ABRIGOS | TRENCH": "Chaquetas",
+    "TRENCH": "Chaquetas",
+    "SUDADERAS": "Polerones",
+    "BUZOS": "Polerones",
+    "POLERONES": "Polerones",
 }
 
 
@@ -106,7 +126,7 @@ class ZaraScraper:
             pass
         return []
 
-    def _parse_products_from_groups(self, product_groups: list[dict], category: str) -> list[ZaraProduct]:
+    def _parse_products_from_groups(self, product_groups: list[dict], gender: str) -> list[ZaraProduct]:
         """Extract ZaraProduct objects from productGroups response."""
         products = []
         seen_ids = set()
@@ -117,14 +137,14 @@ class ZaraScraper:
                 # commercialComponents contains the actual product data
                 components = element.get("commercialComponents", [])
                 for comp in components:
-                    product = self._parse_component(comp, category)
+                    product = self._parse_component(comp, gender)
                     if product and product.external_id not in seen_ids:
                         seen_ids.add(product.external_id)
                         products.append(product)
 
         return products
 
-    def _parse_component(self, comp: dict, category: str) -> Optional[ZaraProduct]:
+    def _parse_component(self, comp: dict, gender: str) -> Optional[ZaraProduct]:
         """Parse a single commercialComponent into a ZaraProduct."""
         try:
             # Skip non-product types (bundles, marketing, etc.)
@@ -155,8 +175,6 @@ class ZaraScraper:
             else:
                 price = 0.0
 
-            # Price is already in CLP (Chilean pesos), no conversion needed
-
             # Image URL from detail.colors[].xmedia[]
             image_url = ""
             detail = comp.get("detail", {})
@@ -170,16 +188,27 @@ class ZaraScraper:
                     if url_template:
                         image_url = url_template.replace("{width}", "800")
 
-            # SEO URL
+            # SEO URL — use seoProductId for correct URL
             seo = comp.get("seo", {})
             keyword = seo.get("keyword", "")
+            seo_product_id = seo.get("seoProductId", "")
             seo_url = seo.get("seoUrl", "")
-            if seo_url:
+
+            if seo_url and seo_product_id:
                 original_url = f"https://www.zara.com{seo_url}"
-            elif keyword:
-                original_url = f"{self.BASE_URL}/{keyword}-p{product_id}.html"
-            else:
+            elif keyword and seo_product_id:
+                original_url = f"{self.BASE_URL}/{keyword}-p{seo_product_id}.html"
+            elif product_id:
                 original_url = f"{self.BASE_URL}/search?search={name.replace(' ', '+')}"
+            else:
+                original_url = ""
+
+            # Sizes from detail.sizes
+            sizes = []
+            for s in detail.get("sizes", []):
+                size_name = s.get("name", "")
+                if size_name:
+                    sizes.append(size_name)
 
             # Colors
             color_names = []
@@ -187,6 +216,12 @@ class ZaraScraper:
                 cname = c.get("name", "")
                 if cname:
                     color_names.append(cname)
+
+            # Category from familyName
+            family_name = comp.get("familyName", "")
+            category = CATEGORY_MAP.get(family_name, family_name)
+            if not category:
+                category = gender
 
             # Availability
             availability = True
@@ -201,7 +236,7 @@ class ZaraScraper:
                 currency="CLP",
                 image_url=image_url,
                 category=category,
-                sizes=[],
+                sizes=sizes,
                 colors=color_names,
                 description=detail.get("description", ""),
                 availability=availability,
