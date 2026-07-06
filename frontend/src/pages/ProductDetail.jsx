@@ -2,19 +2,15 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Sparkles, Heart, Share2, ExternalLink } from "lucide-react";
+import { ArrowLeft, Sparkles, Heart, ExternalLink } from "lucide-react";
 import { fetchProductById } from "../store/productSlice";
-import { fetchRecommendations } from "../store/recommendationSlice";
 import { toggleFavorite, fetchFavorites } from "../store/favoritesSlice";
 import { openVtonModal } from "../store/uiSlice";
-import ProductGrid from "../components/ProductGrid";
-import RevealOnScroll from "../components/RevealOnScroll";
 
 function ProductDetail() {
   const { id } = useParams();
   const dispatch = useDispatch();
   const { selectedProduct, loading } = useSelector((state) => state.products);
-  const { recommendations } = useSelector((state) => state.recommendations);
   const { favorites } = useSelector((state) => state.favorites);
   const { isAuthenticated } = useSelector((state) => state.user);
   const [selectedSize, setSelectedSize] = useState("");
@@ -25,7 +21,6 @@ function ProductDetail() {
 
   useEffect(() => {
     dispatch(fetchProductById(id));
-    dispatch(fetchRecommendations(id));
     if (isAuthenticated) {
       dispatch(fetchFavorites());
     }
@@ -49,10 +44,6 @@ function ProductDetail() {
     if (isAuthenticated) {
       dispatch(toggleFavorite(id));
     }
-  };
-
-  const handleRecommendationTryOn = (product) => {
-    dispatch(openVtonModal(product));
   };
 
   if (loading || !selectedProduct) {
@@ -254,21 +245,6 @@ function ProductDetail() {
           </div>
         </motion.div>
       </div>
-
-      {/* Recommendations */}
-      {recommendations.length > 0 && (
-        <RevealOnScroll className="mt-20">
-          <div className="mb-10">
-            <p className="editorial-label mb-3">Recomendado por IA</p>
-            <h2 className="section-title">Te puede interesar</h2>
-          </div>
-          <ProductGrid
-            products={recommendations}
-            loading={false}
-            onTryOn={handleRecommendationTryOn}
-          />
-        </RevealOnScroll>
-      )}
     </div>
   );
 }

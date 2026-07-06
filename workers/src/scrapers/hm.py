@@ -1,10 +1,10 @@
-"""H&M Chile scraper — VTEX Intelligent Search API.
+"""H&M Chile scraper — VTEX catalog_system products search API.
 
-H&M Chile (cl.hm.com) runs on VTEX + FastStore (Next.js).
-VTEX exposes a public Intelligent Search API that returns structured JSON.
+H&M Chile (cl.hm.com) runs on VTEX. The catalog_system API returns proper
+search results (not the limited intelligent-search endpoint).
 
 Endpoint:
-  GET https://cl.hm.com/api/io/_v/api/intelligent-search/product_search/{query}?count=30
+  GET /api/catalog_system/pub/products/search/?q={query}&_from=0&_to=29
 """
 
 import json
@@ -26,43 +26,45 @@ class HMProduct:
     description: str
     availability: bool
     original_url: str
+    image_urls: list[str] = field(default_factory=list)
 
 
 class HMScraper:
-    """Scraper for H&M Chile (cl.hm.com) using VTEX Intelligent Search API."""
+    """Scraper for H&M Chile (cl.hm.com) using VTEX catalog_system API."""
 
     BASE_URL = "https://cl.hm.com"
-    SEARCH_URL = "https://cl.hm.com/api/io/_v/api/intelligent-search/product_search/{query}?count=30"
+    SEARCH_URL = "https://cl.hm.com/api/catalog_system/pub/products/search/?q={query}&_from=0&_to={to}"
 
-    # Map VTEX product categories / keywords to frontend categories
     CATEGORY_KEYWORDS = {
-        "polera": "Poleras",
-        "camiseta": "Poleras",
-        "remera": "Poleras",
-        "t-shirt": "Poleras",
-        "camisa": "Camisas",
-        "blusa": "Camisas",
-        "shirt": "Camisas",
-        "pantalon": "Pantalones",
-        "pantalón": "Pantalones",
-        "jean": "Pantalones",
-        "jeans": "Pantalones",
-        "bermuda": "Shorts",
-        "short": "Shorts",
-        "chaqueta": "Chaquetas",
-        "abrigo": "Chaquetas",
-        "parka": "Chaquetas",
-        "blazer": "Chaquetas",
-        "vestido": "Vestidos",
-        "dress": "Vestidos",
-        "falda": "Faldas",
-        "skirt": "Faldas",
-        "poleron": "Polerones",
-        "polerón": "Polerones",
-        "buzo": "Polerones",
-        "sudadera": "Polerones",
-        "sweatshirt": "Polerones",
-        "hoodie": "Polerones",
+        "POLERA": "Poleras",
+        "POLERAS": "Poleras",
+        "TOPS": "Poleras",
+        "REMERA": "Poleras",
+        "CAMISETA": "Poleras",
+        "T-SHIRT": "Poleras",
+        "CAMISA": "Camisas",
+        "BLUSA": "Camisas",
+        "SHIRT": "Camisas",
+        "PANTALON": "Pantalones",
+        "PANTALONES": "Pantalones",
+        "JEAN": "Pantalones",
+        "JEANS": "Pantalones",
+        "BERMUDA": "Shorts",
+        "SHORT": "Shorts",
+        "CHAQUETA": "Chaquetas",
+        "ABRIGO": "Chaquetas",
+        "PARKA": "Chaquetas",
+        "BLAZER": "Chaquetas",
+        "VESTIDO": "Vestidos",
+        "DRESS": "Vestidos",
+        "FALDA": "Faldas",
+        "SKIRT": "Faldas",
+        "POLERON": "Polerones",
+        "POLERONES": "Polerones",
+        "BUZO": "Polerones",
+        "SUDADERA": "Polerones",
+        "SWEATSHIRT": "Polerones",
+        "HOODIE": "Polerones",
     }
 
     def __init__(self):
@@ -72,7 +74,7 @@ class HMScraper:
         if self._client is None:
             import httpx
             self._client = httpx.AsyncClient(
-                timeout=20.0,
+                timeout=30.0,
                 follow_redirects=True,
                 headers={
                     "User-Agent": (
@@ -87,31 +89,35 @@ class HMScraper:
         return self._client
 
     def _infer_category(self, text: str) -> str:
-        """Infer frontend category from product name or category tree."""
-        t = text.lower()
+        """Infer frontend category from category path text."""
+        t = text.upper()
         for keyword, category in self.CATEGORY_KEYWORDS.items():
             if keyword in t:
                 return category
         return ""
 
     async def search_products(self, query: str, max_items: int = 30) -> list[HMProduct]:
-        """Search products via H&M VTEX Intelligent Search API."""
+        """Search products via H&M VTEX catalog_system API."""
         client = await self._get_client()
-        url = self.SEARCH_URL.format(query=query)
+        to = max_items - 1 if max_items > 0 else 29
+        url = self.SEARCH_URL.format(query=query, to=to)
         products = []
 
         try:
             resp = await client.get(url)
-            if resp.status_code != 200:
+            if resp.status_code not in (200, 206):
+                print(f"[hm] Search '{query}' returned status {resp.status_code}")
                 return []
             data = resp.json()
-            items = data.get("products", [])
-            for item in items[:max_items]:
+            if not isinstance(data, list):
+                print(f"[hm] Search '{query}' returned non-list: {type(data)}")
+                return []
+            for item in data[:max_items]:
                 product = self._parse_product(item, query)
                 if product and product.name:
                     products.append(product)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[hm] Error searching '{query}': {type(e).__name__}: {e}")
 
         return products[:max_items]
 
@@ -120,52 +126,72 @@ class HMScraper:
         return await self.search_products(category, max_items)
 
     def _parse_product(self, item: dict, query: str) -> Optional[HMProduct]:
-        """Parse a product from VTEX search response."""
+        """Parse a product from VTEX catalog_system response."""
         if not isinstance(item, dict):
             return None
 
-        # Product ID (VTEX uses productId or item.productId)
-        product_id = str(item.get("productId", "") or item.get("id", ""))
+        product_id = str(item.get("productId", "") or item.get("productReference", ""))
         if not product_id:
             return None
 
-        # Name
-        name = item.get("productName", "") or item.get("name", "")
+        name = item.get("productName", "")
         if not name:
             return None
 
-        # Price (VTEX items[0].sellingPrice or items[0].price)
+        # Price from items[0].sellers[0].commertialOffer.Price
         price = 0.0
         items_list = item.get("items", [])
         if items_list and isinstance(items_list, list):
             first_item = items_list[0]
-            selling_price = first_item.get("sellingPrice", 0) or first_item.get("price", 0)
-            try:
-                price = float(selling_price) / 100  # VTEX prices in cents
-            except (ValueError, TypeError):
-                pass
+            sellers = first_item.get("sellers", [])
+            if sellers and isinstance(sellers, list):
+                offer = sellers[0].get("commertialOffer", {})
+                offer_price = offer.get("Price", 0) or offer.get("ListPrice", 0) or offer.get("spotPrice", 0)
+                try:
+                    price = float(offer_price)
+                except (ValueError, TypeError):
+                    pass
 
-        # Image
+        # Image + all images + colors from items
         image_url = ""
-        items_list = item.get("items", [])
+        image_urls = []
+        colors = []
         if items_list and isinstance(items_list, list):
-            first_item = items_list[0]
-            images = first_item.get("images", [])
-            if images and isinstance(images, list):
-                image_url = images[0].get("imageUrl", "")
+            for item_obj in items_list:
+                if not isinstance(item_obj, dict):
+                    continue
+                images = item_obj.get("images", [])
+                if images and isinstance(images, list):
+                    for img in images:
+                        if isinstance(img, dict):
+                            img_url = img.get("imageUrl", "")
+                            if img_url and img_url not in image_urls:
+                                image_urls.append(img_url)
 
-        # URL
-        link = item.get("link", "") or item.get("linkText", "")
-        original_url = f"{self.BASE_URL}{link}" if link and not link.startswith("http") else link
+                # Color heuristics: item name is usually the color variant
+                sku_name = item_obj.get("name", "")
+                if sku_name and sku_name.lower() != name.lower() and sku_name not in colors:
+                    colors.append(sku_name)
 
-        # Category from categoryTree
-        category_tree = item.get("categories", [])
+            if image_urls:
+                image_url = image_urls[0]
+
+        # URL — full URL already provided
+        original_url = item.get("link", "") or f"{self.BASE_URL}/{product_id}/p"
+
+        # Category + Gender from categories path array
         category = ""
-        if category_tree and isinstance(category_tree, list):
-            # Use last category in tree (most specific)
-            for cat in category_tree:
-                cat_name = cat.get("name", "") if isinstance(cat, dict) else str(cat)
-                mapped = self._infer_category(cat_name)
+        gender = ""
+        categories = item.get("categories", [])
+        if categories and isinstance(categories, list):
+            path_text = " ".join(str(c).upper() for c in categories)
+            if "HOMBRE" in path_text or "MEN" in path_text:
+                gender = "hombre"
+            elif "MUJER" in path_text or "WOMEN" in path_text or "LADIES" in path_text:
+                gender = "mujer"
+            for cat in categories:
+                cat_str = str(cat).upper()
+                mapped = self._infer_category(cat_str)
                 if mapped:
                     category = mapped
                     break
@@ -173,34 +199,37 @@ class HMScraper:
         if not category:
             category = self._infer_category(name) or self._infer_category(query)
 
-        # Gender from category tree or query
-        gender = ""
-        q = query.lower()
-        if "hombre" in q or "man" in q:
-            gender = "hombre"
-        elif "mujer" in q or "woman" in q:
-            gender = "mujer"
+        if not gender:
+            q = query.lower()
+            if "hombre" in q or "men" in q:
+                gender = "hombre"
+            elif "mujer" in q or "women" in q:
+                gender = "mujer"
 
         display_category = f"{category} {gender}".strip() if category else query
 
-        # Sizes from items[0].sellers[0].commertialOffer.Availabilities
+        # Sizes from items[].nameComplete
         sizes = []
-        colors = []
         if items_list and isinstance(items_list, list):
             for item_obj in items_list:
                 if not isinstance(item_obj, dict):
                     continue
-                # Size from item name or specifications
                 size_name = item_obj.get("nameComplete", "") or item_obj.get("name", "")
                 sellers = item_obj.get("sellers", [])
                 if sellers and isinstance(sellers, list):
                     offer = sellers[0].get("commertialOffer", {})
                     avail = offer.get("AvailableQuantity", 0)
                     if avail > 0 and size_name:
-                        # Extract size from name (e.g., "POLERA ALGODON REGULAR - M")
+                        # Try " - " separator first (VTEX classic format)
                         parts = size_name.split(" - ")
                         if len(parts) > 1:
-                            sizes.append(parts[-1].strip())
+                            size_val = parts[-1].strip()
+                        else:
+                            # Fallback: extract size from name vs productName
+                            # name is usually "ProductName Size" (e.g. "Trenchcoat XXS")
+                            size_val = size_name.replace(name, "").strip()
+                        if size_val and size_val not in sizes:
+                            sizes.append(size_val)
 
         # Availability
         availability = True
@@ -221,9 +250,10 @@ class HMScraper:
             category=display_category,
             sizes=sizes,
             colors=colors,
-            description="",
+            description=item.get("description", "") or item.get("metaTagDescription", ""),
             availability=availability,
             original_url=original_url,
+            image_urls=image_urls,
         )
 
     async def close(self):

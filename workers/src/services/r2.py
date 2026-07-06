@@ -29,7 +29,23 @@ async def download_image_as_bytes(url: str) -> bytes:
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
         resp = await client.get(url)
         resp.raise_for_status()
-        return resp.bytes
+        return resp.content
+
+
+async def upload_profile_image(env, user_id: str, image_bytes: bytes, content_type: str = "image/jpeg") -> str:
+    """Upload user profile image to R2 and return the public URL.
+
+    Stores at: profiles/{user_id}/avatar.jpg
+    """
+    key = f"profiles/{user_id}/avatar.jpg"
+
+    await env.BUCKET.put(
+        key,
+        image_bytes,
+        http_metadata={"contentType": content_type},
+    )
+
+    return f"{R2_PUBLIC_BASE}/{key}"
 
 
 async def save_vton_output_to_r2(env, user_id: str, vton_id: str, output_url: str) -> str:

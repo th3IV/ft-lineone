@@ -29,6 +29,7 @@ async def list_products(
     clothing_type: Optional[str] = None,
     size: Optional[str] = None,
     color: Optional[str] = None,
+    sort: Optional[str] = None,
 ):
     """List products with filters and pagination."""
     db = get_db(request)
@@ -52,6 +53,8 @@ async def list_products(
         filters["size"] = size
     if color:
         filters["color"] = color
+    if sort:
+        filters["sort"] = sort
 
     products, total = await db.get_products(filters, page, limit)
     total_pages = math.ceil(total / limit) if limit > 0 else 0

@@ -9,6 +9,8 @@ Queries:
 """
 
 import json
+import re
+import traceback
 from typing import Optional
 from dataclasses import dataclass, field
 
@@ -27,6 +29,7 @@ class MauiProduct:
     description: str
     availability: bool
     original_url: str
+    image_urls: list[str] = field(default_factory=list)
 
 
 # Map Maui category url_paths to frontend categories
@@ -150,9 +153,29 @@ class MauiScraper:
         try:
             resp = await client.post(self.GRAPHQL_URL, json=payload)
             if resp.status_code == 200:
-                return resp.json()
-        except Exception:
-            pass
+                data = resp.json()
+                if data.get("errors"):
+                    print(json.dumps({
+                        "event": "maui_graphql_errors",
+                        "errors": data["errors"],
+                        "variables": variables,
+                    }))
+                return data
+            else:
+                print(json.dumps({
+                    "event": "maui_graphql_status",
+                    "status": resp.status_code,
+                    "body_preview": resp.text[:500],
+                    "variables": variables,
+                }))
+        except Exception as e:
+            print(json.dumps({
+                "event": "maui_graphql_exception",
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "variables": variables,
+            }))
+
         return None
 
     async def search_products(self, query: str, max_items: int = 30) -> list[MauiProduct]:
@@ -226,11 +249,26 @@ class MauiScraper:
         except (ValueError, TypeError):
             pass
 
-        # Image
+        # Image + all images
         image_url = ""
+        image_urls = []
         image_data = item.get("image", {})
         if isinstance(image_data, dict):
             image_url = image_data.get("url", "")
+            if image_url:
+                image_urls.append(image_url)
+
+        # Variant images (if any)
+        variants = item.get("variants", [])
+        if isinstance(variants, list):
+            for v in variants:
+                if isinstance(v, dict):
+                    v_product = v.get("product", {})
+                    v_image = v_product.get("image", {})
+                    if isinstance(v_image, dict):
+                        v_url = v_image.get("url", "")
+                        if v_url and v_url not in image_urls:
+                            image_urls.append(v_url)
 
         # URL
         original_url = f"{self.BASE_URL}/{url_key}.html" if url_key else ""
@@ -277,6 +315,7 @@ class MauiScraper:
             description=description,
             availability=availability,
             original_url=original_url,
+            image_urls=image_urls,
         )
 
     async def close(self):

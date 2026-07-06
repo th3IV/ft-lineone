@@ -38,6 +38,7 @@ REGLAS ESTRICTAS (NUNCA VIOLAR):
 6. Responde SIEMPRE en español, de forma concisa y practica.
 7. Cuando recomiendes algo, menciona el nombre del producto y la tienda de nuestro catalogo.
 8. Si el usuario pregunta por precios, responde solo con los precios que veas en la informacion proporcionada.
+9. Formato de respuesta OBLIGATORIO: JSON con exactamente esta estructura {"advice": "texto del consejo en español", "products": [{"product_id": "...", "reason": "..."}]}. Los product_ids SOLO pueden venir de la lista "Productos disponibles". Si no hay productos adecuados, usa una lista vacia [].
 """
 
 # Patterns that suggest prompt injection attempts
@@ -157,6 +158,71 @@ class LLMService:
         except Exception:
             return "Servicio de recomendaciones no disponible temporalmente."
 
+    async def get_style_advice_with_products(
+        self,
+        product_name: str,
+        product_category: str,
+        user_question: str,
+        user_context: str = "",
+        available_products: list[dict] = None,
+        user_id: Optional[str] = None,
+    ) -> tuple[str, list[dict]]:
+        """Get style advice plus recommended products for the chatbot."""
+        try:
+            sanitized_question = self._sanitize_input(user_question)
+            if sanitized_question != user_question:
+                self._log_injection_attempt(user_id, user_question)
+
+            prompt_parts = [
+                f"Producto: {product_name} (categoría: {product_category})",
+                f"Pregunta del usuario: {sanitized_question}",
+            ]
+            if user_context:
+                prompt_parts.append(user_context)
+
+            if available_products:
+                products_text = json.dumps(
+                    [
+                        {
+                            "id": p["id"],
+                            "name": p["name"],
+                            "store": p["store"],
+                            "price": p["price"],
+                            "category": p.get("category", ""),
+                            "colors": p.get("colors", []),
+                        }
+                        for p in available_products[:20]
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                prompt_parts.append(f"\nProductos disponibles (SOLO puedes recomendar de esta lista):\n{products_text}")
+
+            prompt_parts.append(
+                "\n\nProporciona un consejo de estilo conciso y útil en español. "
+                "Si recomiendas productos, inclúyelos en el campo 'products' del JSON con su product_id y una razón breve."
+            )
+
+            result = await self.ai.run(
+                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                {
+                    "messages": [
+                        {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+                        {"role": "user", "content": "\n".join(prompt_parts)},
+                    ],
+                    "max_tokens": 1024,
+                    "temperature": 0.7,
+                },
+            )
+
+            if result and "response" in result:
+                return self._parse_style_advice_response(result["response"], available_products or [])
+            else:
+                return "Lo siento, no pude generar un consejo en este momento.", []
+
+        except Exception:
+            return "Servicio de recomendaciones no disponible temporalmente.", []
+
     # ── Security ──────────────────────────────────────────────
 
     def _sanitize_input(self, text: str) -> str:
@@ -251,18 +317,64 @@ class LLMService:
             if isinstance(data, list):
                 recommendations = []
                 product_ids = {p["id"] for p in available_products}
+                seen_ids = set()
 
                 for item in data:
                     if isinstance(item, dict) and "product_id" in item:
+                        pid = item["product_id"]
                         # Only include products that actually exist in the catalog
-                        if item["product_id"] in product_ids:
+                        if pid in product_ids and pid not in seen_ids:
                             recommendations.append(item)
+                            seen_ids.add(pid)
                 return recommendations
 
         except (json.JSONDecodeError, IndexError):
             pass
 
         return self._fallback_recommendations(available_products)
+
+    def _parse_style_advice_response(
+        self, llm_response: str, available_products: list[dict]
+    ) -> tuple[str, list[dict]]:
+        """Parse chat response into advice text and product recommendations."""
+        try:
+            if "```json" in llm_response:
+                json_str = llm_response.split("```json")[1].split("```")[0].strip()
+            elif "```" in llm_response:
+                json_str = llm_response.split("```")[1].split("```")[0].strip()
+            else:
+                json_str = llm_response.strip()
+
+            data = json.loads(json_str)
+
+            if isinstance(data, dict):
+                advice = str(data.get("advice", "")).strip()
+                products = data.get("products", [])
+
+                if not isinstance(products, list):
+                    products = []
+
+                product_ids = {p["id"] for p in available_products}
+                seen_ids = set()
+                valid_products = []
+
+                for item in products:
+                    if isinstance(item, dict) and "product_id" in item:
+                        pid = item["product_id"]
+                        if pid in product_ids and pid not in seen_ids:
+                            valid_products.append(item)
+                            seen_ids.add(pid)
+
+                if not advice:
+                    advice = "Aquí tienes algunas opciones que podrían interesarte:"
+
+                return advice, valid_products
+
+        except (json.JSONDecodeError, IndexError):
+            pass
+
+        # Fallback: treat entire response as plain advice
+        return llm_response.strip() or "Lo siento, no pude generar un consejo en este momento.", []
 
     def _fallback_recommendations(self, available_products: list[dict]) -> list[dict]:
         """Simple fallback recommendations based on popularity/price."""

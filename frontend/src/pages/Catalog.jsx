@@ -33,6 +33,7 @@ function Catalog() {
     if (filters.minPrice) params.min_price = filters.minPrice;
     if (filters.maxPrice) params.max_price = filters.maxPrice;
     if (filters.query) params.q = filters.query;
+    if (filters.sort) params.sort = filters.sort;
     params.page = pagination.page;
     params.limit = 20;
     dispatch(fetchProducts(params));

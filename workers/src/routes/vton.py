@@ -105,7 +105,7 @@ def _extract_garment_category(product) -> str:
 
 
 @router.post("/upload")
-async def upload_image(request_body: dict):
+async def upload_image(request_body: dict, user=Depends(require_auth)):
     """Accept base64 image, return data URL. Kept for frontend compatibility."""
     image = request_body.get("image")
     if not image:
@@ -169,6 +169,7 @@ async def prefetch_garment(
 async def debug_garment(
     request_body: dict,
     request: Request,
+    user=Depends(require_auth),
 ):
     """Test whether YouCam accepts a garment URL.
 

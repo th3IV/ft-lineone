@@ -5,6 +5,7 @@ import FiltroTipoRopa from "./FiltroTipoRopa";
 import FiltroTallas from "./FiltroTallas";
 import FiltroColores from "./FiltroColores";
 import FiltroPrecio from "./FiltroPrecio";
+import FiltroOrden from "./FiltroOrden";
 import BotonLimpiarFiltros from "./BotonLimpiarFiltros";
 
 function SidebarFiltros({
@@ -21,7 +22,8 @@ function SidebarFiltros({
     filters.minPrice ||
     filters.maxPrice ||
     filters.store ||
-    filters.query;
+    filters.query ||
+    filters.sort;
 
   return (
     <>
@@ -94,6 +96,13 @@ function SidebarFiltros({
               onFilterChange("minPrice", min);
               onFilterChange("maxPrice", max);
             }}
+          />
+
+          <div className="border-t border-editorial-black/5" />
+
+          <FiltroOrden
+            selected={filters.sort}
+            onChange={(val) => onFilterChange("sort", val)}
           />
 
           <BotonLimpiarFiltros hasFilters={hasFilters} onClick={onClearFilters} />

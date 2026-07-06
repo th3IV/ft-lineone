@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Upload, Sparkles, Loader2, AlertCircle } from "lucide-react";
+import { useSelector } from "react-redux";
 import { compressImage } from "../utils/compressImage";
 import { useVtonPolling } from "../hooks/useVtonPolling";
 
@@ -13,6 +14,7 @@ const PHOTO_TIPS = [
 
 function ModalVTON({ product, isOpen, onClose }) {
   const [userImage, setUserImage] = useState(null);
+  const { isAuthenticated } = useSelector((state) => state.user);
   const { loading, error, resultImage, progress, generate, reset } =
     useVtonPolling();
 
@@ -42,6 +44,10 @@ function ModalVTON({ product, isOpen, onClose }) {
 
   const handleGenerate = async () => {
     if (!userImage || !product) return;
+    if (!isAuthenticated) {
+      window.location.href = "/login";
+      return;
+    }
     await generate(product.id, userImage, product.image_url);
   };
 

@@ -27,6 +27,7 @@ class FalabellaProduct:
     description: str
     availability: bool
     original_url: str
+    image_urls: list[str] = field(default_factory=list)
 
 
 # Falabella GSCCategoryId → frontend category
@@ -100,10 +101,12 @@ class FalabellaScraper:
         try:
             resp = await client.get(url)
             if resp.status_code != 200:
+                print(f"[falabella] Search '{query}' returned status {resp.status_code}")
                 return []
             products = self._parse_ssr_data(resp.text, max_items, inferred_category)
-        except Exception:
-            pass
+            print(f"[falabella] Search '{query}' parsed {len(products)} products")
+        except Exception as e:
+            print(f"[falabella] Error searching '{query}': {type(e).__name__}: {e}")
 
         return products[:max_items]
 
@@ -237,6 +240,7 @@ class FalabellaScraper:
             description=f"Marca: {brand}" if brand else "",
             availability=availability,
             original_url=url,
+            image_urls=images,
         )
 
     async def close(self):

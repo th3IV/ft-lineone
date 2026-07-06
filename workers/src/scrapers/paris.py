@@ -10,6 +10,7 @@ Workflow:
   3. Unescape the JSON and parse LD+JSON product data
 """
 
+import asyncio
 import json
 import re
 from typing import Optional
@@ -30,6 +31,7 @@ class ParisProduct:
     description: str
     availability: bool
     original_url: str
+    image_urls: list[str] = field(default_factory=list)
 
 
 class ParisScraper:
@@ -95,6 +97,93 @@ class ParisScraper:
             return "mujer"
         return ""
 
+    def _extract_sizes_from_html(self, html: str) -> list[str]:
+        """Best-effort size extraction from a Paris product detail page."""
+        sizes = []
+        if not html:
+            return sizes
+
+        patterns = [
+            r'\\"name\\":\\"size\\",\\"value\\":\\"([^"\\]+)\\"',
+            r'"size"\s*:\s*\{[^}]*"value"\s*:\s*"([^"]+)"',
+            r'"sizes"\s*:\s*(\[[^\]]+\])',
+            r'"tallas"\s*:\s*(\[[^\]]+\])',
+            r'"Talla\s+([A-Z0-9]+)"',
+        ]
+
+        for pattern in patterns:
+            matches = re.findall(pattern, html)
+            for m in matches:
+                if isinstance(m, tuple):
+                    m = m[0]
+                if m.startswith("["):
+                    try:
+                        arr = json.loads(m)
+                        for val in arr:
+                            if isinstance(val, str) and val and val not in sizes:
+                                sizes.append(val)
+                    except json.JSONDecodeError:
+                        continue
+                elif m and m not in sizes:
+                    sizes.append(m)
+
+        return sizes
+
+    def _extract_colors_from_html(self, html: str) -> list[str]:
+        """Best-effort color extraction from a Paris product detail page."""
+        colors = []
+        if not html:
+            return colors
+
+        patterns = [
+            r'\\"name\\":\\"color\\",\\"value\\":\\"([^"\\]+)\\"',
+            r'"color"\s*:\s*\{[^}]*"value"\s*:\s*"([^"]+)"',
+            r'"colors"\s*:\s*(\[[^\]]+\])',
+            r'"colores"\s*:\s*(\[[^\]]+\])',
+            r'"Color\s+([A-Za-záéíóúÁÉÍÓÚñÑ]+)"',
+        ]
+
+        for pattern in patterns:
+            matches = re.findall(pattern, html)
+            for m in matches:
+                if isinstance(m, tuple):
+                    m = m[0]
+                if m.startswith("["):
+                    try:
+                        arr = json.loads(m)
+                        for val in arr:
+                            if isinstance(val, str) and val and val not in colors:
+                                colors.append(val)
+                    except json.JSONDecodeError:
+                        continue
+                elif m and m not in colors:
+                    colors.append(m)
+
+        return colors
+
+    async def _fetch_product_details(self, client, url: str) -> tuple[list[str], list[str]]:
+        """Fetch product detail page and extract sizes and colors."""
+        try:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                return (
+                    self._extract_sizes_from_html(resp.text),
+                    self._extract_colors_from_html(resp.text),
+                )
+        except Exception as e:
+            print(f"[paris] Error fetching detail {url}: {e}")
+        return [], []
+
+    async def _enrich_with_details(self, client, products: list[ParisProduct]) -> None:
+        """Enrich products with sizes and colors from their detail pages in parallel."""
+        tasks = [self._fetch_product_details(client, p.original_url) for p in products if p.original_url]
+        results = await asyncio.gather(*tasks)
+        for product, (sizes, colors) in zip(products, results):
+            if sizes:
+                product.sizes = sizes
+            if colors:
+                product.colors = colors
+
     async def search_products(self, query: str, max_items: int = 30) -> list[ParisProduct]:
         """Search products via Paris.cl HTTP search and parse RSC/LD+JSON."""
         client = await self._get_client()
@@ -104,10 +193,15 @@ class ParisScraper:
         try:
             resp = await client.get(url)
             if resp.status_code != 200:
+                print(f"[paris] Search '{query}' returned status {resp.status_code}")
                 return []
             products = self._parse_ssr_data(resp.text, query, max_items)
-        except Exception:
-            pass
+            # Best-effort size and color enrichment from product detail pages
+            if products:
+                await self._enrich_with_details(client, products)
+            print(f"[paris] Search '{query}' parsed {len(products)} products")
+        except Exception as e:
+            print(f"[paris] Error searching '{query}': {type(e).__name__}: {e}")
 
         return products[:max_items]
 
@@ -173,8 +267,9 @@ class ParisScraper:
                         continue
                     seen_ids.add(dedup_key)
 
-                    # Extract price from offers
+                    # Extract price and availability from offers
                     price = 0.0
+                    availability = True
                     offers = product_data.get("offers", {})
                     if isinstance(offers, dict):
                         price_val = offers.get("price", 0)
@@ -182,6 +277,19 @@ class ParisScraper:
                             price = float(price_val)
                         except (ValueError, TypeError):
                             pass
+                        avail_url = str(offers.get("availability", ""))
+                        if "OutOfStock" in avail_url or "out_of_stock" in avail_url.lower():
+                            availability = False
+
+                    # Extract images
+                    image = product_data.get("image", "")
+                    image_urls = []
+                    if isinstance(image, str) and image:
+                        image_urls.append(image)
+                    elif isinstance(image, list):
+                        for img in image:
+                            if isinstance(img, str) and img and img not in image_urls:
+                                image_urls.append(img)
 
                     # Extract brand
                     brand = ""
@@ -194,13 +302,14 @@ class ParisScraper:
                         name=name,
                         price=price,
                         currency="CLP",
-                        image_url=image,
+                        image_url=image_urls[0] if image_urls else "",
                         category=display_category,
                         sizes=[],
                         colors=[],
                         description=f"Marca: {brand}" if brand else "",
-                        availability=True,
+                        availability=availability,
                         original_url=url,
+                        image_urls=image_urls,
                     ))
 
                 break  # Found the product list, no need to continue

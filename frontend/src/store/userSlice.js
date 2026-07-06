@@ -50,14 +50,6 @@ export const updateProfile = createAsyncThunk("user/updateProfile", async (data,
   }
 });
 
-export const fetchCurrentUser = createAsyncThunk("user/fetchCurrentUser", async (_, { rejectWithValue }) => {
-  try {
-    return await authService.getCurrentUser();
-  } catch (err) {
-    return rejectWithValue(err.response?.data?.detail || "Failed to fetch user");
-  }
-});
-
 export const updateMeasurements = createAsyncThunk("user/updateMeasurements", async (measurements, { rejectWithValue }) => {
   try {
     const response = await api.put("/users/measurements", measurements);
@@ -73,6 +65,15 @@ export const updatePreferences = createAsyncThunk("user/updatePreferences", asyn
     return response.data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.detail || "Failed to update preferences");
+  }
+});
+
+export const uploadProfileImage = createAsyncThunk("user/uploadProfileImage", async (base64Image, { rejectWithValue }) => {
+  try {
+    const response = await api.post("/users/profile-image", { image_base64: base64Image });
+    return response.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to upload profile image");
   }
 });
 
@@ -133,11 +134,6 @@ const userSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      .addCase(fetchCurrentUser.fulfilled, (state, action) => {
-        state.user = action.payload.user || action.payload;
-        state.measurements = action.payload.measurements || action.payload.user?.body_measurements || null;
-        state.preferences = action.payload.preferences || action.payload.user?.preferences || null;
-      })
       .addCase(updateMeasurements.fulfilled, (state, action) => {
         state.measurements = action.payload.measurements || {};
       })
@@ -152,6 +148,7 @@ const userSlice = createSlice({
           name: data.name,
           gender: data.gender || "",
           created_at: data.created_at,
+          profile_image: data.profile_image || null,
         };
         state.measurements = data.body_measurements || {};
         state.preferences = data.preferences || {};
@@ -161,6 +158,20 @@ const userSlice = createSlice({
           if (action.payload.name) state.user.name = action.payload.name;
           if (action.payload.gender !== undefined) state.user.gender = action.payload.gender;
         }
+      })
+      .addCase(uploadProfileImage.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(uploadProfileImage.fulfilled, (state, action) => {
+        state.loading = false;
+        if (state.user) {
+          state.user.profile_image = action.payload.profile_image;
+        }
+      })
+      .addCase(uploadProfileImage.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });

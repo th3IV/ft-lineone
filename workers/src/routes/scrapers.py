@@ -3,10 +3,9 @@
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
-from ..scrapers.falabella import FalabellaScraper
-from ..scrapers.hites import HitesScraper
-from ..scrapers.fashionpark import FashionParkScraper
-from ..scrapers.hm import HMScraper
+from scrapers.falabella import FalabellaScraper
+from scrapers.fashionpark import FashionParkScraper
+from scrapers.hm import HMScraper
 from models.product import ProductCreate
 from middleware.security import require_auth
 
@@ -34,7 +33,7 @@ class ScraperIngestRequest(BaseModel):
 
 
 @router.post("/ingest")
-async def ingest_product(product_data: ScraperIngestRequest, request: Request):
+async def ingest_product(product_data: ScraperIngestRequest, request: Request, user: dict = Depends(require_auth)):
     """Ingest a product from a scraper."""
     db = get_db(request)
 
@@ -74,7 +73,7 @@ async def ingest_product(product_data: ScraperIngestRequest, request: Request):
 
 
 @router.post("/ingest/batch")
-async def ingest_batch(products: list[ScraperIngestRequest], request: Request):
+async def ingest_batch(products: list[ScraperIngestRequest], request: Request, user: dict = Depends(require_auth)):
     """Ingest multiple products from scrapers."""
     db = get_db(request)
     results = []
@@ -133,7 +132,6 @@ async def run_single_scraper(store: str, request: Request, user: dict = Depends(
         "paris": ParisScraper,
         "maui": MauiScraper,
         "falabella": FalabellaScraper,
-        "hites": HitesScraper,
         "fashionpark": FashionParkScraper,
         "hm": HMScraper,
     }
@@ -149,6 +147,148 @@ async def run_single_scraper(store: str, request: Request, user: dict = Depends(
         return {"store": store, "result": result}
     except Exception as e:
         return {"store": store, "error": str(e), "type": type(e).__name__}
+
+
+@router.post("/enrich-missing")
+async def enrich_missing_sizes(request: Request, user: dict = Depends(require_auth)):
+    """Enrich products that have empty sizes by fetching from store APIs."""
+    import json as _json
+    import js
+    from pyodide.ffi import to_js as _to_js
+    from js import Object
+
+    def to_js(obj):
+        return _to_js(obj, dict_converter=Object.fromEntries)
+
+    db = get_db(request)
+    results = {"stores": {}}
+
+    # Fashion Park enrichment
+    fp_products = await db.get_products_without_sizes("fashionpark", limit=200)
+    fp_enriched = 0
+    fp_errors = []
+    if fp_products:
+        for product in fp_products:
+            try:
+                handle = product.original_url.split("/products/")[-1] if product.original_url else ""
+                if not handle:
+                    continue
+                url = f"https://fashionspark.com/products/{handle}.json"
+                resp = await js.fetch(url, to_js({"method": "GET", "headers": {"Accept": "application/json"}}))
+                if int(resp.status) != 200:
+                    fp_errors.append(f"{handle}: HTTP {resp.status}")
+                    continue
+                text = await resp.text()
+                data = _json.loads(text).get("product", {})
+                sizes = []
+                colors = []
+                for opt in data.get("options", []):
+                    opt_name = (opt.get("name") or "").lower()
+                    if "talla" in opt_name or "size" in opt_name:
+                        for v in data.get("variants", []):
+                            key = f"option{opt.get('position', 1)}"
+                            val = v.get(key, "")
+                            if val and val not in sizes:
+                                sizes.append(val)
+                    elif "color" in opt_name:
+                        for v in data.get("variants", []):
+                            key = f"option{opt.get('position', 1)}"
+                            val = v.get(key, "")
+                            if val and val not in colors:
+                                colors.append(val)
+                if sizes:
+                    await db.update_product_sizes(product.id, sizes, colors or None)
+                    fp_enriched += 1
+                else:
+                    fp_errors.append(f"{handle}: no sizes")
+            except Exception as e:
+                fp_errors.append(f"{product.original_url}: {str(e)[:100]}")
+                continue
+    results["stores"]["fashionpark"] = {"total": len(fp_products), "enriched": fp_enriched, "errors": fp_errors[:5]}
+
+    # Zara enrichment
+    zara_products = await db.get_products_without_sizes("zara", limit=200)
+    zara_enriched = 0
+    zara_errors = []
+    if zara_products:
+        try:
+            headers = to_js({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": "https://www.zara.com/cl/es/",
+            })
+            cat_resp = await js.fetch("https://www.zara.com/cl/es/categories?ajax=true", to_js({"method": "GET", "headers": headers}))
+            if int(cat_resp.status) == 200:
+                cat_text = await cat_resp.text()
+                categories = _json.loads(cat_text)
+                all_sizes_by_id = {}
+                for cat in categories[:10]:
+                    cat_id = cat.get("id")
+                    if not cat_id:
+                        continue
+                    try:
+                        p_resp = await js.fetch(f"https://www.zara.com/cl/es/category/{cat_id}/products?ajax=true", to_js({"method": "GET", "headers": headers}))
+                        if int(p_resp.status) != 200:
+                            continue
+                        p_text = await p_resp.text()
+                        for group in _json.loads(p_text).get("productGroups", []):
+                            for el in group.get("elements", []):
+                                for comp in el.get("commercialComponents", []):
+                                    detail = comp.get("detail", {})
+                                    pid = str(comp.get("id", ""))
+                                    sizes = [s.get("name", "") for s in detail.get("sizes", []) if s.get("name")]
+                                    if pid and sizes:
+                                        all_sizes_by_id[pid] = sizes
+                    except Exception:
+                        continue
+                for product in zara_products:
+                    sizes = all_sizes_by_id.get(product.external_id, [])
+                    if sizes:
+                        await db.update_product_sizes(product.id, sizes)
+                        zara_enriched += 1
+        except Exception as e:
+            zara_errors.append(str(e)[:100])
+    results["stores"]["zara"] = {"total": len(zara_products), "enriched": zara_enriched, "errors": zara_errors[:5]}
+
+    # Paris enrichment
+    paris_products = await db.get_products_without_sizes("paris", limit=200)
+    paris_enriched = 0
+    paris_errors = []
+    if paris_products:
+        from scrapers.paris import ParisScraper
+        scraper = ParisScraper()
+        try:
+            for product in paris_products:
+                if not product.original_url:
+                    continue
+                try:
+                    headers = to_js({
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        "Accept-Language": "es-CL,es;q=0.9",
+                    })
+                    resp = await js.fetch(product.original_url, to_js({"method": "GET", "headers": headers}))
+                    if int(resp.status) != 200:
+                        continue
+                    text = await resp.text()
+                    sizes = scraper._extract_sizes_from_html(text)
+                    colors = scraper._extract_colors_from_html(text)
+                    if sizes:
+                        await db.update_product_sizes(product.id, sizes, colors or None)
+                        paris_enriched += 1
+                    else:
+                        paris_errors.append(f"{product.original_url}: no sizes")
+                except Exception as e:
+                    paris_errors.append(f"{product.original_url}: {str(e)[:100]}")
+                    continue
+        finally:
+            await scraper.close()
+    results["stores"]["paris"] = {"total": len(paris_products), "enriched": paris_enriched, "errors": paris_errors[:5]}
+
+    results["summary"] = {
+        "total_enriched": fp_enriched + zara_enriched + paris_enriched,
+    }
+    return results
 
 
 @router.get("/debug/{store}")

@@ -14,8 +14,17 @@ class UserModel:
         self.email = row.get("email", "")
         self.name = row.get("name", "")
         self.password_hash = row.get("password_hash", "")
-        self.body_measurements = json.loads(row["body_measurements"]) if row.get("body_measurements") else None
-        self.preferences = json.loads(row["preferences"]) if row.get("preferences") else {}
+        self.body_measurements = (
+            json.loads(row["body_measurements"])
+            if isinstance(row.get("body_measurements"), str)
+            else (row.get("body_measurements") or None)
+        )
+        self.preferences = (
+            json.loads(row["preferences"])
+            if isinstance(row.get("preferences"), str)
+            else (row.get("preferences") or {})
+        )
+        self.profile_image = row.get("profile_image")
         self.created_at = row.get("created_at", datetime.utcnow().isoformat())
 
 
@@ -33,9 +42,21 @@ class ProductModel:
         self.description = row.get("description", "")
         self.original_url = row.get("original_url", "")
         self.image_url = row.get("image_url")
-        self.image_urls = json.loads(row["image_urls"]) if row.get("image_urls") else []
-        self.sizes = json.loads(row["sizes"]) if row.get("sizes") else []
-        self.colors = json.loads(row["colors"]) if row.get("colors") else []
+        self.image_urls = (
+            json.loads(row["image_urls"])
+            if isinstance(row.get("image_urls"), str)
+            else (row.get("image_urls") or [])
+        )
+        self.sizes = (
+            json.loads(row["sizes"])
+            if isinstance(row.get("sizes"), str)
+            else (row.get("sizes") or [])
+        )
+        self.colors = (
+            json.loads(row["colors"])
+            if isinstance(row.get("colors"), str)
+            else (row.get("colors") or [])
+        )
         self.availability = bool(row.get("availability", 1))
         self.created_at = row.get("created_at", datetime.utcnow().isoformat())
 
@@ -112,11 +133,11 @@ class DatabaseService:
         })
 
     async def update_user(self, user_id: str, updates: dict) -> bool:
-        """Update user fields. Supports: name, email, body_measurements, preferences."""
+        """Update user fields. Supports: name, email, body_measurements, preferences, profile_image."""
         set_clauses = []
         params = []
         for key, value in updates.items():
-            if key in ("name", "email"):
+            if key in ("name", "email", "profile_image"):
                 set_clauses.append(f"{key} = ?")
                 params.append(value)
             elif key == "body_measurements":
@@ -215,6 +236,13 @@ class DatabaseService:
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
+        # Sort order
+        sort_clause = "ORDER BY created_at DESC"
+        if filters.get("sort") == "price_asc":
+            sort_clause = "ORDER BY price ASC"
+        elif filters.get("sort") == "price_desc":
+            sort_clause = "ORDER BY price DESC"
+
         # Count total
         count_result = await self.db.prepare(
             f"SELECT COUNT(*) as total FROM products WHERE {where_clause}"
@@ -224,7 +252,7 @@ class DatabaseService:
         # Fetch page
         offset = (page - 1) * limit
         d1_result = await self.db.prepare(
-            f"SELECT * FROM products WHERE {where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            f"SELECT * FROM products WHERE {where_clause} {sort_clause} LIMIT ? OFFSET ?"
         ).bind(*params, limit, offset).all()
 
         rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
@@ -237,7 +265,7 @@ class DatabaseService:
         now = datetime.utcnow().isoformat()
 
         await self.db.prepare(
-            """INSERT INTO products
+            """INSERT OR IGNORE INTO products
                (id, external_id, name, store, price, currency, category, description,
                 original_url, image_url, image_urls, sizes, colors, availability, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
@@ -276,6 +304,32 @@ class DatabaseService:
             "availability": product_data.get("availability", True),
             "created_at": now,
         })
+
+    async def update_product_sizes(self, product_id: str, sizes: list[str], colors: list[str] = None) -> bool:
+        """Update sizes and optionally colors for an existing product."""
+        sets = []
+        params = []
+        if sizes:
+            sets.append("sizes = ?")
+            params.append(json.dumps(sizes))
+        if colors is not None:
+            sets.append("colors = ?")
+            params.append(json.dumps(colors))
+        if not sets:
+            return False
+        params.append(product_id)
+        await self.db.prepare(
+            f"UPDATE products SET {', '.join(sets)} WHERE id = ?"
+        ).bind(*params).run()
+        return True
+
+    async def get_products_without_sizes(self, store: str, limit: int = 100) -> list[ProductModel]:
+        """Get products from a store that have empty sizes."""
+        d1_result = await self.db.prepare(
+            "SELECT * FROM products WHERE store = ? AND (sizes IS NULL OR sizes = '[]') LIMIT ?"
+        ).bind(store, limit).all()
+        rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
+        return [ProductModel(row) for row in rows]
 
     async def create_vton_result(self, data: dict) -> VtonResultModel:
         """Create a VTON result record."""

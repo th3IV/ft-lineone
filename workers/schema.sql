@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     body_measurements TEXT, -- JSON as TEXT
     preferences TEXT, -- JSON as TEXT
+    profile_image TEXT, -- R2 public URL to user avatar
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

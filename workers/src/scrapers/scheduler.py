@@ -8,7 +8,6 @@ from scrapers.paris import ParisScraper
 from scrapers.maui import MauiScraper
 from scrapers.falabella import FalabellaScraper
 from scrapers.hm import HMScraper
-from scrapers.hites import HitesScraper
 from scrapers.fashionpark import FashionParkScraper
 from services.database import DatabaseService
 
@@ -20,7 +19,6 @@ RATE_LIMITS = {
     "zara": 3.0,
     "falabella": 1.5,
     "hm": 1.5,
-    "hites": 2.0,
     "fashionpark": 1.0,
 }
 
@@ -35,10 +33,6 @@ STORE_CATEGORIES = {
             "vestido mujer",
             "chaqueta hombre",
             "falda mujer",
-            "buzo hombre",
-            "jean hombre",
-            "camisa mujer",
-            "pantalon hombre",
         ],
     },
     "maui": {
@@ -46,14 +40,9 @@ STORE_CATEGORIES = {
         "categories": [
             "hombre-poleras",
             "mujer-poleras",
-            "hombre-camisas",
             "mujer-camisas",
-            "hombre-pantalones",
             "mujer-pantalones",
-            "hombre-chaquetas",
-            "mujer-chaquetas",
             "mujer-vestidos",
-            "mujer-faldas",
             "hombre-polerones",
         ],
     },
@@ -69,62 +58,21 @@ STORE_CATEGORIES = {
         "queries": [
             "polera mujer",
             "polera hombre",
-            "camisa mujer",
-            "camisa hombre",
-            "pantalon mujer",
-            "pantalon hombre",
             "jean mujer",
             "jean hombre",
             "vestido mujer",
             "chaqueta mujer",
-            "chaqueta hombre",
-            "falda mujer",
-            "short mujer",
-            "short hombre",
-            "poleron hombre",
-            "poleron mujer",
         ],
     },
     "hm": {
-        "type": "search",  # H&M uses VTEX search
+        "type": "search",  # H&M uses VTEX catalog_system search
         "queries": [
-            "polera mujer",
-            "polera hombre",
-            "camisa mujer",
-            "camisa hombre",
-            "pantalon mujer",
-            "pantalon hombre",
-            "jean mujer",
-            "jean hombre",
-            "vestido mujer",
-            "chaqueta mujer",
-            "chaqueta hombre",
-            "falda mujer",
-            "short mujer",
-            "short hombre",
-            "poleron hombre",
-            "poleron mujer",
-        ],
-    },
-    "hites": {
-        "type": "search",  # Hites uses HTML search
-        "queries": [
-            "polera mujer",
-            "polera hombre",
-            "camisa mujer",
-            "camisa hombre",
-            "pantalon mujer",
-            "pantalon hombre",
-            "jean mujer",
-            "jean hombre",
-            "vestido mujer",
-            "chaqueta mujer",
-            "chaqueta hombre",
-            "falda mujer",
-            "short mujer",
-            "short hombre",
-            "poleron hombre",
-            "poleron mujer",
+            "polera",
+            "jean",
+            "vestido",
+            "chaqueta",
+            "falda",
+            "poleron",
         ],
     },
     "fashionpark": {
@@ -132,22 +80,13 @@ STORE_CATEGORIES = {
         "queries": [
             "polera mujer",
             "polera hombre",
-            "camisa mujer",
-            "camisa hombre",
-            "pantalon mujer",
-            "pantalon hombre",
             "jean mujer",
             "jean hombre",
             "vestido mujer",
             "chaqueta mujer",
-            "chaqueta hombre",
-            "falda mujer",
-            "short mujer",
-            "short hombre",
-            "poleron hombre",
-            "poleron mujer",
         ],
     },
+
 }
 
 
@@ -163,24 +102,30 @@ class ScraperRunner:
             "paris": ParisScraper(),
             "maui": MauiScraper(),
             "falabella": FalabellaScraper(),
+            "hm": HMScraper(),
+            "fashionpark": FashionParkScraper(),
         }
 
-    async def run_all_scrapers(self) -> dict:
-        """Run all scrapers and return results."""
+    async def run_all_scrapers(self, max_concurrent: int = 3) -> dict:
+        """Run all scrapers in parallel batches and return results."""
         results = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "scrapers": {},
         }
 
-        for store_name, scraper in self.scrapers.items():
+        async def run_one(store_name: str, scraper):
             try:
-                result = await self._run_scraper(store_name, scraper)
-                results["scrapers"][store_name] = result
+                return store_name, await self._run_scraper(store_name, scraper)
             except Exception as e:
-                results["scrapers"][store_name] = {
-                    "status": "error",
-                    "error": str(e),
-                }
+                return store_name, {"status": "error", "error": str(e)}
+
+        # Run scrapers in parallel batches to avoid CPU timeout
+        items = list(self.scrapers.items())
+        for i in range(0, len(items), max_concurrent):
+            batch = items[i:i + max_concurrent]
+            batch_results = await asyncio.gather(*[run_one(name, scraper) for name, scraper in batch])
+            for store_name, result in batch_results:
+                results["scrapers"][store_name] = result
 
         return results
 
@@ -264,19 +209,23 @@ class ScraperRunner:
 
     async def _ingest_product(self, store_name: str, product) -> dict:
         """Ingest a scraped product into the database."""
-        # Check for existing product by external_id
-        existing_products, _ = await self.db.get_products(
-            {"store": store_name},
-            page=1,
-            limit=1000,
-        )
+        # Use cached existing products set to avoid repeated DB queries
+        if not hasattr(self, '_existing_ids'):
+            self._existing_ids = {}
+        if store_name not in self._existing_ids:
+            existing_products, _ = await self.db.get_products(
+                {"store": store_name},
+                page=1,
+                limit=2000,
+            )
+            self._existing_ids[store_name] = {p.external_id: p.id for p in existing_products}
 
-        for p in existing_products:
-            if p.external_id == product.external_id:
-                return {"status": "skipped", "product_id": p.id}
+        if product.external_id in self._existing_ids[store_name]:
+            return {"status": "skipped", "product_id": self._existing_ids[store_name][product.external_id]}
 
         # Create new product
         try:
+            image_urls = getattr(product, "image_urls", None) or ([product.image_url] if product.image_url else [])
             created = await self.db.create_product(
                 {
                     "external_id": product.external_id,
@@ -288,12 +237,13 @@ class ScraperRunner:
                     "description": product.description,
                     "original_url": product.original_url,
                     "image_url": product.image_url,
-                    "image_urls": [product.image_url] if product.image_url else [],
+                    "image_urls": image_urls,
                     "sizes": product.sizes,
                     "colors": product.colors,
                     "availability": product.availability,
                 }
             )
+            self._existing_ids[store_name][product.external_id] = created.id
             return {"status": "created", "product_id": created.id}
         except Exception as e:
             return {"status": "error", "error": str(e), "product_name": product.name}

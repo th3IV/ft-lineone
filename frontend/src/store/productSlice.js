@@ -42,6 +42,7 @@ const productSlice = createSlice({
       minPrice: null,
       maxPrice: null,
       query: null,
+      sort: null,
     },
     pagination: { page: 1, limit: 20, total: 0 },
     loading: false,
@@ -68,6 +69,7 @@ const productSlice = createSlice({
         minPrice: null,
         maxPrice: null,
         query: null,
+        sort: null,
       };
       state.pagination.page = 1;
       state.pagination.total = 0;

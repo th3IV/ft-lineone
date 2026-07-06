@@ -1,10 +1,13 @@
 """User profile routes."""
 
+import base64
+import re
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
 
 from middleware.security import require_auth
+from services.r2 import upload_profile_image
 
 router = APIRouter()
 
@@ -12,6 +15,11 @@ router = APIRouter()
 def get_db(request: Request):
     """Get database service from request state."""
     return request.app.state.db
+
+
+def get_env(request: Request):
+    """Get Workers env binding from request state."""
+    return getattr(request.app.state, "env", None)
 
 
 class ProfileUpdate(BaseModel):
@@ -33,6 +41,10 @@ class PreferencesUpdate(BaseModel):
     preferences: dict = {}
 
 
+class ProfileImageUpdate(BaseModel):
+    image_base64: str
+
+
 @router.get("/me")
 async def get_current_user(request: Request, user: dict = Depends(require_auth)):
     """Get current user profile with measurements and preferences."""
@@ -52,6 +64,7 @@ async def get_current_user(request: Request, user: dict = Depends(require_auth))
         "created_at": user_obj.created_at,
         "body_measurements": measurements,
         "preferences": user_obj.preferences or {},
+        "profile_image": user_obj.profile_image,
     }
 
 
@@ -106,3 +119,44 @@ async def update_preferences(
     db = get_db(request)
     await db.update_user(user.user_id, {"preferences": body.preferences})
     return {"status": "updated", "preferences": body.preferences}
+
+
+@router.post("/profile-image")
+async def upload_profile_image_route(
+    body: ProfileImageUpdate,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    """Upload a user profile image (base64) to R2 and update the user record."""
+    env = get_env(request)
+    if not env or not getattr(env, "BUCKET", None):
+        raise HTTPException(status_code=500, detail="R2 bucket not configured")
+
+    # Extract data URI prefix and bytes
+    data = body.image_base64
+    content_type = "image/jpeg"
+    if "," in data:
+        header, b64data = data.split(",", 1)
+        mime_match = re.match(r"data:([a-zA-Z0-9/+-]+);base64", header)
+        if mime_match:
+            content_type = mime_match.group(1)
+    else:
+        b64data = data
+
+    try:
+        image_bytes = base64.b64decode(b64data)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+
+    if len(image_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large (max 5MB)")
+
+    try:
+        public_url = await upload_profile_image(env, user.user_id, image_bytes, content_type)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
+
+    db = get_db(request)
+    await db.update_user(user.user_id, {"profile_image": public_url})
+
+    return {"status": "updated", "profile_image": public_url}

@@ -24,6 +24,7 @@ class UserResponse(UserBase):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     body_measurements: Optional[dict] = None
     preferences: dict = {}
+    profile_image: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -40,3 +41,4 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     body_measurements: Optional[dict] = None
     preferences: Optional[dict] = None
+    profile_image: Optional[str] = None

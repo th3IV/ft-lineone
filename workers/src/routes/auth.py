@@ -52,6 +52,7 @@ async def register(user_data: UserCreate, request: Request):
             email=user.email,
             name=user.name,
             created_at=user.created_at,
+            profile_image=user.profile_image,
         ),
     )
 
@@ -79,6 +80,7 @@ async def login(credentials: UserLogin, request: Request):
             created_at=user.created_at,
             body_measurements=user.body_measurements,
             preferences=user.preferences or {},
+            profile_image=user.profile_image,
         ),
     )
 
@@ -111,5 +113,8 @@ async def refresh_token(body: dict, request: Request):
             email=user.email,
             name=user.name,
             created_at=user.created_at,
+            body_measurements=user.body_measurements,
+            preferences=user.preferences or {},
+            profile_image=user.profile_image,
         ),
     )

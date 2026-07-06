@@ -1,10 +1,8 @@
-const generos = ["Hombre", "Mujer", "Unisex", "Ninos"];
+const generos = ["Hombre", "Mujer"];
 
 const iconos = {
   Hombre: "M",
   Mujer: "F",
-  Unisex: "U",
-  Ninos: "K",
 };
 
 function FiltroGenero({ selected, onChange }) {

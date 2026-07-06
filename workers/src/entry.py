@@ -1,13 +1,14 @@
 """FT-LineOne API - Cloudflare Workers Python Entry Point."""
 
 import json
+import re
 import time
 
 from workers import WorkerEntrypoint, Response
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 import asgi
 
@@ -23,30 +24,22 @@ app = FastAPI(
 )
 
 
-# CORS middleware — hardcoded because os.getenv doesn't work in Workers Python
+# CORS origins — hardcoded because os.getenv doesn't work in Workers Python
 # (vars only arrive via self.env, which isn't available at import time)
-CORS_ORIGINS = [
+_CORS_ORIGINS = [
     "https://thelineone.com",
     "https://www.thelineone.com",
     "http://localhost:3000",
-    "https://feat-cloudflare-migration.ft-lineone.pages.dev",
 ]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+_PAGES_PATTERN = re.compile(r"^https://[a-z0-9-]+\.ft-lineone\.pages\.dev$")
+
+
+def _is_allowed_origin(origin: str) -> bool:
+    return origin in _CORS_ORIGINS or bool(_PAGES_PATTERN.match(origin))
 
 
 def _cors_headers(origin):
-    origins = CORS_ORIGINS
-    if origin and origin in origins:
-        allow_origin = origin
-    else:
-        allow_origin = origins[0] if origins else "*"
+    allow_origin = origin if _is_allowed_origin(origin) else _CORS_ORIGINS[0]
     return {
         "Access-Control-Allow-Origin": allow_origin,
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -54,6 +47,26 @@ def _cors_headers(origin):
         "Access-Control-Allow-Credentials": "true",
         "Access-Control-Max-Age": "86400",
     }
+
+
+class DynamicCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin", "")
+        if request.method == "OPTIONS":
+            h = _cors_headers(origin)
+            h["Content-Type"] = "text/plain"
+            return Response(b"", status=204, headers=h)
+        response = await call_next(request)
+        if origin and _is_allowed_origin(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Max-Age"] = "86400"
+        return response
+
+
+app.add_middleware(DynamicCORSMiddleware)
 
 
 # Exception handler — catches unhandled exceptions that escape FastAPI/Starlette
@@ -163,7 +176,7 @@ class Default(WorkerEntrypoint):
                 headers=h,
             )
 
-    async def on_scheduled(self, controller):
+    async def scheduled(self, controller, env, ctx):
         """Handle cron triggers for scraper scheduling and VTON polling."""
         from scrapers.scheduler import ScraperRunner
         from cron import process_pending_vton_tasks
@@ -175,7 +188,7 @@ class Default(WorkerEntrypoint):
 
         # Run scrapers (independent — failure doesn't block VTON)
         try:
-            runner = ScraperRunner(self.env, max_products=max_products)
+            runner = ScraperRunner(env, max_products=max_products)
             try:
                 results = await runner.run_all_scrapers()
                 print(json.dumps({"event": "cron_scrapers_complete", "cron": cron_expr, "results": results}))
@@ -186,7 +199,7 @@ class Default(WorkerEntrypoint):
 
         # Process pending VTON tasks (always runs, even if scrapers failed)
         try:
-            vton_results = await process_pending_vton_tasks(self.env)
+            vton_results = await process_pending_vton_tasks(env)
             print(json.dumps({"event": "cron_vton_complete", "cron": cron_expr, "results": vton_results}))
         except Exception as e:
             print(json.dumps({"event": "cron_vton_error", "error": str(e)}))

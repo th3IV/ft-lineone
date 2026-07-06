@@ -12,14 +12,12 @@ import RevealOnScroll, {
 } from "../components/RevealOnScroll";
 
 const stores = [
-    // Tiendas existentes...
-    { name: 'Paris', image: '/images/paris.png' },
-    { name: 'Maui', image: '/images/maui.png' },
-    { name: 'Zara', image: '/images/zara.png' },
-    { name: 'Falabella', image: '/images/falabella.png' }, // Nuevo
-    { name: 'H&M', image: '/images/hm.png' }, // Nuevo
-    { name: 'Hites', image: '/images/hites.png' }, // Nuevo
-    { name: 'Fashion Park', image: '/images/fashionpark.png' }, // Nuevo
+    { name: 'Paris', slug: 'paris', description: 'Estilo accesible', image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80' },
+    { name: 'Maui', slug: 'maui', description: 'Maui & Sons', image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=800&q=80' },
+    { name: 'Zara', slug: 'zara', description: 'Moda internacional', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&q=80' },
+    { name: 'Falabella', slug: 'falabella', description: 'Variedad y moda', image: 'https://images.unsplash.com/photo-1567401893414-76b7b1e5a7a5?w=800&q=80' },
+    { name: 'H&M', slug: 'hm', description: 'Moda consciente', image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&q=80' },
+    { name: 'Fashion Park', slug: 'fashionpark', description: 'Tendencias urbanas', image: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=800&q=80' },
 ];
 
 

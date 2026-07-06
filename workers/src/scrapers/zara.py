@@ -10,6 +10,7 @@ Key: Do NOT fetch the HTML pages (Akamai bot detection). Only use ?ajax=true.
 """
 
 import json
+import traceback
 import httpx
 from typing import Optional
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ class ZaraProduct:
     description: str = ""
     availability: bool = True
     original_url: str = ""
+    image_urls: list[str] = field(default_factory=list)
 
 
 # Internal Zara Chile category IDs (confirmed working via ?ajax=true)
@@ -107,8 +109,9 @@ class ZaraScraper:
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("productGroups", [])
-        except Exception:
-            pass
+            print(f"[zara] Category {cat_id} returned status {resp.status_code}")
+        except Exception as e:
+            print(f"[zara] Error fetching category {cat_id}: {type(e).__name__}: {e}")
         return []
 
     def _parse_products_from_groups(self, product_groups: list[dict], gender: str) -> list[ZaraProduct]:
@@ -155,18 +158,22 @@ class ZaraScraper:
             else:
                 price = 0.0
 
-            # Image URL from detail.colors[].xmedia[]
+            # Image URLs from detail.colors[].xmedia[]
             image_url = ""
+            image_urls = []
             detail = comp.get("detail", {})
             colors_data = detail.get("colors", [])
             if colors_data:
-                first_color = colors_data[0]
-                xmedia = first_color.get("xmedia", [])
-                if xmedia:
-                    media = xmedia[0]
-                    url_template = media.get("url", "")
-                    if url_template:
-                        image_url = url_template.replace("{width}", "800")
+                for color in colors_data:
+                    xmedia = color.get("xmedia", [])
+                    for media in xmedia:
+                        url_template = media.get("url", "")
+                        if url_template:
+                            full_url = url_template.replace("{width}", "800")
+                            if full_url not in image_urls:
+                                image_urls.append(full_url)
+                if image_urls:
+                    image_url = image_urls[0]
 
             # SEO URL
             seo = comp.get("seo", {})
@@ -221,8 +228,16 @@ class ZaraScraper:
                 description=detail.get("description", ""),
                 availability=availability,
                 original_url=original_url,
+                image_urls=image_urls,
             )
-        except Exception:
+        except Exception as e:
+            print(json.dumps({
+                "event": "zara_parse_error",
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "component_id": comp.get("id") if isinstance(comp, dict) else None,
+                "component_name": comp.get("name") if isinstance(comp, dict) else None,
+            }))
             return None
 
     async def scrape_category(self, category: str, max_items: int = 20) -> list[ZaraProduct]:

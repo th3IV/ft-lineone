@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X, Sparkles } from "lucide-react";
+import { MessageCircle, X, Sparkles, User } from "lucide-react";
+import { useSelector } from "react-redux";
 import api from "../services/api";
 
 const quickQuestions = [
@@ -10,12 +12,56 @@ const quickQuestions = [
   "Recomiendame un outfit casual",
 ];
 
+function ProductMiniCard({ product }) {
+  const image = product.image_urls?.[0] || product.image_url;
+  return (
+    <Link
+      to={`/product/${product.id}`}
+      className="flex items-center gap-3 bg-white rounded-xl p-2 border border-editorial-black/5 hover:border-editorial-black/20 transition-colors min-w-[220px]"
+    >
+      <div className="w-12 h-12 rounded-lg overflow-hidden bg-editorial-cream flex-shrink-0">
+        {image ? (
+          <img src={image} alt={product.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-editorial-cream" />
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium text-editorial-black truncate">
+          {product.name}
+        </p>
+        <p className="text-[10px] text-editorial-gray truncate">
+          {product.store}
+        </p>
+        <p className="text-[10px] font-semibold text-editorial-black">
+          {product.currency === "CLP" ? "$" : product.currency || "$"}
+          {product.price?.toLocaleString("es-CL")}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+function Avatar({ src, fallback, className }) {
+  return (
+    <div className={`rounded-full overflow-hidden bg-editorial-gray-light/30 flex items-center justify-center ${className}`}>
+      {src ? (
+        <img src={src} alt="Avatar" className="w-full h-full object-cover" />
+      ) : (
+        <User size={16} className="text-editorial-gray" />
+      )}
+    </div>
+  );
+}
+
 function ChatFlotante() {
+  const { user } = useSelector((state) => state.user);
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      text: "Hola! Soy tu Asesor de Imagen IA. Preguntame sobre moda, combinaciones o tendencias.",
+      text: "Hola! Soy Liney, tu Asesor de Imagen IA personal. Preguntame sobre moda, combinaciones o tendencias. estoy aqui para ayudarte a encontrar el look perfecto.",
+      products: [],
     },
   ]);
   const [input, setInput] = useState("");
@@ -24,7 +70,7 @@ function ChatFlotante() {
   const sendMessage = async (text) => {
     if (!text.trim()) return;
 
-    const userMsg = { role: "user", text: text.trim() };
+    const userMsg = { role: "user", text: text.trim(), products: [] };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
@@ -34,11 +80,15 @@ function ChatFlotante() {
         question: text.trim(),
       });
       const advice = res.data?.advice || "No pude generar un consejo.";
-      setMessages((prev) => [...prev, { role: "assistant", text: advice }]);
+      const products = res.data?.products || [];
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: advice, products },
+      ]);
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: "Servicio no disponible temporalmente." },
+        { role: "assistant", text: "Servicio no disponible temporalmente.", products: [] },
       ]);
     } finally {
       setLoading(false);
@@ -112,21 +162,41 @@ function ChatFlotante() {
             {/* Messages */}
             <div className="h-80 overflow-y-auto p-4 space-y-3">
               {messages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`flex ${
-                    msg.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
+                <div key={i} className="space-y-2">
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed ${
-                      msg.role === "user"
-                        ? "bg-editorial-black text-white rounded-br-md"
-                        : "bg-editorial-cream text-editorial-charcoal rounded-bl-md"
+                    className={`flex items-end gap-2 ${
+                      msg.role === "user" ? "justify-end" : "justify-start"
                     }`}
                   >
-                    {msg.text}
+                    {msg.role === "assistant" && (
+                      <div className="w-6 h-6 rounded-full bg-editorial-black/5 flex items-center justify-center shrink-0">
+                        <Sparkles size={12} className="text-editorial-black" />
+                      </div>
+                    )}
+                    <div
+                      className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed ${
+                        msg.role === "user"
+                          ? "bg-editorial-black text-white rounded-br-md"
+                          : "bg-editorial-cream text-editorial-charcoal rounded-bl-md"
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
+                    {msg.role === "user" && (
+                      <Avatar
+                        src={user?.profile_image}
+                        fallback={<User size={12} />}
+                        className="w-6 h-6 shrink-0"
+                      />
+                    )}
                   </div>
+                  {msg.products && msg.products.length > 0 && (
+                    <div className="flex flex-col gap-2 pl-2">
+                      {msg.products.map((product) => (
+                        <ProductMiniCard key={product.id} product={product} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               {loading && (
