@@ -209,6 +209,9 @@ class ZaraScraper:
             category = CATEGORY_MAP.get(family_name, family_name)
             if not category:
                 category = gender
+            # Include gender in category for filtering
+            if gender:
+                category = f"{category} {gender}".strip()
 
             # Availability
             availability = True

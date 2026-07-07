@@ -168,10 +168,10 @@ class HMScraper:
                             if img_url and img_url not in image_urls:
                                 image_urls.append(img_url)
 
-                # Color heuristics: item name is usually the color variant
-                sku_name = item_obj.get("name", "")
-                if sku_name and sku_name.lower() != name.lower() and sku_name not in colors:
-                    colors.append(sku_name)
+                # Color from complementName (e.g., "Beige", "Negro")
+                color_name = item_obj.get("complementName", "")
+                if color_name and color_name not in colors:
+                    colors.append(color_name)
 
             if image_urls:
                 image_url = image_urls[0]

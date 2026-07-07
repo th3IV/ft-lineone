@@ -119,6 +119,21 @@ async def run_scrapers(request: Request, user: dict = Depends(require_auth)):
         await runner.close()
 
 
+@router.post("/trigger")
+async def trigger_scrapers(request: Request):
+    """Public endpoint to trigger scrapers (no auth required). Use from frontend on first load."""
+    from scrapers.scheduler import ScraperRunner
+
+    runner = ScraperRunner(request.app.state.env, max_products=10)
+    try:
+        results = await runner.run_all_scrapers()
+        return {"status": "completed", "results": results}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+    finally:
+        await runner.close()
+
+
 @router.post("/run/{store}")
 async def run_single_scraper(store: str, request: Request, user: dict = Depends(require_auth)):
     """Manually trigger a single store scraper for testing."""

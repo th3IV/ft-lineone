@@ -1,16 +1,13 @@
-"""Paris scraper — HTTP direct with RSC/LD+JSON extraction.
+"""Paris scraper — Constructor.io API.
 
-Paris.cl renders products via React Server Components. Product data is
-embedded in the HTML as serialized RSC payload inside <script> tags.
-LD+JSON structured data is embedded inside RSC push scripts with escaped quotes.
+Paris.cl uses Constructor.io for search. We query the Constructor.io API
+to get product listings without needing to scrape Paris.cl directly.
 
 Workflow:
-  1. GET /search?q={query}
-  2. Find RSC push scripts containing itemListElement (product list)
-  3. Unescape the JSON and parse LD+JSON product data
+  1. Fetch Constructor.io key from JS bundle
+  2. Search products via Constructor.io API
 """
 
-import asyncio
 import json
 import re
 from typing import Optional
@@ -35,12 +32,13 @@ class ParisProduct:
 
 
 class ParisScraper:
-    """Scraper for Paris (paris.cl) using HTTP direct + RSC/LD+JSON."""
+    """Scraper for Paris (paris.cl) using Constructor.io API."""
 
     BASE_URL = "https://www.paris.cl"
-    SEARCH_URL = "https://www.paris.cl/search?q={query}"
+    CNSTRC_BUNDLE_URL = "https://cnstrc.com/js/cust/cencosud_0BmS-e.js"
+    CNSTRC_SEARCH_URL = "https://ac.cnstrc.com/search"
 
-    # Category keywords for mapping search queries → frontend categories
+    # Category keywords for mapping search queries -> frontend categories
     CATEGORY_KEYWORDS = {
         "polera": "Poleras",
         "camiseta": "Poleras",
@@ -61,6 +59,7 @@ class ParisScraper:
 
     def __init__(self):
         self._client = None
+        self._cnstrc_key = None
 
     async def _get_client(self):
         if self._client is None:
@@ -74,11 +73,29 @@ class ParisScraper:
                         "AppleWebKit/537.36 (KHTML, like Gecko) "
                         "Chrome/131.0.0.0 Safari/537.36"
                     ),
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept": "application/json",
                     "Accept-Language": "es-CL,es;q=0.9,en;q=0.8",
                 },
             )
         return self._client
+
+    async def _get_cnstrc_key(self, client) -> Optional[str]:
+        """Fetch Constructor.io key from Paris.cl JS bundle."""
+        if self._cnstrc_key:
+            return self._cnstrc_key
+
+        try:
+            resp = await client.get(self.CNSTRC_BUNDLE_URL)
+            if resp.status_code == 200:
+                match = re.search(r'key[=:]\s*[\'"]?([a-zA-Z0-9_-]+)[\'"]?', resp.text)
+                if match:
+                    self._cnstrc_key = match.group(1)
+                    print(json.dumps({"event": "paris_cnstrc_key", "key": self._cnstrc_key}))
+                    return self._cnstrc_key
+        except Exception as e:
+            print(json.dumps({"event": "paris_cnstrc_key_error", "error": str(e)}))
+
+        return None
 
     def _infer_category(self, query: str) -> str:
         """Infer frontend category from search query keywords."""
@@ -97,109 +114,99 @@ class ParisScraper:
             return "mujer"
         return ""
 
-    def _extract_sizes_from_html(self, html: str) -> list[str]:
-        """Best-effort size extraction from a Paris product detail page."""
-        sizes = []
-        if not html:
-            return sizes
-
-        patterns = [
-            r'\\"name\\":\\"size\\",\\"value\\":\\"([^"\\]+)\\"',
-            r'"size"\s*:\s*\{[^}]*"value"\s*:\s*"([^"]+)"',
-            r'"sizes"\s*:\s*(\[[^\]]+\])',
-            r'"tallas"\s*:\s*(\[[^\]]+\])',
-            r'"Talla\s+([A-Z0-9]+)"',
-        ]
-
-        for pattern in patterns:
-            matches = re.findall(pattern, html)
-            for m in matches:
-                if isinstance(m, tuple):
-                    m = m[0]
-                if m.startswith("["):
-                    try:
-                        arr = json.loads(m)
-                        for val in arr:
-                            if isinstance(val, str) and val and val not in sizes:
-                                sizes.append(val)
-                    except json.JSONDecodeError:
-                        continue
-                elif m and m not in sizes:
-                    sizes.append(m)
-
-        return sizes
-
-    def _extract_colors_from_html(self, html: str) -> list[str]:
-        """Best-effort color extraction from a Paris product detail page."""
-        colors = []
-        if not html:
-            return colors
-
-        patterns = [
-            r'\\"name\\":\\"color\\",\\"value\\":\\"([^"\\]+)\\"',
-            r'"color"\s*:\s*\{[^}]*"value"\s*:\s*"([^"]+)"',
-            r'"colors"\s*:\s*(\[[^\]]+\])',
-            r'"colores"\s*:\s*(\[[^\]]+\])',
-            r'"Color\s+([A-Za-záéíóúÁÉÍÓÚñÑ]+)"',
-        ]
-
-        for pattern in patterns:
-            matches = re.findall(pattern, html)
-            for m in matches:
-                if isinstance(m, tuple):
-                    m = m[0]
-                if m.startswith("["):
-                    try:
-                        arr = json.loads(m)
-                        for val in arr:
-                            if isinstance(val, str) and val and val not in colors:
-                                colors.append(val)
-                    except json.JSONDecodeError:
-                        continue
-                elif m and m not in colors:
-                    colors.append(m)
-
-        return colors
-
-    async def _fetch_product_details(self, client, url: str) -> tuple[list[str], list[str]]:
-        """Fetch product detail page and extract sizes and colors."""
-        try:
-            resp = await client.get(url)
-            if resp.status_code == 200:
-                return (
-                    self._extract_sizes_from_html(resp.text),
-                    self._extract_colors_from_html(resp.text),
-                )
-        except Exception as e:
-                print(json.dumps({"event": "paris_detail_error", "url": url, "error": str(e)}))
-        return [], []
-
-    async def _enrich_with_details(self, client, products: list[ParisProduct]) -> None:
-        """Enrich products with sizes and colors from their detail pages in parallel."""
-        tasks = [self._fetch_product_details(client, p.original_url) for p in products if p.original_url]
-        results = await asyncio.gather(*tasks)
-        for product, (sizes, colors) in zip(products, results):
-            if sizes:
-                product.sizes = sizes
-            if colors:
-                product.colors = colors
-
     async def search_products(self, query: str, max_items: int = 30) -> list[ParisProduct]:
-        """Search products via Paris.cl HTTP search and parse RSC/LD+JSON."""
+        """Search products via Constructor.io API."""
         client = await self._get_client()
-        url = self.SEARCH_URL.format(query=query)
         products = []
 
         try:
-            resp = await client.get(url)
+            # Get Constructor.io key
+            key = await self._get_cnstrc_key(client)
+            if not key:
+                print(json.dumps({"event": "paris_search_error", "query": query, "error": "No Constructor.io key"}))
+                return []
+
+            # Search via Constructor.io
+            resp = await client.get(self.CNSTRC_SEARCH_URL, params={
+                "key": key,
+                "i": query,
+                "num_results_per_page": max_items,
+                "section": "Products",
+            })
+
             if resp.status_code != 200:
                 print(json.dumps({"event": "paris_search_error", "query": query, "status": resp.status_code}))
                 return []
-            products = self._parse_ssr_data(resp.text, query, max_items)
-            # Best-effort size and color enrichment from product detail pages
-            if products:
-                await self._enrich_with_details(client, products)
+
+            data = resp.json()
+            results = data.get("response", {}).get("results", [])
+
+            category = self._infer_category(query)
+            gender = self._infer_gender(query)
+            display_category = f"{category} {gender}".strip() if category else query
+
+            seen_ids = set()
+
+            for item in results:
+                if len(products) >= max_items:
+                    break
+
+                item_data = item.get("data", {})
+                if not item_data:
+                    continue
+
+                # Extract fields from Constructor.io response
+                external_id = str(item_data.get("id", "") or item.get("id", ""))
+                name = item_data.get("product_name", "") or item_data.get("name", "")
+                if not name:
+                    continue
+
+                # Deduplicate
+                if external_id in seen_ids:
+                    continue
+                seen_ids.add(external_id)
+
+                # Price
+                price = 0.0
+                price_val = item_data.get("price", 0) or item_data.get("minimum_price", 0)
+                try:
+                    price = float(price_val)
+                except (ValueError, TypeError):
+                    pass
+
+                # URL
+                url = item_data.get("url", "")
+                if url and not url.startswith("http"):
+                    url = f"{self.BASE_URL}{url}"
+
+                # Image
+                image_url = item_data.get("image_url", "") or item_data.get("image", "")
+                image_urls = []
+                if image_url:
+                    image_urls.append(image_url)
+
+                # Availability
+                availability = True
+                if item_data.get("availability") == "OutOfStock":
+                    availability = False
+
+                products.append(ParisProduct(
+                    external_id=external_id,
+                    name=name,
+                    price=price,
+                    currency="CLP",
+                    image_url=image_urls[0] if image_urls else "",
+                    category=display_category,
+                    sizes=[],
+                    colors=[],
+                    description="",
+                    availability=availability,
+                    original_url=url,
+                    image_urls=image_urls,
+                ))
+
             print(json.dumps({"event": "paris_search_success", "query": query, "products_found": len(products)}))
+
         except Exception as e:
             print(json.dumps({"event": "paris_search_error", "query": query, "error": str(e)}))
 
@@ -208,116 +215,6 @@ class ParisScraper:
     async def scrape_category(self, category: str, max_items: int = 50) -> list[ParisProduct]:
         """Scrape products from a category using search."""
         return await self.search_products(category, max_items)
-
-    def _parse_ssr_data(self, html: str, query: str, max_items: int) -> list[ParisProduct]:
-        """Parse Paris.cl SSR RSC payload to extract products."""
-        products = []
-        seen_ids = set()
-
-        category = self._infer_category(query)
-        gender = self._infer_gender(query)
-        display_category = f"{category} {gender}".strip() if category else query
-
-        # Find RSC push scripts containing itemListElement
-        scripts = re.findall(
-            r'self\.__next_f\.push\(\[1,"(.*?)"\]\)</script>', html, re.DOTALL
-        )
-
-        for script in scripts:
-            if "itemListElement" not in script:
-                continue
-
-            try:
-                # Find the JSON start (first {)
-                json_start = script.find("{")
-                if json_start < 0:
-                    continue
-
-                raw = script[json_start:]
-
-                # Unescape the content
-                content = raw.replace('\\"', '"')
-                content = content.replace("\\/", "/")
-                content = content.replace("\\\\", "\\")
-
-                # Parse the JSON
-                data = json.loads(content)
-
-                # Navigate to itemListElement
-                items = data.get("mainEntity", {}).get("itemListElement", [])
-                for item in items:
-                    if len(products) >= max_items:
-                        break
-
-                    product_data = item.get("item", {})
-                    if not product_data or product_data.get("@type") != "Product":
-                        continue
-
-                    name = product_data.get("name", "")
-                    url = product_data.get("url", "")
-                    image = product_data.get("image", "")
-                    sku = product_data.get("sku", "")
-
-                    if not name:
-                        continue
-
-                    # Deduplicate by SKU or URL
-                    dedup_key = sku or url
-                    if dedup_key in seen_ids:
-                        continue
-                    seen_ids.add(dedup_key)
-
-                    # Extract price and availability from offers
-                    price = 0.0
-                    availability = True
-                    offers = product_data.get("offers", {})
-                    if isinstance(offers, dict):
-                        price_val = offers.get("price", 0)
-                        try:
-                            price = float(price_val)
-                        except (ValueError, TypeError):
-                            pass
-                        avail_url = str(offers.get("availability", ""))
-                        if "OutOfStock" in avail_url or "out_of_stock" in avail_url.lower():
-                            availability = False
-
-                    # Extract images
-                    image = product_data.get("image", "")
-                    image_urls = []
-                    if isinstance(image, str) and image:
-                        image_urls.append(image)
-                    elif isinstance(image, list):
-                        for img in image:
-                            if isinstance(img, str) and img and img not in image_urls:
-                                image_urls.append(img)
-
-                    # Extract brand
-                    brand = ""
-                    brand_data = product_data.get("brand", {})
-                    if isinstance(brand_data, dict):
-                        brand = brand_data.get("name", "")
-
-                    products.append(ParisProduct(
-                        external_id=str(sku) if sku else str(len(products)),
-                        name=name,
-                        price=price,
-                        currency="CLP",
-                        image_url=image_urls[0] if image_urls else "",
-                        category=display_category,
-                        sizes=[],
-                        colors=[],
-                        description=f"Marca: {brand}" if brand else "",
-                        availability=availability,
-                        original_url=url,
-                        image_urls=image_urls,
-                    ))
-
-                break  # Found the product list, no need to continue
-
-            except (json.JSONDecodeError, KeyError):
-                continue
-
-        return products
 
     async def close(self):
         """Close the HTTP client."""

@@ -16,6 +16,7 @@ import ChatFlotante from "./components/ChatFlotante";
 import ModalVTON from "./components/ModalVTON";
 import { closeVtonModal } from "./store/uiSlice";
 import { setUnauthorizedCallback } from "./services/api";
+import api from "./services/api";
 import { logoutUser } from "./store/userSlice";
 import { fetchFavorites } from "./store/favoritesSlice";
 
@@ -45,6 +46,15 @@ function App() {
       dispatch(fetchFavorites());
     }
   }, [dispatch, isAuthenticated]);
+
+  // Trigger scrapers on first visit (once per session)
+  useEffect(() => {
+    const scrapersTriggered = sessionStorage.getItem("scrapers_triggered");
+    if (!scrapersTriggered) {
+      sessionStorage.setItem("scrapers_triggered", "true");
+      api.post("/scrapers/trigger").catch(() => {});
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-editorial-cream">
