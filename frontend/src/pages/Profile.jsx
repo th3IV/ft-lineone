@@ -44,6 +44,7 @@ function Profile() {
   const [activeTab, setActiveTab] = useState("profile");
   const [imageLoading, setImageLoading] = useState(false);
   const [showAvatarMenu, setShowAvatarMenu] = useState(false);
+  const [editingSection, setEditingSection] = useState(null);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const avatarMenuRef = useRef(null);
@@ -355,7 +356,8 @@ function Profile() {
                   onChange={(e) =>
                     setMeasurements({ ...measurements, [key]: e.target.value })
                   }
-                  className="input-line w-full"
+                  disabled={editingSection !== "measurements"}
+                  className={`input-line w-full ${editingSection !== "measurements" ? "opacity-60 cursor-not-allowed" : ""}`}
                 />
               </div>
             ))}
@@ -368,13 +370,13 @@ function Profile() {
                 <button
                   key={shape}
                   onClick={() =>
-                    setMeasurements({ ...measurements, bodyShape: shape })
+                    editingSection === "measurements" && setMeasurements({ ...measurements, bodyShape: shape })
                   }
                   className={`px-4 py-2 rounded-full text-xs capitalize transition-all ${
                     measurements.bodyShape === shape
                       ? "bg-editorial-black text-white"
                       : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
-                  }`}
+                  } ${editingSection !== "measurements" ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   {shape}
                 </button>
@@ -383,15 +385,33 @@ function Profile() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <button
-              onClick={async () => {
-                await dispatch(updateMeasurements(measurements));
-                toast.success("Medidas guardadas");
-              }}
-              className="btn-primary"
-            >
-              Guardar Medidas
-            </button>
+            {editingSection === "measurements" ? (
+              <>
+                <button
+                  onClick={() => setEditingSection(null)}
+                  className="btn-outline"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    await dispatch(updateMeasurements(measurements));
+                    toast.success("Medidas guardadas");
+                    setEditingSection(null);
+                  }}
+                  className="btn-primary"
+                >
+                  Guardar
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setEditingSection("measurements")}
+                className="btn-primary"
+              >
+                Editar
+              </button>
+            )}
           </div>
         </motion.div>
       )}
@@ -424,7 +444,8 @@ function Profile() {
                         sizes: { ...preferences.sizes, [key]: e.target.value },
                       })
                     }
-                    className="input-line w-full"
+                    disabled={editingSection !== "preferences"}
+                    className={`input-line w-full ${editingSection !== "preferences" ? "opacity-60 cursor-not-allowed" : ""}`}
                     placeholder="Ej: S, 38"
                   />
                 </div>
@@ -440,6 +461,7 @@ function Profile() {
                   <button
                     key={style}
                     onClick={() => {
+                      if (editingSection !== "preferences") return;
                       const styles = preferences.styles || [];
                       const updated = styles.includes(style)
                         ? styles.filter((s) => s !== style)
@@ -450,7 +472,7 @@ function Profile() {
                       preferences.styles?.includes(style)
                         ? "bg-editorial-black text-white"
                         : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
-                    }`}
+                    } ${editingSection !== "preferences" ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     {style}
                   </button>
@@ -503,12 +525,33 @@ function Profile() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <button onClick={async () => {
-              await dispatch(updatePreferences(preferences));
-              toast.success("Preferencias guardadas");
-            }} className="btn-primary">
-              Guardar Preferencias
-            </button>
+            {editingSection === "preferences" ? (
+              <>
+                <button
+                  onClick={() => setEditingSection(null)}
+                  className="btn-outline"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    await dispatch(updatePreferences(preferences));
+                    toast.success("Preferencias guardadas");
+                    setEditingSection(null);
+                  }}
+                  className="btn-primary"
+                >
+                  Guardar
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setEditingSection("preferences")}
+                className="btn-primary"
+              >
+                Editar
+              </button>
+            )}
           </div>
         </motion.div>
       )}
@@ -553,21 +596,22 @@ function Profile() {
                 <label className="editorial-label">¿Qué colores prefieres?</label>
                 <div className="flex gap-3 mt-2 flex-wrap">
                   {QUIZ_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => {
-                        const colors = preferences.colors || [];
-                        const updated = colors.includes(color)
-                          ? colors.filter((c) => c !== color)
-                          : [...colors, color];
-                        setPreferences({ ...preferences, colors: updated });
-                      }}
-                      className={`px-4 py-2 rounded-full text-xs capitalize transition-all ${
-                        preferences.colors?.includes(color)
-                          ? "bg-editorial-black text-white"
-                          : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
-                      }`}
-                    >
+                  <button
+                    key={color}
+                    onClick={() => {
+                      if (editingSection !== "preferences") return;
+                      const colors = preferences.colors || [];
+                      const updated = colors.includes(color)
+                        ? colors.filter((c) => c !== color)
+                        : [...colors, color];
+                      setPreferences({ ...preferences, colors: updated });
+                    }}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                      preferences.colors?.includes(color)
+                        ? "border-editorial-black scale-110"
+                        : "border-editorial-gray-light hover:border-editorial-gray"
+                    } ${editingSection !== "preferences" ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
                       {color}
                     </button>
                   ))}
@@ -637,7 +681,8 @@ function Profile() {
                           sizes: { ...preferences.sizes, [key]: e.target.value },
                         })
                       }
-                      className="input-line w-full"
+                      disabled={editingSection !== "quiz"}
+                      className={`input-line w-full ${editingSection !== "quiz" ? "opacity-60 cursor-not-allowed" : ""}`}
                       placeholder="Ej: S, 38"
                     />
                   </div>
@@ -646,16 +691,34 @@ function Profile() {
             </div>
 
             <div className="flex justify-end gap-3 pt-6">
-              <button
-                onClick={async () => {
-                  await dispatch(updateMeasurements(measurements));
-                  await dispatch(updatePreferences(preferences));
-                  toast.success("Perfil de estilo guardado");
-                }}
-                className="btn-primary"
-              >
-                Guardar mi perfil de estilo
-              </button>
+              {editingSection === "quiz" ? (
+                <>
+                  <button
+                    onClick={() => setEditingSection(null)}
+                    className="btn-outline"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await dispatch(updateMeasurements(measurements));
+                      await dispatch(updatePreferences(preferences));
+                      toast.success("Perfil de estilo guardado");
+                      setEditingSection(null);
+                    }}
+                    className="btn-primary"
+                  >
+                    Guardar
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setEditingSection("quiz")}
+                  className="btn-primary"
+                >
+                  Editar
+                </button>
+              )}
             </div>
           </div>
         </motion.div>

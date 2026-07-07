@@ -492,6 +492,34 @@ async def persist_vton_result(
         raise HTTPException(status_code=500, detail=f"Failed to persist: {str(e)}")
 
 
+@router.delete("/{vton_id}")
+async def delete_vton_result_route(
+    vton_id: str,
+    request: Request,
+    user=Depends(require_auth),
+):
+    """Delete a VTON result (D1 record + R2 object)."""
+    user_id = user.user_id
+    db = get_db(request)
+    env = get_env(request)
+    vton_result = await db.get_vton_result(vton_id)
+
+    if not vton_result:
+        raise HTTPException(status_code=404, detail="VTON result not found")
+    if vton_result.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    from services.r2 import delete_vton_result as delete_r2_object
+    try:
+        await delete_r2_object(env, user_id, vton_id)
+    except Exception as e:
+        import json
+        print(json.dumps({"event": "r2_delete_failed", "vton_id": vton_id, "error": str(e)}))
+
+    await db.delete_vton_result(vton_id, user_id)
+    return {"status": "deleted"}
+
+
 @router.get("/history")
 async def get_user_history(
     request: Request,

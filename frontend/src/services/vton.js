@@ -103,6 +103,11 @@ export const persistVtonResult = async (vtonId) => {
   return response.data;
 };
 
+export const deleteVtonResult = async (vtonId) => {
+  await api.delete(`/vton/${vtonId}`);
+  return true;
+};
+
 export const getHistory = async () => {
   const response = await api.get("/vton/history");
   return response.data;

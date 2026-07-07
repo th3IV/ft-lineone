@@ -52,14 +52,19 @@ function ModalVTON({ product, isOpen, onClose }) {
         video: { facingMode: "user", width: { ideal: 768 }, height: { ideal: 1024 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
       setCameraActive(true);
     } catch (err) {
       console.error("Error accessing camera:", err);
     }
   };
+
+  // Attach stream to video element after it renders
+  useEffect(() => {
+    if (cameraActive && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraActive]);
 
   // Stop camera
   const stopCamera = () => {

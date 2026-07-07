@@ -66,3 +66,10 @@ async def save_vton_output_to_r2(env, user_id: str, vton_id: str, output_url: st
             "error": str(e),
         }))
         return output_url
+
+
+async def delete_vton_result(env, user_id: str, vton_id: str) -> bool:
+    """Delete VTON result image from R2."""
+    key = f"vton/{user_id}/{vton_id}.jpg"
+    await env.R2.delete(key)
+    return True

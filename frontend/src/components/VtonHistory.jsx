@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ExternalLink, Clock, CheckCircle, AlertCircle, Loader } from "lucide-react";
+import { X, ExternalLink, Clock, CheckCircle, AlertCircle, Loader, Trash2, Download } from "lucide-react";
 import api from "../services/api";
+import { deleteVtonResult } from "../services/vton";
+import toast from "react-hot-toast";
 
 function VtonHistory() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedResult, setSelectedResult] = useState(null);
+  const [deleting, setDeleting] = useState(null);
 
   useEffect(() => {
     fetchHistory();
@@ -45,6 +48,32 @@ function VtonHistory() {
       case "failed": return "Fallido";
       default: return status;
     }
+  };
+
+  const handleDelete = async (e, resultId) => {
+    e.stopPropagation();
+    setDeleting(resultId);
+    try {
+      await deleteVtonResult(resultId);
+      setResults(results.filter((r) => r.id !== resultId));
+      if (selectedResult?.id === resultId) setSelectedResult(null);
+      toast.success("Resultado eliminado");
+    } catch {
+      toast.error("Error al eliminar");
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const handleDownload = (e, imageUrl, productName) => {
+    e.stopPropagation();
+    const a = document.createElement("a");
+    a.href = imageUrl;
+    a.download = `vton-${productName || "resultado"}.jpg`;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   if (loading) {
@@ -101,6 +130,31 @@ function VtonHistory() {
               <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-editorial-white/90 backdrop-blur-sm rounded-full px-2.5 py-1">
                 {getStatusIcon(result.status)}
                 <span className="text-[10px] font-medium">{getStatusLabel(result.status)}</span>
+              </div>
+
+              {/* Action buttons */}
+              <div className="absolute top-3 right-3 flex gap-1.5 z-10">
+                {result.output_image_url && (
+                  <button
+                    onClick={(e) => handleDownload(e, result.output_image_url, result.product?.name)}
+                    className="w-7 h-7 rounded-full bg-editorial-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-editorial-white transition-colors"
+                    title="Descargar"
+                  >
+                    <Download size={12} className="text-editorial-black" />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => handleDelete(e, result.id)}
+                  disabled={deleting === result.id}
+                  className="w-7 h-7 rounded-full bg-editorial-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-red-50 transition-colors disabled:opacity-50"
+                  title="Eliminar"
+                >
+                  {deleting === result.id ? (
+                    <Loader size={12} className="text-red-500 animate-spin" />
+                  ) : (
+                    <Trash2 size={12} className="text-red-500" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -193,17 +247,36 @@ function VtonHistory() {
                   {getStatusIcon(selectedResult.status)}
                   <span className="text-xs">{getStatusLabel(selectedResult.status)}</span>
                 </div>
-                {selectedResult.product?.original_url && (
-                  <a
-                    href={selectedResult.product.original_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-outline text-xs flex items-center gap-1.5"
+                <div className="flex items-center gap-2">
+                  {selectedResult.output_image_url && (
+                    <button
+                      onClick={(e) => handleDownload(e, selectedResult.output_image_url, selectedResult.product?.name)}
+                      className="btn-outline text-xs flex items-center gap-1.5"
+                    >
+                      <Download size={12} />
+                      Descargar
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => handleDelete(e, selectedResult.id)}
+                    disabled={deleting === selectedResult.id}
+                    className="btn-outline text-xs flex items-center gap-1.5 hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
                   >
-                    <ExternalLink size={12} />
-                    Ver prenda
-                  </a>
-                )}
+                    <Trash2 size={12} className="text-red-500" />
+                    Eliminar
+                  </button>
+                  {selectedResult.product?.original_url && (
+                    <a
+                      href={selectedResult.product.original_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-outline text-xs flex items-center gap-1.5"
+                    >
+                      <ExternalLink size={12} />
+                      Ver prenda
+                    </a>
+                  )}
+                </div>
               </div>
             </motion.div>
           </motion.div>

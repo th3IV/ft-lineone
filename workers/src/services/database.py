@@ -163,6 +163,17 @@ class DatabaseService:
             return ProductModel(result)
         return None
 
+    # Gender value → list of SQL LIKE keywords to match in category column
+    GENDER_VARIANTS = {
+        "hombre": ["hombre", "men", "masculino", "male"],
+        "mujer": ["mujer", "women", "femenino", "female", "ladies", "damas"],
+    }
+
+    # Keywords that identify footwear (excluded from catalog — VTON doesn't support it)
+    EXCLUDED_FOOTWEAR_KEYWORDS = [
+        "calzado", "zapato", "zapatill", "sneaker", "tenis", "bota", "botin",
+    ]
+
     # Frontend clothing type label → SQL LIKE keywords for category column
     CLOTHING_TYPE_MAP = {
         "Poleras": ["polera", "camiseta"],
@@ -201,14 +212,16 @@ class DatabaseService:
             conditions.append("name LIKE ?")
             params.append(f"%{filters['query']}%")
 
-        # Gender filter — split comma-separated values, match any
+        # Gender filter — normalize variants and match any
         if filters.get("gender"):
             gender_values = [g.strip().lower() for g in filters["gender"].split(",") if g.strip()]
             if gender_values:
                 gender_conds = []
                 for gv in gender_values:
-                    gender_conds.append("LOWER(category) LIKE ?")
-                    params.append(f"%{gv}%")
+                    variants = self.GENDER_VARIANTS.get(gv, [gv])
+                    for v in variants:
+                        gender_conds.append("LOWER(category) LIKE ?")
+                        params.append(f"%{v}%")
                 conditions.append(f"({' OR '.join(gender_conds)})")
 
         # Clothing type filter — map frontend labels to SQL LIKE keywords
@@ -233,6 +246,11 @@ class DatabaseService:
         if filters.get("color"):
             conditions.append("colors LIKE ?")
             params.append(f'%"{filters["color"]}"%')
+
+        # Exclude footwear from catalog (VTON doesn't support shoes)
+        for kw in self.EXCLUDED_FOOTWEAR_KEYWORDS:
+            conditions.append(f"LOWER(category) NOT LIKE '%{kw}%'")
+            conditions.append(f"LOWER(name) NOT LIKE '%{kw}%'")
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
@@ -455,3 +473,10 @@ class DatabaseService:
         if result:
             return VtonResultModel(result)
         return None
+
+    async def delete_vton_result(self, vton_id: str, user_id: str) -> bool:
+        """Delete a VTON result record (with ownership check)."""
+        await self.db.prepare(
+            "DELETE FROM vton_results WHERE id = ? AND user_id = ?"
+        ).bind(vton_id, user_id).run()
+        return True
