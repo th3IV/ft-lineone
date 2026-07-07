@@ -5,6 +5,7 @@ Polls YouCam API for tasks with status "processing" and updates D1.
 """
 
 import json
+import re
 from datetime import datetime
 from services.database import DatabaseService
 from services.youcam import YouCamService
@@ -57,3 +58,92 @@ async def process_pending_vton_tasks(env):
             }))
 
     return {"processed": processed, "total_pending": len(pending_tasks)}
+
+
+# Size suffixes to detect corrupted colors
+_SIZE_SUFFIXES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
+
+
+def _is_valid_color(color: str, product_name: str) -> bool:
+    """Check if a color value is valid. Returns False if color is corrupted."""
+    if not color:
+        return False
+
+    color_upper = color.upper().strip()
+
+    # 1. Color contains product name -> invalid
+    if product_name.lower() in color.lower():
+        return False
+
+    # 2. Color is a size (XS, S, M, L, XL, etc.) -> invalid
+    for suffix in _SIZE_SUFFIXES:
+        if color_upper == suffix or color_upper.endswith(f' {suffix}'):
+            return False
+
+    # 3. Color is a number (size) -> invalid
+    if color_upper.isdigit():
+        return False
+
+    # 4. Color contains size-like patterns (e.g., "0-1M", "1-2M") -> invalid
+    if re.match(r'^\d+-\d+M$', color_upper):
+        return False
+
+    return True
+
+
+async def cleanup_corrupted_data(env):
+    """Clean up products with corrupted colors (colors that are actually sizes)."""
+    db = DatabaseService(env)
+
+    # Get all products (paginated)
+    page = 1
+    total_fixed = 0
+    total_checked = 0
+
+    while True:
+        products, total = await db.get_products({}, page=page, limit=100)
+        if not products:
+            break
+
+        for product in products:
+            total_checked += 1
+            needs_update = False
+            clean_colors = []
+
+            for color in product.colors:
+                if _is_valid_color(color, product.name):
+                    clean_colors.append(color)
+                else:
+                    needs_update = True
+
+            if needs_update:
+                try:
+                    await db.update_product_sizes(product.id, product.sizes, clean_colors)
+                    total_fixed += 1
+                    print(json.dumps({
+                        "event": "cleanup_fixed",
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "old_colors": product.colors,
+                        "new_colors": clean_colors,
+                    }))
+                except Exception as e:
+                    print(json.dumps({
+                        "event": "cleanup_error",
+                        "product_id": product.id,
+                        "error": str(e),
+                    }))
+
+        # Next page
+        if page * 100 >= total:
+            break
+        page += 1
+
+    if total_fixed > 0:
+        print(json.dumps({
+            "event": "cleanup_complete",
+            "checked": total_checked,
+            "fixed": total_fixed,
+        }))
+
+    return {"checked": total_checked, "fixed": total_fixed}

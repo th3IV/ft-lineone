@@ -8,6 +8,7 @@ Endpoint:
 """
 
 import json
+import re
 from typing import Optional
 from dataclasses import dataclass, field
 
@@ -176,6 +177,14 @@ class HMScraper:
             if image_urls:
                 image_url = image_urls[0]
 
+        # Fallback: Color from product specifications
+        if not colors:
+            color_specs = item.get("Color", [])
+            if isinstance(color_specs, list):
+                for c in color_specs:
+                    if c and c not in colors:
+                        colors.append(c)
+
         # URL — full URL already provided
         original_url = item.get("link", "") or f"{self.BASE_URL}/{product_id}/p"
 
@@ -225,9 +234,14 @@ class HMScraper:
                         if len(parts) > 1:
                             size_val = parts[-1].strip()
                         else:
-                            # Fallback: extract size from name vs productName
-                            # name is usually "ProductName Size" (e.g. "Trenchcoat XXS")
-                            size_val = size_name.replace(name, "").strip()
+                            # Extract size from the end of the string
+                            # Common sizes: XXS, XS, S, M, L, XL, XXL, XXXL, numeric sizes
+                            size_match = re.search(r'\b(XXS|XS|S|M|L|XL|XXL|XXXL|\d{2})\s*$', size_name)
+                            if size_match:
+                                size_val = size_match.group(1)
+                            else:
+                                # Fallback: try to remove product name
+                                size_val = size_name.replace(name, "").strip()
                         if size_val and size_val not in sizes:
                             sizes.append(size_val)
 

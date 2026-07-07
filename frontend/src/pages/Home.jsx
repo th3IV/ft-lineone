@@ -12,7 +12,6 @@ import RevealOnScroll, {
 } from "../components/RevealOnScroll";
 
 const stores = [
-    { name: 'Paris', slug: 'paris', description: 'Estilo accesible', image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80' },
     { name: 'Maui', slug: 'maui', description: 'Maui & Sons', image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=800&q=80' },
     { name: 'Zara', slug: 'zara', description: 'Moda internacional', image: 'https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=800&q=80' },
     { name: 'Falabella', slug: 'falabella', description: 'Variedad y moda', image: 'https://images.unsplash.com/photo-1567401893414-76b7b1e5a7a5?w=800&q=80' },

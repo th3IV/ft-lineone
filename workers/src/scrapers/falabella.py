@@ -97,13 +97,14 @@ class FalabellaScraper:
 
         # Infer category from query for products missing GSCCategoryId
         inferred_category = self._infer_category(query)
+        inferred_gender = self._infer_gender(query)
 
         try:
             resp = await client.get(url)
             if resp.status_code != 200:
                 print(f"[falabella] Search '{query}' returned status {resp.status_code}")
                 return []
-            products = self._parse_ssr_data(resp.text, max_items, inferred_category)
+            products = self._parse_ssr_data(resp.text, max_items, inferred_category, inferred_gender)
             print(f"[falabella] Search '{query}' parsed {len(products)} products")
         except Exception as e:
             print(f"[falabella] Error searching '{query}': {type(e).__name__}: {e}")
@@ -118,11 +119,20 @@ class FalabellaScraper:
                 return category
         return ""
 
+    def _infer_gender(self, query: str) -> str:
+        """Infer gender from search query."""
+        q = query.lower()
+        if "hombre" in q or "men" in q:
+            return "hombre"
+        elif "mujer" in q or "women" in q:
+            return "mujer"
+        return ""
+
     async def scrape_category(self, category: str, max_items: int = 50) -> list[FalabellaProduct]:
         """Scrape products from a category using search."""
         return await self.search_products(category, max_items)
 
-    def _parse_ssr_data(self, html: str, max_items: int, inferred_category: str = "") -> list[FalabellaProduct]:
+    def _parse_ssr_data(self, html: str, max_items: int, inferred_category: str = "", inferred_gender: str = "") -> list[FalabellaProduct]:
         """Parse Falabella SSR JSON payload to extract products."""
         products = []
 
@@ -138,7 +148,7 @@ class FalabellaScraper:
                     continue
 
                 for item in results[:max_items]:
-                    product = self._parse_falabella_product(item, inferred_category)
+                    product = self._parse_falabella_product(item, inferred_category, inferred_gender)
                     if product and product.name:
                         products.append(product)
 
@@ -148,7 +158,7 @@ class FalabellaScraper:
 
         return products[:max_items]
 
-    def _parse_falabella_product(self, item: dict, inferred_category: str = "") -> Optional[FalabellaProduct]:
+    def _parse_falabella_product(self, item: dict, inferred_category: str = "", inferred_gender: str = "") -> Optional[FalabellaProduct]:
         """Parse a single Falabella product from SSR data."""
         if not isinstance(item, dict):
             return None
@@ -189,6 +199,9 @@ class FalabellaScraper:
         # Extract category from GSCCategoryId, fallback to inferred from query
         gsc_id = item.get("GSCCategoryId", "")
         category = CATEGORY_MAP.get(gsc_id, "") or inferred_category
+        # Include gender in category for filtering
+        if inferred_gender:
+            category = f"{category} {inferred_gender}".strip()
 
         # Extract colors and sizes from variants
         # CORRECT path: variants[type="COLOR"].options[*].sizes[*]["value"]

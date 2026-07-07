@@ -3,18 +3,11 @@
 import asyncio
 from datetime import datetime, timezone
 
-from scrapers.zara import ZaraScraper
-from scrapers.paris import ParisScraper
-from scrapers.maui import MauiScraper
-from scrapers.falabella import FalabellaScraper
-from scrapers.hm import HMScraper
-from scrapers.fashionpark import FashionParkScraper
 from services.database import DatabaseService
 
 
 # Rate limiting: seconds between requests per store
 RATE_LIMITS = {
-    "paris": 1.5,
     "maui": 2.0,
     "zara": 3.0,
     "falabella": 1.5,
@@ -24,17 +17,6 @@ RATE_LIMITS = {
 
 # Real categories/search terms per store
 STORE_CATEGORIES = {
-    "paris": {
-        "type": "search",  # Paris uses search queries
-        "queries": [
-            "polera mujer",
-            "jean mujer",
-            "polera hombre",
-            "vestido mujer",
-            "chaqueta hombre",
-            "falda mujer",
-        ],
-    },
     "maui": {
         "type": "category",  # Maui uses category slugs
         "categories": [
@@ -94,12 +76,17 @@ class ScraperRunner:
     """Runs scrapers on a schedule via Cloudflare Workers Cron."""
 
     def __init__(self, env, max_products=30):
+        from scrapers.zara import ZaraScraper
+        from scrapers.maui import MauiScraper
+        from scrapers.falabella import FalabellaScraper
+        from scrapers.hm import HMScraper
+        from scrapers.fashionpark import FashionParkScraper
+
         self.env = env
         self.db = DatabaseService(env)
         self.max_products = max_products
         self.scrapers = {
             "zara": ZaraScraper(),
-            "paris": ParisScraper(),
             "maui": MauiScraper(),
             "falabella": FalabellaScraper(),
             "hm": HMScraper(),
@@ -207,8 +194,49 @@ class ScraperRunner:
         except Exception as e:
             return {"status": "failed", "error": str(e)}
 
+    def _validate_product(self, product) -> bool:
+        """Validate product data before inserting. Returns False if data is corrupted."""
+        # 1. Name must exist and be at least 3 chars
+        if not product.name or len(product.name) < 3:
+            return False
+
+        # 2. Price must be positive
+        if product.price <= 0:
+            return False
+
+        # 3. Sizes must not contain product name
+        for size in product.sizes:
+            if product.name.lower() in size.lower():
+                return False
+
+        # 4. Colors must not contain product name
+        for color in product.colors:
+            if product.name.lower() in color.lower():
+                return False
+
+        # 5. Colors must not be sizes (e.g., "Polera XS", "Polera S")
+        size_suffixes = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
+        for color in product.colors:
+            color_upper = color.upper().strip()
+            for suffix in size_suffixes:
+                if color_upper.endswith(f' {suffix}') or color_upper == suffix:
+                    return False
+
+        return True
+
     async def _ingest_product(self, store_name: str, product) -> dict:
         """Ingest a scraped product into the database."""
+        # Validate product data before inserting
+        if not self._validate_product(product):
+            print(json.dumps({
+                "event": "product_validation_failed",
+                "store": store_name,
+                "product_name": product.name,
+                "sizes": product.sizes,
+                "colors": product.colors,
+            }))
+            return {"status": "invalid", "product_name": product.name}
+
         # Use cached existing products set to avoid repeated DB queries
         if not hasattr(self, '_existing_ids'):
             self._existing_ids = {}

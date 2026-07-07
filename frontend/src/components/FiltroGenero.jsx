@@ -1,10 +1,5 @@
 const generos = ["Hombre", "Mujer"];
 
-const iconos = {
-  Hombre: "M",
-  Mujer: "F",
-};
-
 function FiltroGenero({ selected, onChange }) {
   return (
     <div>
@@ -20,7 +15,7 @@ function FiltroGenero({ selected, onChange }) {
                 : "bg-editorial-white text-editorial-gray hover:border-editorial-black/20"
             }`}
           >
-            {iconos[g]}
+            {g}
           </button>
         ))}
       </div>

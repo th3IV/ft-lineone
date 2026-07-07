@@ -1,5 +1,4 @@
 const tiendas = [
-  { nombre: "Paris", slug: "paris", clase: "bg-editorial-blue-light text-white hover:bg-editorial-blue-dark transition-colors" },
   { nombre: "Maui", slug: "maui", clase: "bg-teal-500 text-white hover:bg-teal-600 transition-colors" },
   { nombre: "Zara", slug: "zara", clase: "bg-black text-white hover:bg-gray-800 transition-colors" },
   { nombre: "Falabella", slug: "falabella", clase: "bg-green-600 text-white hover:bg-green-700 transition-colors" },

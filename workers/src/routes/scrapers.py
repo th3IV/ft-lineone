@@ -3,9 +3,6 @@
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
-from scrapers.falabella import FalabellaScraper
-from scrapers.fashionpark import FashionParkScraper
-from scrapers.hm import HMScraper
 from models.product import ProductCreate
 from middleware.security import require_auth
 
@@ -134,17 +131,56 @@ async def trigger_scrapers(request: Request):
         await runner.close()
 
 
+@router.post("/reset/{store}")
+async def reset_store(store: str, request: Request):
+    """EMERGENCY ONLY: Delete all products from a store and re-scrape.
+
+    This endpoint is for emergency use only when data is severely corrupted
+    and the automatic cleanup in the cron cannot fix it.
+
+    Normal data cleanup happens automatically every 2 minutes via cron.
+    """
+    from scrapers.scheduler import ScraperRunner
+
+    db = request.app.state.db
+
+    # Delete all products from the store
+    try:
+        deleted_count = await db.delete_products_by_store(store)
+    except Exception as e:
+        return {"status": "error", "error": f"Failed to delete: {str(e)}"}
+
+    # Re-scrape the store
+    runner = ScraperRunner(request.app.state.env, max_products=20)
+    try:
+        if store not in runner.scrapers:
+            return {"status": "error", "error": f"Unknown store: {store}"}
+
+        result = await runner._run_scraper(store, runner.scrapers[store])
+        return {
+            "status": "completed",
+            "store": store,
+            "deleted_count": deleted_count,
+            "scrape_result": result,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+    finally:
+        await runner.close()
+
+
 @router.post("/run/{store}")
 async def run_single_scraper(store: str, request: Request, user: dict = Depends(require_auth)):
     """Manually trigger a single store scraper for testing."""
     from scrapers.scheduler import ScraperRunner
     from scrapers.zara import ZaraScraper
-    from scrapers.paris import ParisScraper
     from scrapers.maui import MauiScraper
+    from scrapers.falabella import FalabellaScraper
+    from scrapers.fashionpark import FashionParkScraper
+    from scrapers.hm import HMScraper
 
     scraper_map = {
         "zara": ZaraScraper,
-        "paris": ParisScraper,
         "maui": MauiScraper,
         "falabella": FalabellaScraper,
         "fashionpark": FashionParkScraper,
@@ -266,42 +302,8 @@ async def enrich_missing_sizes(request: Request, user: dict = Depends(require_au
             zara_errors.append(str(e)[:100])
     results["stores"]["zara"] = {"total": len(zara_products), "enriched": zara_enriched, "errors": zara_errors[:5]}
 
-    # Paris enrichment
-    paris_products = await db.get_products_without_sizes("paris", limit=200)
-    paris_enriched = 0
-    paris_errors = []
-    if paris_products:
-        from scrapers.paris import ParisScraper
-        scraper = ParisScraper()
-        try:
-            for product in paris_products:
-                if not product.original_url:
-                    continue
-                try:
-                    headers = to_js({
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                        "Accept-Language": "es-CL,es;q=0.9",
-                    })
-                    resp = await js.fetch(product.original_url, to_js({"method": "GET", "headers": headers}))
-                    if int(resp.status) != 200:
-                        continue
-                    text = await resp.text()
-                    sizes = scraper._extract_sizes_from_html(text)
-                    colors = scraper._extract_colors_from_html(text)
-                    if sizes:
-                        await db.update_product_sizes(product.id, sizes, colors or None)
-                        paris_enriched += 1
-                    else:
-                        paris_errors.append(f"{product.original_url}: no sizes")
-                except Exception as e:
-                    paris_errors.append(f"{product.original_url}: {str(e)[:100]}")
-                    continue
-        finally:
-            await scraper.close()
-    results["stores"]["paris"] = {"total": len(paris_products), "enriched": paris_enriched, "errors": paris_errors[:5]}
-
     results["summary"] = {
-        "total_enriched": fp_enriched + zara_enriched + paris_enriched,
+        "total_enriched": fp_enriched + zara_enriched,
     }
     return results
 
@@ -313,53 +315,7 @@ async def debug_scraper(store: str):
 
     debug_info = {"store": store, "tests": []}
 
-    if store == "paris":
-        client = httpx.AsyncClient(timeout=15.0, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept-Language": "es-CL,es;q=0.9",
-        })
-        try:
-            # Test 1: Constructor.io JS bundle
-            r1 = await client.get("https://cnstrc.com/js/cust/cencosud_0BmS-e.js")
-            import re
-            match = re.search(r"key[=:]\s*['\"]?([a-zA-Z0-9_-]+)['\"]?", r1.text) if r1.status_code == 200 else None
-            debug_info["tests"].append({
-                "test": "cnstrc_js",
-                "status": r1.status_code,
-                "content_length": len(r1.text),
-                "key_found": match.group(1) if match else None,
-            })
-
-            # Test 2: Constructor.io search
-            if match:
-                key = match.group(1)
-                r2 = await client.get("https://ac.cnstrc.com/search", params={
-                    "key": key, "i": "polera mujer", "num_results_per_page": 5, "section": "Products",
-                })
-                data = r2.json() if r2.status_code == 200 else {}
-                results = data.get("response", {}).get("results", [])
-                debug_info["tests"].append({
-                    "test": "cnstrc_search",
-                    "status": r2.status_code,
-                    "results_count": len(results),
-                    "first_result": results[0] if results else None,
-                })
-
-            # Test 3: Direct HTML
-            r3 = await client.get("https://www.paris.cl/search", params={"q": "polera mujer"})
-            debug_info["tests"].append({
-                "test": "html_search",
-                "status": r3.status_code,
-                "content_length": len(r3.text),
-                "has_next_data": "__NEXT_DATA__" in r3.text,
-                "snippet": r3.text[:500] if r3.status_code == 200 else f"Error {r3.status_code}",
-            })
-        except Exception as e:
-            debug_info["error"] = str(e)
-        finally:
-            await client.aclose()
-
-    elif store == "zara":
+    if store == "zara":
         client = httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept-Language": "es-CL,es;q=0.9",
@@ -437,27 +393,6 @@ async def test_endpoints():
     import httpx
 
     results = {}
-
-    # Test Paris
-    try:
-        async with httpx.AsyncClient(timeout=15.0, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "text/html,application/xhtml+xml",
-            "Accept-Language": "es-CL,es;q=0.9",
-        }) as client:
-            r = await client.get("https://www.paris.cl/search", params={"q": "polera mujer"})
-            has_rsc = "self.__next_f.push" in r.text
-            has_item_list = "itemListElement" in r.text
-            results["paris"] = {
-                "url": str(r.url),
-                "status": r.status_code,
-                "content_length": len(r.text),
-                "has_rsc_push": has_rsc,
-                "has_item_list_element": has_item_list,
-                "snippet": r.text[:800] if r.status_code == 200 else f"Error {r.status_code}",
-            }
-    except Exception as e:
-        results["paris"] = {"error": str(e)}
 
     # Test Fashion Park
     try:

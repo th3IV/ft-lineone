@@ -107,6 +107,42 @@ async def health_check():
     return {"status": "healthy", "version": "2.0.0", "runtime": "cloudflare-workers"}
 
 
+@app.get("/test-packages")
+async def test_packages():
+    """Test which Python packages are available in Workers."""
+    results = {}
+
+    # Test httpx
+    try:
+        import httpx
+        results["httpx"] = {"available": True, "version": httpx.__version__}
+    except ImportError as e:
+        results["httpx"] = {"available": False, "error": str(e)}
+
+    # Test cloudscraper
+    try:
+        import cloudscraper
+        results["cloudscraper"] = {"available": True}
+    except ImportError as e:
+        results["cloudscraper"] = {"available": False, "error": str(e)}
+
+    # Test curl_cffi
+    try:
+        import curl_cffi
+        results["curl_cffi"] = {"available": True}
+    except ImportError as e:
+        results["curl_cffi"] = {"available": False, "error": str(e)}
+
+    # Test js (Pyodide)
+    try:
+        import js
+        results["js"] = {"available": True}
+    except ImportError as e:
+        results["js"] = {"available": False, "error": str(e)}
+
+    return results
+
+
 @app.get("/test-ai")
 async def test_ai(request: Request):
     """Test endpoint to verify Workers AI binding is working."""
@@ -227,7 +263,7 @@ class Default(WorkerEntrypoint):
     async def scheduled(self, controller, env, ctx):
         """Handle cron triggers for scraper scheduling and VTON polling."""
         from scrapers.scheduler import ScraperRunner
-        from cron import process_pending_vton_tasks
+        from cron import process_pending_vton_tasks, cleanup_corrupted_data
 
         cron_expr = getattr(controller, "cron", "") or ""
         max_products = 20
@@ -251,3 +287,10 @@ class Default(WorkerEntrypoint):
             print(json.dumps({"event": "cron_vton_complete", "cron": cron_expr, "results": vton_results}))
         except Exception as e:
             print(json.dumps({"event": "cron_vton_error", "error": str(e)}))
+
+        # Clean up corrupted product data
+        try:
+            cleanup_results = await cleanup_corrupted_data(env)
+            print(json.dumps({"event": "cron_cleanup_complete", "cron": cron_expr, "results": cleanup_results}))
+        except Exception as e:
+            print(json.dumps({"event": "cron_cleanup_error", "error": str(e)}))

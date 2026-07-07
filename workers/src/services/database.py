@@ -305,6 +305,13 @@ class DatabaseService:
             "created_at": now,
         })
 
+    async def delete_products_by_store(self, store: str) -> int:
+        """Delete all products from a specific store. Returns number of deleted products."""
+        result = await self.db.prepare(
+            "DELETE FROM products WHERE store = ?"
+        ).bind(store).run()
+        return result.changes if hasattr(result, 'changes') else 0
+
     async def update_product_sizes(self, product_id: str, sizes: list[str], colors: list[str] = None) -> bool:
         """Update sizes and optionally colors for an existing product."""
         sets = []
