@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Upload, Sparkles, Loader2, AlertCircle } from "lucide-react";
+import { X, Upload, Sparkles, Loader2, AlertCircle, Camera } from "lucide-react";
 import { useSelector } from "react-redux";
 import { compressImage } from "../utils/compressImage";
 import { useVtonPolling } from "../hooks/useVtonPolling";
@@ -14,6 +14,9 @@ const PHOTO_TIPS = [
 
 function ModalVTON({ product, isOpen, onClose }) {
   const [userImage, setUserImage] = useState(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
   const { isAuthenticated } = useSelector((state) => state.user);
   const { loading, error, resultImage, progress, generate, reset } =
     useVtonPolling();
@@ -41,6 +44,65 @@ function ModalVTON({ product, isOpen, onClose }) {
     multiple: false,
     maxSize: 10 * 1024 * 1024,
   });
+
+  // Start camera
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 768 }, height: { ideal: 1024 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setCameraActive(true);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+    }
+  };
+
+  // Stop camera
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  };
+
+  // Capture photo from camera
+  const capturePhoto = async () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext("2d").drawImage(videoRef.current, 0, 0);
+
+    canvas.toBlob(
+      async (blob) => {
+        if (blob) {
+          const file = new File([blob], "camera-photo.jpg", { type: "image/jpeg" });
+          try {
+            const { dataUrl } = await compressImage(file);
+            setUserImage(dataUrl);
+            reset();
+          } catch {
+            // error handled by parent
+          }
+        }
+        stopCamera();
+      },
+      "image/jpeg",
+      0.8
+    );
+  };
+
+  // Clean up camera on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
 
   const handleGenerate = async () => {
     if (!userImage || !product) return;
@@ -126,36 +188,73 @@ function ModalVTON({ product, isOpen, onClose }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="editorial-label">Tu foto</p>
-                  <div
-                    {...getRootProps()}
-                    className={`aspect-[3/4] border border-dashed flex items-center justify-center cursor-pointer transition-all ${
-                      isDragActive
-                        ? "border-editorial-black bg-editorial-cream"
-                        : "border-editorial-gray-light hover:border-editorial-black bg-editorial-cream-light"
-                    }`}
-                  >
-                    <input {...getInputProps()} />
-                    {userImage ? (
-                      <img
-                        src={userImage}
-                        alt="Tu foto"
+                  {cameraActive ? (
+                    <div className="aspect-[3/4] relative bg-black">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
                         className="w-full h-full object-cover"
                       />
-                    ) : (
-                      <div className="text-center p-4">
-                        <Upload
-                          size={24}
-                          className="mx-auto text-editorial-gray-light mb-2"
-                        />
-                        <p className="text-xs text-editorial-gray">
-                          {isDragActive
-                            ? "Suelta tu foto aqui"
-                            : "Sube tu foto (max. 10MB)"}
-                        </p>
+                      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                        <button
+                          onClick={capturePhoto}
+                          className="w-14 h-14 rounded-full bg-white border-4 border-editorial-black flex items-center justify-center hover:bg-gray-100 transition-colors"
+                        >
+                          <Camera size={24} className="text-editorial-black" />
+                        </button>
+                        <button
+                          onClick={stopCamera}
+                          className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
-                    )}
-                  </div>
-                  {!userImage && (
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        {...getRootProps()}
+                        className={`aspect-[3/4] border border-dashed flex items-center justify-center cursor-pointer transition-all ${
+                          isDragActive
+                            ? "border-editorial-black bg-editorial-cream"
+                            : "border-editorial-gray-light hover:border-editorial-black bg-editorial-cream-light"
+                        }`}
+                      >
+                        <input {...getInputProps()} />
+                        {userImage ? (
+                          <img
+                            src={userImage}
+                            alt="Tu foto"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="text-center p-4">
+                            <Upload
+                              size={24}
+                              className="mx-auto text-editorial-gray-light mb-2"
+                            />
+                            <p className="text-xs text-editorial-gray">
+                              {isDragActive
+                                ? "Suelta tu foto aqui"
+                                : "Sube tu foto (max. 10MB)"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      {!userImage && (
+                        <button
+                          onClick={startCamera}
+                          className="mt-2 w-full flex items-center justify-center gap-2 py-2 px-4 border border-editorial-black/20 text-editorial-black text-xs font-medium hover:bg-editorial-cream transition-colors"
+                        >
+                          <Camera size={14} />
+                          Usar camara
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {!userImage && !cameraActive && (
                     <ul className="mt-1.5 space-y-0.5">
                       {PHOTO_TIPS.map((tip) => (
                         <li

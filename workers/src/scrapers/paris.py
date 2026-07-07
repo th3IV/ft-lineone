@@ -85,13 +85,17 @@ class ParisScraper:
             return self._cnstrc_key
 
         try:
+            print(json.dumps({"event": "paris_cnstrc_fetch", "url": self.CNSTRC_BUNDLE_URL}))
             resp = await client.get(self.CNSTRC_BUNDLE_URL)
+            print(json.dumps({"event": "paris_cnstrc_response", "status": resp.status_code, "length": len(resp.text)}))
             if resp.status_code == 200:
                 match = re.search(r'key[=:]\s*[\'"]?([a-zA-Z0-9_-]+)[\'"]?', resp.text)
                 if match:
                     self._cnstrc_key = match.group(1)
-                    print(json.dumps({"event": "paris_cnstrc_key", "key": self._cnstrc_key}))
+                    print(json.dumps({"event": "paris_cnstrc_key_found", "key": self._cnstrc_key}))
                     return self._cnstrc_key
+                else:
+                    print(json.dumps({"event": "paris_cnstrc_key_not_found", "snippet": resp.text[:200]}))
         except Exception as e:
             print(json.dumps({"event": "paris_cnstrc_key_error", "error": str(e)}))
 
@@ -127,6 +131,7 @@ class ParisScraper:
                 return []
 
             # Search via Constructor.io
+            print(json.dumps({"event": "paris_search_request", "query": query, "key": key, "max_items": max_items}))
             resp = await client.get(self.CNSTRC_SEARCH_URL, params={
                 "key": key,
                 "i": query,
@@ -134,12 +139,14 @@ class ParisScraper:
                 "section": "Products",
             })
 
+            print(json.dumps({"event": "paris_search_response", "query": query, "status": resp.status_code, "length": len(resp.text)}))
             if resp.status_code != 200:
-                print(json.dumps({"event": "paris_search_error", "query": query, "status": resp.status_code}))
+                print(json.dumps({"event": "paris_search_error", "query": query, "status": resp.status_code, "body": resp.text[:500]}))
                 return []
 
             data = resp.json()
             results = data.get("response", {}).get("results", [])
+            print(json.dumps({"event": "paris_search_results", "query": query, "results_count": len(results)}))
 
             category = self._infer_category(query)
             gender = self._infer_gender(query)
