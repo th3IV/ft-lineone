@@ -171,7 +171,7 @@ class ParisScraper:
                     self._extract_colors_from_html(resp.text),
                 )
         except Exception as e:
-            print(f"[paris] Error fetching detail {url}: {e}")
+                print(json.dumps({"event": "paris_detail_error", "url": url, "error": str(e)}))
         return [], []
 
     async def _enrich_with_details(self, client, products: list[ParisProduct]) -> None:
@@ -193,15 +193,15 @@ class ParisScraper:
         try:
             resp = await client.get(url)
             if resp.status_code != 200:
-                print(f"[paris] Search '{query}' returned status {resp.status_code}")
+                print(json.dumps({"event": "paris_search_error", "query": query, "status": resp.status_code}))
                 return []
             products = self._parse_ssr_data(resp.text, query, max_items)
             # Best-effort size and color enrichment from product detail pages
             if products:
                 await self._enrich_with_details(client, products)
-            print(f"[paris] Search '{query}' parsed {len(products)} products")
+            print(json.dumps({"event": "paris_search_success", "query": query, "products_found": len(products)}))
         except Exception as e:
-            print(f"[paris] Error searching '{query}': {type(e).__name__}: {e}")
+            print(json.dumps({"event": "paris_search_error", "query": query, "error": str(e)}))
 
         return products[:max_items]
 

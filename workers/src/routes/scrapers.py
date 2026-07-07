@@ -414,3 +414,93 @@ async def debug_scraper(store: str):
             await client.aclose()
 
     return debug_info
+
+
+@router.get("/test-endpoints")
+async def test_endpoints():
+    """Test all store API endpoints and return diagnostic info."""
+    import httpx
+
+    results = {}
+
+    # Test Paris
+    try:
+        async with httpx.AsyncClient(timeout=15.0, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "es-CL,es;q=0.9",
+        }) as client:
+            r = await client.get("https://www.paris.cl/search", params={"q": "polera mujer"})
+            has_rsc = "self.__next_f.push" in r.text
+            has_item_list = "itemListElement" in r.text
+            results["paris"] = {
+                "url": str(r.url),
+                "status": r.status_code,
+                "content_length": len(r.text),
+                "has_rsc_push": has_rsc,
+                "has_item_list_element": has_item_list,
+                "snippet": r.text[:800] if r.status_code == 200 else f"Error {r.status_code}",
+            }
+    except Exception as e:
+        results["paris"] = {"error": str(e)}
+
+    # Test Fashion Park
+    try:
+        async with httpx.AsyncClient(timeout=15.0, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+        }) as client:
+            r = await client.get("https://fashionspark.com/search/suggest.json", params={
+                "q": "polera mujer",
+                "resources[type]": "product",
+                "resources[limit]": 5,
+            })
+            data = r.json() if r.status_code == 200 else {}
+            products = data.get("resources", {}).get("results", {}).get("products", [])
+            results["fashionpark"] = {
+                "url": str(r.url),
+                "status": r.status_code,
+                "has_resources": "resources" in data,
+                "products_count": len(products),
+                "first_product": products[0] if products else None,
+                "raw_keys": list(data.keys()) if isinstance(data, dict) else str(type(data)),
+            }
+    except Exception as e:
+        results["fashionpark"] = {"error": str(e)}
+
+    # Test H&M
+    try:
+        async with httpx.AsyncClient(timeout=15.0, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+            "Accept-Language": "es-CL,es;q=0.9",
+        }) as client:
+            r = await client.get("https://cl.hm.com/api/catalog_system/pub/products/search/", params={
+                "q": "polera",
+                "_from": 0,
+                "_to": 4,
+            })
+            is_list = False
+            products = []
+            raw_type = ""
+            try:
+                data = r.json()
+                raw_type = str(type(data))
+                is_list = isinstance(data, list)
+                if is_list:
+                    products = data
+            except:
+                data = r.text[:500]
+            results["hm"] = {
+                "url": str(r.url),
+                "status": r.status_code,
+                "is_list": is_list,
+                "raw_type": raw_type,
+                "products_count": len(products) if is_list else 0,
+                "first_product": products[0] if products else None,
+                "snippet": r.text[:800] if r.status_code != 200 else (str(products[0])[:300] if products else "empty list"),
+            }
+    except Exception as e:
+        results["hm"] = {"error": str(e)}
+
+    return results

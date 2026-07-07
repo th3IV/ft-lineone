@@ -30,6 +30,6 @@
     "CLOUDFLARE_AI_GATEWAY_ID": "ft-lineone-vton"
   },
   "triggers": {
-    "crons": []
+    "crons": ["0 */6 * * *"]
   }
 }

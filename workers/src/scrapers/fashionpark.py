@@ -178,7 +178,7 @@ class FashionParkScraper:
             if resp.status_code == 200:
                 return resp.json()
         except Exception as e:
-            print(f"[fashionpark] Error fetching detail for {handle}: {e}")
+                    print(json.dumps({"event": "fashionpark_detail_error", "handle": handle, "error": str(e)}))
         return {}
 
     async def _enrich_with_details(self, client, items: list[dict]) -> dict[str, dict]:
@@ -205,7 +205,7 @@ class FashionParkScraper:
         try:
             resp = await client.get(url)
             if resp.status_code != 200:
-                print(f"[fashionpark] Search '{query}' returned status {resp.status_code}")
+                print(json.dumps({"event": "fashionpark_search_error", "query": query, "status": resp.status_code}))
                 return []
             data = resp.json()
             results = data.get("resources", {}).get("results", {}).get("products", [])
@@ -225,9 +225,9 @@ class FashionParkScraper:
                 )
                 if product and product.name:
                     products.append(product)
-            print(f"[fashionpark] Search '{query}' parsed {len(products)} products")
+            print(json.dumps({"event": "fashionpark_search_success", "query": query, "products_found": len(products)}))
         except Exception as e:
-            print(f"[fashionpark] Error searching '{query}': {type(e).__name__}: {e}")
+            print(json.dumps({"event": "fashionpark_search_error", "query": query, "error": str(e)}))
 
         return products[:max_items]
 

@@ -3,7 +3,7 @@ const tiendas = [
   { nombre: "Maui", slug: "maui", clase: "bg-teal-500 text-white hover:bg-teal-600 transition-colors" },
   { nombre: "Zara", slug: "zara", clase: "bg-black text-white hover:bg-gray-800 transition-colors" },
   { nombre: "Falabella", slug: "falabella", clase: "bg-green-600 text-white hover:bg-green-700 transition-colors" },
-  { nombre: "H&M", slug: "h&m", clase: "bg-red-600 text-white hover:bg-red-700 transition-colors" },
+  { nombre: "H&M", slug: "hm", clase: "bg-red-600 text-white hover:bg-red-700 transition-colors" },
   { nombre: "Fashion Park", slug: "fashionpark", clase: "bg-pink-500 text-white hover:bg-pink-600 transition-colors" }
 ];
 

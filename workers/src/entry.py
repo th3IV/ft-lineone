@@ -1,5 +1,6 @@
 """FT-LineOne API - Cloudflare Workers Python Entry Point."""
 
+import asyncio
 import json
 import re
 import time
@@ -14,6 +15,9 @@ import asgi
 
 from routes import auth, products, vton, recommendations, scrapers, users, favorites
 from services.database import DatabaseService
+
+# Track if scrapers have been triggered this Workers instance lifecycle
+_startup_scrapers_triggered = False
 
 app = FastAPI(
     title="FT-LineOne API",
@@ -170,6 +174,7 @@ class Default(WorkerEntrypoint):
 
     async def on_fetch(self, request):
         """Handle incoming HTTP requests via ASGI bridge."""
+        global _startup_scrapers_triggered
         origin = request.headers.get("origin", "")
 
         if request.method == "OPTIONS":
@@ -180,6 +185,11 @@ class Default(WorkerEntrypoint):
         start = time.time()
         app.state.db = DatabaseService(self.env)
         app.state.env = self.env
+
+        # Run scrapers on first request after deploy (background task)
+        if not _startup_scrapers_triggered:
+            _startup_scrapers_triggered = True
+            asyncio.create_task(self._run_startup_scrapers())
 
         try:
             response = await asgi.fetch(app, request, self.env)
@@ -223,6 +233,20 @@ class Default(WorkerEntrypoint):
                 status=500,
                 headers=h,
             )
+
+    async def _run_startup_scrapers(self):
+        """Run scrapers once on Workers startup (first request after deploy)."""
+        try:
+            from scrapers.scheduler import ScraperRunner
+            print(json.dumps({"event": "startup_scrapers_begin"}))
+            runner = ScraperRunner(self.env, max_products=20)
+            try:
+                results = await runner.run_all_scrapers()
+                print(json.dumps({"event": "startup_scrapers_complete", "results": results}))
+            finally:
+                await runner.close()
+        except Exception as e:
+            print(json.dumps({"event": "startup_scrapers_error", "error": str(e)}))
 
     async def scheduled(self, controller, env, ctx):
         """Handle cron triggers for scraper scheduling and VTON polling."""
