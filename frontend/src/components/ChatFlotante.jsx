@@ -14,30 +14,13 @@ const quickQuestions = [
 
 function ProductMiniCard({ product }) {
   const image = product.image_urls?.[0] || product.image_url;
+  if (!image) return null;
   return (
     <Link
       to={`/product/${product.id}`}
-      className="flex items-center gap-3 bg-white rounded-xl p-2 border border-editorial-black/5 hover:border-editorial-black/20 transition-colors min-w-[220px]"
+      className="block w-16 h-16 rounded-lg overflow-hidden border border-editorial-black/5 hover:border-editorial-black/20 transition-colors flex-shrink-0"
     >
-      <div className="w-12 h-12 rounded-lg overflow-hidden bg-editorial-cream flex-shrink-0">
-        {image ? (
-          <img src={image} alt={product.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-editorial-cream" />
-        )}
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] font-medium text-editorial-black truncate">
-          {product.name}
-        </p>
-        <p className="text-[10px] text-editorial-gray truncate">
-          {product.store}
-        </p>
-        <p className="text-[10px] font-semibold text-editorial-black">
-          {product.currency === "CLP" ? "$" : product.currency || "$"}
-          {product.price?.toLocaleString("es-CL")}
-        </p>
-      </div>
+      <img src={image} alt={product.name} className="w-full h-full object-cover" />
     </Link>
   );
 }
@@ -191,7 +174,7 @@ function ChatFlotante() {
                     )}
                   </div>
                   {msg.products && msg.products.length > 0 && (
-                    <div className="flex flex-col gap-2 pl-2">
+                    <div className="flex gap-2 pl-2 overflow-x-auto">
                       {msg.products.map((product) => (
                         <ProductMiniCard key={product.id} product={product} />
                       ))}

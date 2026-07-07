@@ -77,6 +77,114 @@ class LLMService:
         self.env = env
         self.ai = env.AI  # Workers AI binding
 
+    def _extract_response_text(self, result) -> str:
+        """Extract response text from AI result, handling multiple formats.
+
+        Handles:
+        - Object with "advice" at root: {"advice": "texto", "products": [...]}
+        - Old format: {"response": "texto"}
+        - New format: {"choices": [{"message": {"content": "texto"}}]}
+        - JSON string containing advice: '{"advice": "texto", "products": [...]}'
+        """
+        if not result:
+            return ""
+
+        # Case 1: result itself is a dict with "advice" at root
+        if isinstance(result, dict) and "advice" in result:
+            advice = result["advice"]
+            if advice:
+                import json as _json
+                print(_json.dumps({
+                    "event": "llm_response_extracted",
+                    "source": "root_advice",
+                    "advice_preview": str(advice)[:200],
+                }))
+                return str(advice)
+
+        # Case 2: result is a JSON string with "advice"
+        if isinstance(result, str):
+            try:
+                parsed = json.loads(result)
+                if isinstance(parsed, dict) and "advice" in parsed and parsed["advice"]:
+                    import json as _json
+                    print(_json.dumps({
+                        "event": "llm_response_extracted",
+                        "source": "json_string_advice",
+                        "advice_preview": str(parsed["advice"])[:200],
+                    }))
+                    return str(parsed["advice"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+            return result
+
+        # Case 3: Old format (llama-3.1 and earlier)
+        if isinstance(result, dict) and "response" in result:
+            val = result["response"]
+            return str(val) if val is not None else ""
+
+        # Case 4: New format (llama-3.3+ with chat completions API)
+        if isinstance(result, dict) and "choices" in result:
+            choices = result["choices"]
+            if isinstance(choices, list) and len(choices) > 0:
+                choice = choices[0]
+                if isinstance(choice, dict):
+                    message = choice.get("message", {})
+                    if isinstance(message, dict):
+                        content = message.get("content", "")
+                        import json as _json
+                        print(_json.dumps({
+                            "event": "llm_response_extracted",
+                            "source": "choices_content",
+                            "content_preview": content[:200] if content else "",
+                            "content_length": len(content) if content else 0,
+                        }))
+                        return str(content) if content is not None else ""
+
+        return ""
+
+    def _parse_advice_text(self, text: str) -> str:
+        """Parse response text and reliably extract the advice string.
+
+        Handles:
+        - JSON with advice field: '{"advice": "texto", "products": [...]}'
+        - JSON wrapped in markdown: '```json\n{"advice": "texto"}\n```'
+        - Plain text (returned as-is)
+        - Nested JSON in advice value
+        """
+        if not text:
+            return ""
+
+        stripped = text.strip()
+        json_str = stripped
+
+        # Strip markdown code fences if present
+        if "```json" in stripped:
+            json_str = stripped.split("```json")[1].split("```")[0].strip()
+        elif "```" in stripped:
+            json_str = stripped.split("```")[1].split("```")[0].strip()
+
+        try:
+            data = json.loads(json_str)
+            if isinstance(data, dict) and "advice" in data:
+                advice = data["advice"]
+                if isinstance(advice, str):
+                    advice = advice.strip()
+                    # Handle nested JSON in advice value
+                    if advice.startswith("{"):
+                        try:
+                            inner = json.loads(advice)
+                            if isinstance(inner, dict) and "advice" in inner:
+                                advice = str(inner["advice"]).strip()
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    if advice:
+                        return advice
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Fallback: return original text if it's not empty
+        return stripped if stripped else ""
+
     # ── Public API ────────────────────────────────────────────
 
     async def get_recommendations(
@@ -105,12 +213,20 @@ class LLMService:
                 },
             )
 
-            if result and "response" in result:
-                return self._parse_recommendations(result["response"], available_products)
+            response_text = self._extract_response_text(result)
+            if response_text:
+                return self._parse_recommendations(response_text, available_products)
             else:
                 return self._fallback_recommendations(available_products)
 
-        except Exception:
+        except Exception as e:
+            import json as _json
+            print(_json.dumps({
+                "event": "llm_error",
+                "method": "get_recommendations",
+                "error": str(e),
+                "type": type(e).__name__,
+            }))
             return self._fallback_recommendations(available_products)
 
     async def get_style_advice(
@@ -150,12 +266,21 @@ class LLMService:
                 },
             )
 
-            if result and "response" in result:
-                return result["response"]
-            else:
-                return "Lo siento, no pude generar un consejo en este momento."
+            response_text = self._extract_response_text(result)
+            if response_text:
+                advice = self._parse_advice_text(response_text)
+                if advice:
+                    return advice
+            return "Lo siento, no pude generar un consejo en este momento."
 
-        except Exception:
+        except Exception as e:
+            import json as _json
+            print(_json.dumps({
+                "event": "llm_error",
+                "method": "get_style_advice",
+                "error": str(e),
+                "type": type(e).__name__,
+            }))
             return "Servicio de recomendaciones no disponible temporalmente."
 
     async def get_style_advice_with_products(
@@ -203,6 +328,14 @@ class LLMService:
                 "Si recomiendas productos, inclúyelos en el campo 'products' del JSON con su product_id y una razón breve."
             )
 
+            import json as _json
+            print(_json.dumps({
+                "event": "llm_request",
+                "method": "get_style_advice_with_products",
+                "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                "prompt_length": len("\n".join(prompt_parts)),
+            }))
+
             result = await self.ai.run(
                 "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
                 {
@@ -215,12 +348,28 @@ class LLMService:
                 },
             )
 
-            if result and "response" in result:
-                return self._parse_style_advice_response(result["response"], available_products or [])
+            print(_json.dumps({
+                "event": "llm_response",
+                "method": "get_style_advice_with_products",
+                "result_type": type(result).__name__,
+                "result_keys": list(result.keys()) if isinstance(result, dict) else None,
+                "result_preview": str(result)[:200] if result else None,
+            }))
+
+            response_text = self._extract_response_text(result)
+            if response_text:
+                return self._parse_style_advice_response(response_text, available_products or [])
             else:
                 return "Lo siento, no pude generar un consejo en este momento.", []
 
-        except Exception:
+        except Exception as e:
+            import json as _json
+            print(_json.dumps({
+                "event": "llm_error",
+                "method": "get_style_advice_with_products",
+                "error": str(e),
+                "type": type(e).__name__,
+            }))
             return "Servicio de recomendaciones no disponible temporalmente.", []
 
     # ── Security ──────────────────────────────────────────────
@@ -328,7 +477,7 @@ class LLMService:
                             seen_ids.add(pid)
                 return recommendations
 
-        except (json.JSONDecodeError, IndexError):
+        except Exception:
             pass
 
         return self._fallback_recommendations(available_products)
@@ -351,6 +500,17 @@ class LLMService:
                 advice = str(data.get("advice", "")).strip()
                 products = data.get("products", [])
 
+                # If advice is itself a JSON string, parse it
+                if advice.startswith("{"):
+                    try:
+                        inner = json.loads(advice)
+                        if isinstance(inner, dict) and "advice" in inner:
+                            advice = str(inner["advice"]).strip()
+                            if "products" in inner and isinstance(inner["products"], list):
+                                products = inner["products"]
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+
                 if not isinstance(products, list):
                     products = []
 
@@ -370,11 +530,11 @@ class LLMService:
 
                 return advice, valid_products
 
-        except (json.JSONDecodeError, IndexError):
+        except Exception:
             pass
 
         # Fallback: treat entire response as plain advice
-        return llm_response.strip() or "Lo siento, no pude generar un consejo en este momento.", []
+        return (llm_response.strip() if llm_response else "") or "Lo siento, no pude generar un consejo en este momento.", []
 
     def _fallback_recommendations(self, available_products: list[dict]) -> list[dict]:
         """Simple fallback recommendations based on popularity/price."""

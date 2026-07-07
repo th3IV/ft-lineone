@@ -23,6 +23,7 @@ const PREFERENCES_DEFAULT = {
   brands: [],
   colors: [],
   styles: [],
+  occasions: [],
 };
 
 const QUIZ_COLORS = ["negro", "blanco", "gris", "azul", "beige", "marrón", "verde", "rosa"];
@@ -33,7 +34,7 @@ const BODY_SHAPES = ["reloj", "pera", "rectangulo", "triangulo", "ovalo"];
 function Profile() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { user, loading } = useSelector((state) => state.user);
+  const { user, loading, measurements: savedMeasurements, preferences: savedPreferences } = useSelector((state) => state.user);
   const { products: favoriteProducts, loading: favLoading } = useSelector((state) => state.favorites);
 
   const [profile, setProfile] = useState(user || {});
@@ -52,10 +53,20 @@ function Profile() {
   useEffect(() => {
     if (user) {
       setProfile(user);
-      if (user.body_measurements) setMeasurements(user.body_measurements);
-      if (user.preferences) setPreferences(user.preferences);
     }
-  }, [user]);
+    if (savedMeasurements && Object.keys(savedMeasurements).length > 0) {
+      setMeasurements({ ...MEASUREMENTS_DEFAULT, ...savedMeasurements });
+    }
+    if (savedPreferences && Object.keys(savedPreferences).length > 0) {
+      setPreferences({
+        sizes: savedPreferences.sizes || { upper: "", lower: "" },
+        brands: savedPreferences.brands || [],
+        colors: savedPreferences.colors || [],
+        styles: savedPreferences.styles || [],
+        occasions: savedPreferences.occasions || [],
+      });
+    }
+  }, [user, savedMeasurements, savedPreferences]);
 
   const handleSave = async () => {
     await dispatch(updateProfile({ name: profile.name, gender: profile.gender }));

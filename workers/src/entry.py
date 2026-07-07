@@ -107,6 +107,54 @@ async def health_check():
     return {"status": "healthy", "version": "2.0.0", "runtime": "cloudflare-workers"}
 
 
+@app.get("/test-ai")
+async def test_ai(request: Request):
+    """Test endpoint to verify Workers AI binding is working."""
+    env = getattr(request.app.state, "env", None)
+    if not env or not hasattr(env, "AI"):
+        return {"error": "AI binding not found", "has_env": env is not None}
+
+    # Test 1: Check if AI object exists
+    ai = env.AI
+    ai_type = type(ai).__name__
+
+    # Test 2: Try different models
+    models_to_try = [
+        "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "@cf/meta/llama-3.1-70b-instruct",
+        "@cf/meta/llama-3-8b-instruct",
+        "@cf/meta/llama-3.2-3b-instruct",
+        "@cf/meta/llama-3.1-8b-instruct-fast",
+    ]
+
+    results = {}
+    working_model = None
+    for model in models_to_try:
+        try:
+            result = await ai.run(
+                model,
+                {
+                    "messages": [{"role": "user", "content": "Say hello in one word"}],
+                    "max_tokens": 10,
+                },
+            )
+            results[model] = {"success": True, "result": str(result)[:100]}
+            if not working_model:
+                working_model = model
+        except Exception as e:
+            error_msg = str(e)
+            if "5028" in error_msg:
+                results[model] = {"success": False, "error": "Model deprecated"}
+            else:
+                results[model] = {"success": False, "error": error_msg[:100]}
+
+    return {
+        "ai_type": ai_type,
+        "working_model": working_model,
+        "results": results,
+    }
+
+
 @app.get("/")
 async def root():
     return {
