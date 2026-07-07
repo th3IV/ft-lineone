@@ -25,6 +25,7 @@ class UserResponse(UserBase):
     body_measurements: Optional[dict] = None
     preferences: dict = {}
     profile_image: Optional[str] = None
+    is_premium: bool = False
 
     class Config:
         from_attributes = True

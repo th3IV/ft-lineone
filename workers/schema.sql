@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     body_measurements TEXT, -- JSON as TEXT
     preferences TEXT, -- JSON as TEXT
     profile_image TEXT, -- R2 public URL to user avatar
+    is_premium INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

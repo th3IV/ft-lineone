@@ -25,6 +25,7 @@ class UserModel:
             else (row.get("preferences") or {})
         )
         self.profile_image = row.get("profile_image")
+        self.is_premium = bool(row.get("is_premium", 0))
         self.created_at = row.get("created_at", datetime.utcnow().isoformat())
 
 
@@ -110,8 +111,8 @@ class DatabaseService:
         now = datetime.utcnow().isoformat()
 
         await self.db.prepare(
-            """INSERT INTO users (id, email, name, password_hash, body_measurements, preferences, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)"""
+            """INSERT INTO users (id, email, name, password_hash, body_measurements, preferences, is_premium, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
         ).bind(
             user_id,
             user_data["email"],
@@ -119,6 +120,7 @@ class DatabaseService:
             user_data["password_hash"],
             json.dumps(user_data.get("body_measurements")) if user_data.get("body_measurements") else None,
             json.dumps(user_data.get("preferences", [])),
+            0,
             now,
         ).run()
 
@@ -129,15 +131,16 @@ class DatabaseService:
             "password_hash": user_data["password_hash"],
             "body_measurements": user_data.get("body_measurements"),
             "preferences": user_data.get("preferences", []),
+            "is_premium": 0,
             "created_at": now,
         })
 
     async def update_user(self, user_id: str, updates: dict) -> bool:
-        """Update user fields. Supports: name, email, body_measurements, preferences, profile_image."""
+        """Update user fields. Supports: name, email, body_measurements, preferences, profile_image, is_premium."""
         set_clauses = []
         params = []
         for key, value in updates.items():
-            if key in ("name", "email", "profile_image"):
+            if key in ("name", "email", "profile_image", "is_premium"):
                 set_clauses.append(f"{key} = ?")
                 params.append(value)
             elif key == "body_measurements":
@@ -153,6 +156,10 @@ class DatabaseService:
             f"UPDATE users SET {', '.join(set_clauses)} WHERE id = ?"
         ).bind(*params).run()
         return True
+
+    async def set_premium_status(self, user_id: str, is_premium: bool) -> bool:
+        """Set premium status for a user."""
+        return await self.update_user(user_id, {"is_premium": 1 if is_premium else 0})
 
     async def get_product(self, product_id: str) -> Optional[ProductModel]:
         """Get product by ID."""

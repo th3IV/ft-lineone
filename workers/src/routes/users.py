@@ -65,6 +65,7 @@ async def get_current_user(request: Request, user: dict = Depends(require_auth))
         "body_measurements": measurements,
         "preferences": user_obj.preferences or {},
         "profile_image": user_obj.profile_image,
+        "is_premium": user_obj.is_premium,
     }
 
 
@@ -171,3 +172,31 @@ async def delete_profile_image(
     db = get_db(request)
     await db.update_user(user.user_id, {"profile_image": None})
     return {"status": "deleted"}
+
+
+class PremiumUpdate(BaseModel):
+    is_premium: bool
+
+
+@router.patch("/{user_id}/premium")
+async def set_premium(
+    user_id: str,
+    body: PremiumUpdate,
+    request: Request,
+):
+    """Toggle premium status for a user. Requires X-Admin-Key header."""
+    env = get_env(request)
+    admin_key = getattr(env, "ADMIN_KEY", None) if env else None
+    if not admin_key:
+        raise HTTPException(status_code=500, detail="ADMIN_KEY not configured")
+
+    header_key = request.headers.get("X-Admin-Key", "")
+    if header_key != admin_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    db = get_db(request)
+    success = await db.set_premium_status(user_id, body.is_premium)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found or no changes")
+
+    return {"status": "updated", "is_premium": body.is_premium}
