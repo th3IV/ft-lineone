@@ -12,6 +12,35 @@ const quickQuestions = [
   "Recomiendame un outfit casual",
 ];
 
+function renderAdvice(text) {
+  if (!text) return null;
+  const parts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+  return parts.map((part, i) => {
+    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (linkMatch) {
+      let label = linkMatch[1];
+      const to = linkMatch[2];
+      label = label.replace(/^\*\*(.+)\*\*$/, "$1");
+      return (
+        <Link
+          key={i}
+          to={to}
+          className="font-semibold underline underline-offset-2 hover:text-editorial-black transition-colors"
+        >
+          {label}
+        </Link>
+      );
+    }
+    const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
+    return boldParts.map((bp, j) => {
+      if (bp.startsWith("**") && bp.endsWith("**")) {
+        return <strong key={`${i}-${j}`}>{bp.slice(2, -2)}</strong>;
+      }
+      return bp;
+    });
+  });
+}
+
 function ProductMiniCard({ product }) {
   const image = product.image_urls?.[0] || product.image_url;
   if (!image) return null;
@@ -163,7 +192,7 @@ function ChatFlotante() {
                           : "bg-editorial-cream text-editorial-charcoal rounded-bl-md"
                       }`}
                     >
-                      {msg.text}
+                      {msg.role === "assistant" ? renderAdvice(msg.text) : msg.text}
                     </div>
                     {msg.role === "user" && (
                       <Avatar
