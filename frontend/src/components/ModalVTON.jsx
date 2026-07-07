@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Upload, Sparkles, Loader2, AlertCircle, Camera } from "lucide-react";
+import { X, Upload, Sparkles, Loader2, AlertCircle, Camera, RefreshCw } from "lucide-react";
 import { useSelector } from "react-redux";
 import { compressImage } from "../utils/compressImage";
 import { useVtonPolling } from "../hooks/useVtonPolling";
@@ -15,6 +15,7 @@ const PHOTO_TIPS = [
 function ModalVTON({ product, isOpen, onClose }) {
   const [userImage, setUserImage] = useState(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [facingMode, setFacingMode] = useState("user");
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const { isAuthenticated } = useSelector((state) => state.user);
@@ -49,7 +50,7 @@ function ModalVTON({ product, isOpen, onClose }) {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 768 }, height: { ideal: 1024 } },
+        video: { facingMode: facingMode, width: { ideal: 768 }, height: { ideal: 1024 } },
       });
       streamRef.current = stream;
       setCameraActive(true);
@@ -100,6 +101,22 @@ function ModalVTON({ product, isOpen, onClose }) {
       "image/jpeg",
       0.8
     );
+  };
+
+  // Switch between front and back camera
+  const switchCamera = async () => {
+    stopCamera();
+    const newFacing = facingMode === "user" ? "environment" : "user";
+    setFacingMode(newFacing);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: newFacing, width: { ideal: 768 }, height: { ideal: 1024 } },
+      });
+      streamRef.current = stream;
+      setCameraActive(true);
+    } catch (err) {
+      console.error("Error switching camera:", err);
+    }
   };
 
   // Clean up camera on unmount
@@ -202,12 +219,19 @@ function ModalVTON({ product, isOpen, onClose }) {
                         muted
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-3">
                         <button
                           onClick={capturePhoto}
                           className="w-14 h-14 rounded-full bg-white border-4 border-editorial-black flex items-center justify-center hover:bg-gray-100 transition-colors"
                         >
                           <Camera size={24} className="text-editorial-black" />
+                        </button>
+                        <button
+                          onClick={switchCamera}
+                          className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                          title="Cambiar camara"
+                        >
+                          <RefreshCw size={18} />
                         </button>
                         <button
                           onClick={stopCamera}

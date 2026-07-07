@@ -26,6 +26,7 @@ class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     gender: Optional[str] = None
+    age: Optional[int] = None
 
 
 class MeasurementsUpdate(BaseModel):
@@ -66,6 +67,7 @@ async def get_current_user(request: Request, user: dict = Depends(require_auth))
         "preferences": user_obj.preferences or {},
         "profile_image": user_obj.profile_image,
         "is_premium": user_obj.is_premium,
+        "age": user_obj.age,
     }
 
 
@@ -75,13 +77,15 @@ async def update_profile(
     request: Request,
     user: dict = Depends(require_auth),
 ):
-    """Update user profile (name, email, gender)."""
+    """Update user profile (name, email, gender, age)."""
     db = get_db(request)
     updates = {}
     if body.name is not None:
         updates["name"] = body.name
     if body.email is not None:
         updates["email"] = body.email
+    if body.age is not None:
+        updates["age"] = body.age
     if body.gender is not None:
         user_obj = await db.get_user_by_id(user.user_id)
         measurements = user_obj.body_measurements or {}

@@ -423,6 +423,9 @@ class LLMService:
         if user_preferences.get("gender"):
             prompt_parts.append(f"Género: {user_preferences['gender']}")
 
+        if user_preferences.get("age"):
+            prompt_parts.append(f"Edad: {user_preferences['age']} años")
+
         if user_preferences.get("clothing_type"):
             prompt_parts.append(f"Tipo de ropa preferida: {', '.join(user_preferences['clothing_type'])}")
 

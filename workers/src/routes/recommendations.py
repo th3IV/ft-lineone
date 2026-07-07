@@ -41,6 +41,7 @@ async def get_recommendations(
         "occasions": [],
         "sizes": {},
         "body_measurements": {},
+        "age": None,
     }
     if user_obj:
         if user_obj.preferences:
@@ -51,6 +52,8 @@ async def get_recommendations(
         if user_obj.body_measurements:
             user_preferences["gender"] = user_obj.body_measurements.get("gender")
             user_preferences["body_measurements"] = user_obj.body_measurements
+        if user_obj.age:
+            user_preferences["age"] = user_obj.age
 
     products, _ = await db.get_products({}, page=1, limit=50)
 
@@ -169,6 +172,8 @@ async def style_chat(
                     parts.append(f"caderas={hips}cm")
                 if body_shape:
                     parts.append(f"forma del cuerpo={body_shape}")
+            if user_obj.age:
+                parts.append(f"edad={user_obj.age}")
             if parts:
                 user_context = f"\nDatos completos del usuario: {', '.join(parts)}"
 

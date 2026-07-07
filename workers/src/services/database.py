@@ -26,6 +26,7 @@ class UserModel:
         )
         self.profile_image = row.get("profile_image")
         self.is_premium = bool(row.get("is_premium", 0))
+        self.age = row.get("age")
         self.created_at = row.get("created_at", datetime.utcnow().isoformat())
 
 
@@ -111,8 +112,8 @@ class DatabaseService:
         now = datetime.utcnow().isoformat()
 
         await self.db.prepare(
-            """INSERT INTO users (id, email, name, password_hash, body_measurements, preferences, is_premium, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+            """INSERT INTO users (id, email, name, password_hash, body_measurements, preferences, is_premium, age, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         ).bind(
             user_id,
             user_data["email"],
@@ -121,6 +122,7 @@ class DatabaseService:
             json.dumps(user_data.get("body_measurements")) if user_data.get("body_measurements") else None,
             json.dumps(user_data.get("preferences", [])),
             0,
+            user_data.get("age"),
             now,
         ).run()
 
@@ -132,15 +134,16 @@ class DatabaseService:
             "body_measurements": user_data.get("body_measurements"),
             "preferences": user_data.get("preferences", []),
             "is_premium": 0,
+            "age": user_data.get("age"),
             "created_at": now,
         })
 
     async def update_user(self, user_id: str, updates: dict) -> bool:
-        """Update user fields. Supports: name, email, body_measurements, preferences, profile_image, is_premium."""
+        """Update user fields. Supports: name, email, body_measurements, preferences, profile_image, is_premium, age."""
         set_clauses = []
         params = []
         for key, value in updates.items():
-            if key in ("name", "email", "profile_image", "is_premium"):
+            if key in ("name", "email", "profile_image", "is_premium", "age"):
                 set_clauses.append(f"{key} = ?")
                 params.append(value)
             elif key == "body_measurements":

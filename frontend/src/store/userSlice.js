@@ -43,8 +43,9 @@ export const updateProfile = createAsyncThunk("user/updateProfile", async (data,
     const response = await api.put("/users/profile", {
       name: data.name,
       gender: data.gender,
+      age: data.age,
     });
-    return { ...response.data, name: data.name, gender: data.gender };
+    return { ...response.data, name: data.name, gender: data.gender, age: data.age };
   } catch (err) {
     return rejectWithValue(err.response?.data?.detail || "Failed to update profile");
   }
@@ -158,6 +159,7 @@ const userSlice = createSlice({
           gender: data.gender || "",
           created_at: data.created_at,
           profile_image: data.profile_image || null,
+          age: data.age || null,
         };
         state.measurements = data.body_measurements || {};
         state.preferences = data.preferences || {};
@@ -166,6 +168,7 @@ const userSlice = createSlice({
         if (state.user) {
           if (action.payload.name) state.user.name = action.payload.name;
           if (action.payload.gender !== undefined) state.user.gender = action.payload.gender;
+          if (action.payload.age !== undefined) state.user.age = action.payload.age;
         }
       })
       .addCase(uploadProfileImage.pending, (state) => {

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     preferences TEXT, -- JSON as TEXT
     profile_image TEXT, -- R2 public URL to user avatar
     is_premium INTEGER DEFAULT 0,
+    age INTEGER, -- User age for personalized recommendations
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

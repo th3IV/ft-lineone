@@ -48,6 +48,7 @@ function Profile() {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const avatarMenuRef = useRef(null);
+  const tabsRef = useRef(null);
 
   useEffect(() => {
     dispatch(fetchProfile());
@@ -83,7 +84,7 @@ function Profile() {
   }, []);
 
   const handleSave = async () => {
-    await dispatch(updateProfile({ name: profile.name, gender: profile.gender }));
+    await dispatch(updateProfile({ name: profile.name, gender: profile.gender, age: profile.age }));
     setIsEditing(false);
   };
 
@@ -130,12 +131,12 @@ function Profile() {
   };
 
   const tabs = [
-    { id: "profile", label: "Perfil", icon: User },
-    { id: "measurements", label: "Medidas", icon: Settings },
-    { id: "preferences", label: "Preferencias", icon: Sparkles },
-    { id: "quiz", label: "Quiz", icon: Shirt },
-    { id: "favorites", label: "Favoritos", icon: Heart },
-    { id: "history", label: "Historial", icon: Clock },
+    { id: "profile", label: "Perfil", shortLabel: "Perfil", icon: User },
+    { id: "measurements", label: "Medidas", shortLabel: "Medidas", icon: Settings },
+    { id: "preferences", label: "Preferencias", shortLabel: "Prefs", icon: Sparkles },
+    { id: "quiz", label: "Quiz", shortLabel: "Quiz", icon: Shirt },
+    { id: "favorites", label: "Favoritos", shortLabel: "Favs", icon: Heart },
+    { id: "history", label: "Historial", shortLabel: "Historial", icon: Clock },
   ];
 
   return (
@@ -143,26 +144,31 @@ function Profile() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.6 }}
-      className="max-w-[1000px] mx-auto px-5 sm:px-8 py-10"
+      className="max-w-[1000px] mx-auto px-4 sm:px-8 py-6 sm:py-10"
     >
-      <h1 className="text-3xl font-display font-bold tracking-tight text-editorial-black mb-8">
+      <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-tight text-editorial-black mb-6 sm:mb-8">
         Mi Cuenta
       </h1>
 
-      {/* Tabs */}
-      <div className="flex gap-0 border-b border-editorial-gray-light mb-8">
+      {/* Tabs - Mobile: scrollable horizontal, Desktop: normal */}
+      <div
+        ref={tabsRef}
+        className="flex overflow-x-auto gap-0 border-b border-editorial-gray-light mb-6 sm:mb-8 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0"
+        style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-5 py-3 text-xs uppercase tracking-widest border-b -mb-px transition-colors ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 text-[10px] sm:text-xs uppercase tracking-widest border-b -mb-px transition-colors whitespace-nowrap shrink-0 ${
               activeTab === tab.id
                 ? "border-editorial-black text-editorial-black font-medium"
                 : "border-transparent text-editorial-gray-light hover:text-editorial-gray"
             }`}
           >
             <tab.icon size={14} />
-            {tab.label}
+            <span className="hidden sm:inline">{tab.label}</span>
+            <span className="sm:hidden">{tab.shortLabel}</span>
           </button>
         ))}
       </div>
@@ -173,13 +179,14 @@ function Profile() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="space-y-8"
+          className="space-y-5 sm:space-y-8"
         >
-          <div className="flex items-center gap-6">
+          {/* Avatar + Name */}
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
             <div ref={avatarMenuRef} className="relative shrink-0">
               <div
                 onClick={handleImageClick}
-                className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-editorial-gray-light cursor-pointer group"
+                className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-editorial-gray-light cursor-pointer group"
               >
                 {profile.profile_image ? (
                   <img
@@ -189,11 +196,13 @@ function Profile() {
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-editorial-gray-light/30 text-editorial-gray">
-                    <User size={32} />
+                    <User size={28} className="sm:hidden" />
+                    <User size={32} className="hidden sm:block" />
                   </div>
                 )}
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Camera size={20} className="text-white" />
+                  <Camera size={18} className="text-white sm:hidden" />
+                  <Camera size={20} className="text-white hidden sm:block" />
                 </div>
                 {imageLoading && (
                   <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
@@ -251,7 +260,7 @@ function Profile() {
               onChange={handleImageChange}
               className="hidden"
             />
-            <div>
+            <div className="text-center sm:text-left">
               <h2 className="text-lg font-display font-semibold text-editorial-black">
                 {profile.name || "Usuario"}
               </h2>
@@ -259,7 +268,8 @@ function Profile() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Name + Email + Age */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div>
               <label className="editorial-label">Nombre</label>
               <input
@@ -279,16 +289,30 @@ function Profile() {
                 className="input-line w-full opacity-50"
               />
             </div>
+            <div>
+              <label className="editorial-label">Edad</label>
+              <input
+                type="number"
+                min="13"
+                max="120"
+                value={profile.age || ""}
+                onChange={(e) => setProfile({ ...profile, age: e.target.value ? parseInt(e.target.value) : "" })}
+                disabled={!isEditing}
+                className="input-line w-full"
+                placeholder="Ej: 28"
+              />
+            </div>
           </div>
 
+          {/* Gender */}
           <div>
             <label className="editorial-label">Género</label>
-            <div className="flex gap-3 mt-2">
+            <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
               {["femenino", "masculino", "unisex", "otro"].map((g) => (
                 <button
                   key={g}
                   onClick={() => isEditing && setProfile({ ...profile, gender: g })}
-                  className={`px-4 py-2 rounded-full text-xs transition-all ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs transition-all ${
                     profile.gender === g
                       ? "bg-editorial-black text-white"
                       : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
@@ -300,23 +324,24 @@ function Profile() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          {/* Edit/Save buttons */}
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
             {isEditing ? (
               <>
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="btn-outline"
+                  className="btn-outline w-full sm:w-auto"
                 >
                   Cancelar
                 </button>
-                <button onClick={handleSave} className="btn-primary">
+                <button onClick={handleSave} className="btn-primary w-full sm:w-auto">
                   Guardar
                 </button>
               </>
             ) : (
               <button
                 onClick={() => setIsEditing(true)}
-                className="btn-primary"
+                className="btn-primary w-full sm:w-auto"
               >
                 Editar Perfil
               </button>
@@ -331,9 +356,9 @@ function Profile() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="space-y-8"
+          className="space-y-5 sm:space-y-8"
         >
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
             {Object.entries({
               height: "Altura (cm)",
               weight: "Peso (kg)",
@@ -349,7 +374,7 @@ function Profile() {
               })
               .map(([key, label]) => (
               <div key={key}>
-                <label className="editorial-label">{label}</label>
+                <label className="editorial-label text-[10px] sm:text-xs">{label}</label>
                 <input
                   type="number"
                   value={measurements[key] || ""}
@@ -357,7 +382,7 @@ function Profile() {
                     setMeasurements({ ...measurements, [key]: e.target.value })
                   }
                   disabled={editingSection !== "measurements"}
-                  className={`input-line w-full ${editingSection !== "measurements" ? "opacity-60 cursor-not-allowed" : ""}`}
+                  className={`input-line w-full text-sm ${editingSection !== "measurements" ? "opacity-60 cursor-not-allowed" : ""}`}
                 />
               </div>
             ))}
@@ -365,14 +390,14 @@ function Profile() {
 
           <div>
             <label className="editorial-label">Forma del cuerpo</label>
-            <div className="flex gap-3 mt-2 flex-wrap">
+            <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
               {["reloj", "pera", "rectangulo", "triangulo", "ovalo"].map((shape) => (
                 <button
                   key={shape}
                   onClick={() =>
                     editingSection === "measurements" && setMeasurements({ ...measurements, bodyShape: shape })
                   }
-                  className={`px-4 py-2 rounded-full text-xs capitalize transition-all ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
                     measurements.bodyShape === shape
                       ? "bg-editorial-black text-white"
                       : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
@@ -384,12 +409,12 @@ function Profile() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
             {editingSection === "measurements" ? (
               <>
                 <button
                   onClick={() => setEditingSection(null)}
-                  className="btn-outline"
+                  className="btn-outline w-full sm:w-auto"
                 >
                   Cancelar
                 </button>
@@ -399,7 +424,7 @@ function Profile() {
                     toast.success("Medidas guardadas");
                     setEditingSection(null);
                   }}
-                  className="btn-primary"
+                  className="btn-primary w-full sm:w-auto"
                 >
                   Guardar
                 </button>
@@ -407,7 +432,7 @@ function Profile() {
             ) : (
               <button
                 onClick={() => setEditingSection("measurements")}
-                className="btn-primary"
+                className="btn-primary w-full sm:w-auto"
               >
                 Editar
               </button>
@@ -422,17 +447,17 @@ function Profile() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="space-y-8"
+          className="space-y-5 sm:space-y-8"
         >
           <div>
             <label className="editorial-label">Tallas preferidas</label>
-            <div className="grid grid-cols-2 gap-4 mt-2">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-2">
               {Object.entries({
                 upper: "Parte superior",
                 lower: "Parte inferior",
               }).map(([key, label]) => (
                 <div key={key}>
-                  <span className="text-[10px] uppercase tracking-widest text-editorial-gray-light mb-1 block">
+                  <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-editorial-gray-light mb-1 block">
                     {label}
                   </span>
                   <input
@@ -445,7 +470,7 @@ function Profile() {
                       })
                     }
                     disabled={editingSection !== "preferences"}
-                    className={`input-line w-full ${editingSection !== "preferences" ? "opacity-60 cursor-not-allowed" : ""}`}
+                    className={`input-line w-full text-sm ${editingSection !== "preferences" ? "opacity-60 cursor-not-allowed" : ""}`}
                     placeholder="Ej: S, 38"
                   />
                 </div>
@@ -455,7 +480,7 @@ function Profile() {
 
           <div>
             <label className="editorial-label">Estilos que te gustan</label>
-            <div className="flex gap-3 mt-2 flex-wrap">
+            <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
               {["minimalista", "streetwear", "casual", "formal", "bohemio", "deportivo"].map(
                 (style) => (
                   <button
@@ -468,7 +493,7 @@ function Profile() {
                         : [...styles, style];
                       setPreferences({ ...preferences, styles: updated });
                     }}
-                    className={`px-4 py-2 rounded-full text-xs capitalize transition-all ${
+                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
                       preferences.styles?.includes(style)
                         ? "bg-editorial-black text-white"
                         : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
@@ -483,7 +508,7 @@ function Profile() {
 
           <div>
             <label className="editorial-label">Colores preferidos</label>
-            <div className="flex gap-3 mt-2">
+            <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
               {["negro", "blanco", "gris", "azul", "beige", "marrón", "verde", "rosa"].map(
                 (color) => (
                   <button
@@ -495,7 +520,7 @@ function Profile() {
                         : [...colors, color];
                       setPreferences({ ...preferences, colors: updated });
                     }}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 transition-all ${
                       preferences.colors?.includes(color)
                         ? "border-editorial-black scale-110"
                         : "border-editorial-gray-light hover:border-editorial-gray"
@@ -524,12 +549,12 @@ function Profile() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
             {editingSection === "preferences" ? (
               <>
                 <button
                   onClick={() => setEditingSection(null)}
-                  className="btn-outline"
+                  className="btn-outline w-full sm:w-auto"
                 >
                   Cancelar
                 </button>
@@ -539,7 +564,7 @@ function Profile() {
                     toast.success("Preferencias guardadas");
                     setEditingSection(null);
                   }}
-                  className="btn-primary"
+                  className="btn-primary w-full sm:w-auto"
                 >
                   Guardar
                 </button>
@@ -547,7 +572,7 @@ function Profile() {
             ) : (
               <button
                 onClick={() => setEditingSection("preferences")}
-                className="btn-primary"
+                className="btn-primary w-full sm:w-auto"
               >
                 Editar
               </button>
@@ -562,25 +587,25 @@ function Profile() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="space-y-8"
+          className="space-y-5 sm:space-y-8"
         >
-          <div className="bg-editorial-gray-light/10 p-6 rounded-lg border border-editorial-gray-light">
-            <h3 className="text-lg font-display font-semibold text-editorial-black mb-2">
+          <div className="bg-editorial-gray-light/10 p-4 sm:p-6 rounded-lg border border-editorial-gray-light">
+            <h3 className="text-base sm:text-lg font-display font-semibold text-editorial-black mb-2">
               Tu estilo en 1 minuto
             </h3>
-            <p className="text-sm text-editorial-gray mb-6">
+            <p className="text-xs sm:text-sm text-editorial-gray mb-4 sm:mb-6">
               Responde este quiz para que nuestro asistente te recomiende prendas que encajen contigo.
             </p>
 
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <div>
                 <label className="editorial-label">¿Qué formas de cuerpo te identifican?</label>
-                <div className="flex gap-3 mt-2 flex-wrap">
+                <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
                   {BODY_SHAPES.map((shape) => (
                     <button
                       key={shape}
                       onClick={() => setMeasurements({ ...measurements, bodyShape: shape })}
-                      className={`px-4 py-2 rounded-full text-xs capitalize transition-all ${
+                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
                         measurements.bodyShape === shape
                           ? "bg-editorial-black text-white"
                           : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
@@ -594,7 +619,7 @@ function Profile() {
 
               <div>
                 <label className="editorial-label">¿Qué colores prefieres?</label>
-                <div className="flex gap-3 mt-2 flex-wrap">
+                <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
                   {QUIZ_COLORS.map((color) => (
                   <button
                     key={color}
@@ -606,21 +631,21 @@ function Profile() {
                         : [...colors, color];
                       setPreferences({ ...preferences, colors: updated });
                     }}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 transition-all ${
                       preferences.colors?.includes(color)
                         ? "border-editorial-black scale-110"
                         : "border-editorial-gray-light hover:border-editorial-gray"
                     } ${editingSection !== "preferences" ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
-                      {color}
-                    </button>
+                    {color}
+                  </button>
                   ))}
                 </div>
               </div>
 
               <div>
                 <label className="editorial-label">¿Qué estilos te representan?</label>
-                <div className="flex gap-3 mt-2 flex-wrap">
+                <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
                   {QUIZ_STYLES.map((style) => (
                     <button
                       key={style}
@@ -631,7 +656,7 @@ function Profile() {
                           : [...styles, style];
                         setPreferences({ ...preferences, styles: updated });
                       }}
-                      className={`px-4 py-2 rounded-full text-xs capitalize transition-all ${
+                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
                         preferences.styles?.includes(style)
                           ? "bg-editorial-black text-white"
                           : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
@@ -645,7 +670,7 @@ function Profile() {
 
               <div>
                 <label className="editorial-label">¿Para qué ocasiones buscas ropa?</label>
-                <div className="flex gap-3 mt-2 flex-wrap">
+                <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
                   {QUIZ_OCCASIONS.map((occasion) => (
                     <button
                       key={occasion}
@@ -656,7 +681,7 @@ function Profile() {
                           : [...occasions, occasion];
                         setPreferences({ ...preferences, occasions: updated });
                       }}
-                      className={`px-4 py-2 rounded-full text-xs capitalize transition-all ${
+                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
                         preferences.occasions?.includes(occasion)
                           ? "bg-editorial-black text-white"
                           : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
@@ -668,10 +693,10 @@ function Profile() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {Object.entries({ upper: "Talla superior", lower: "Talla inferior" }).map(([key, label]) => (
                   <div key={key}>
-                    <label className="editorial-label">{label}</label>
+                    <label className="editorial-label text-[10px] sm:text-xs">{label}</label>
                     <input
                       type="text"
                       value={preferences.sizes?.[key] || ""}
@@ -682,7 +707,7 @@ function Profile() {
                         })
                       }
                       disabled={editingSection !== "quiz"}
-                      className={`input-line w-full ${editingSection !== "quiz" ? "opacity-60 cursor-not-allowed" : ""}`}
+                      className={`input-line w-full text-sm ${editingSection !== "quiz" ? "opacity-60 cursor-not-allowed" : ""}`}
                       placeholder="Ej: S, 38"
                     />
                   </div>
@@ -690,12 +715,12 @@ function Profile() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-6">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 sm:pt-6">
               {editingSection === "quiz" ? (
                 <>
                   <button
                     onClick={() => setEditingSection(null)}
-                    className="btn-outline"
+                    className="btn-outline w-full sm:w-auto"
                   >
                     Cancelar
                   </button>
@@ -706,7 +731,7 @@ function Profile() {
                       toast.success("Perfil de estilo guardado");
                       setEditingSection(null);
                     }}
-                    className="btn-primary"
+                    className="btn-primary w-full sm:w-auto"
                   >
                     Guardar
                   </button>
@@ -714,7 +739,7 @@ function Profile() {
               ) : (
                 <button
                   onClick={() => setEditingSection("quiz")}
-                  className="btn-primary"
+                  className="btn-primary w-full sm:w-auto"
                 >
                   Editar
                 </button>
@@ -738,14 +763,14 @@ function Profile() {
           ) : favoriteProducts.length > 0 ? (
             <ProductGrid products={favoriteProducts} loading={false} />
           ) : (
-            <div className="text-center py-16">
-              <Heart size={40} className="mx-auto text-editorial-gray-light mb-4" />
-              <p className="text-editorial-gray text-sm">
+            <div className="text-center py-12 sm:py-16">
+              <Heart size={36} className="mx-auto text-editorial-gray-light mb-4" />
+              <p className="text-editorial-gray text-xs sm:text-sm">
                 Todavia no tienes favoritos. Explora el catalogo y guarda las prendas que te gusten.
               </p>
               <button
                 onClick={() => navigate("/catalog")}
-                className="btn-primary mt-6"
+                className="btn-primary mt-4 sm:mt-6 w-full sm:w-auto"
               >
                 Explorar catalogo
               </button>
