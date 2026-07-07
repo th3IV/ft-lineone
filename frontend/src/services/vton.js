@@ -98,6 +98,11 @@ export const pollResult = async (vtonId, onProgress) => {
   );
 };
 
+export const persistVtonResult = async (vtonId) => {
+  const response = await api.post(`/vton/${vtonId}/persist`);
+  return response.data;
+};
+
 export const getHistory = async () => {
   const response = await api.get("/vton/history");
   return response.data;

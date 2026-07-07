@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { User, Settings, Clock, Sparkles, Heart, Camera, Shirt } from "lucide-react";
+import { User, Settings, Clock, Sparkles, Heart, Camera, Shirt, Image as ImageIcon, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { fetchProfile, updateProfile, updateMeasurements, updatePreferences, uploadProfileImage } from "../store/userSlice";
+import { fetchProfile, updateProfile, updateMeasurements, updatePreferences, uploadProfileImage, deleteProfileImage } from "../store/userSlice";
 import { fetchFavorites } from "../store/favoritesSlice";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -43,7 +43,10 @@ function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
   const [imageLoading, setImageLoading] = useState(false);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const avatarMenuRef = useRef(null);
 
   useEffect(() => {
     dispatch(fetchProfile());
@@ -68,13 +71,43 @@ function Profile() {
     }
   }, [user, savedMeasurements, savedPreferences]);
 
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (avatarMenuRef.current && !avatarMenuRef.current.contains(e.target)) {
+        setShowAvatarMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleSave = async () => {
     await dispatch(updateProfile({ name: profile.name, gender: profile.gender }));
     setIsEditing(false);
   };
 
   const handleImageClick = () => {
+    setShowAvatarMenu((prev) => !prev);
+  };
+
+  const handleSelectGallery = () => {
+    setShowAvatarMenu(false);
     fileInputRef.current?.click();
+  };
+
+  const handleTakePhoto = () => {
+    setShowAvatarMenu(false);
+    cameraInputRef.current?.click();
+  };
+
+  const handleRemovePhoto = async () => {
+    setShowAvatarMenu(false);
+    try {
+      await dispatch(deleteProfileImage());
+      toast.success("Foto eliminada");
+    } catch {
+      toast.error("Error al eliminar la foto");
+    }
   };
 
   const handleImageChange = async (e) => {
@@ -142,32 +175,75 @@ function Profile() {
           className="space-y-8"
         >
           <div className="flex items-center gap-6">
-            <div
-              onClick={handleImageClick}
-              className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-editorial-gray-light cursor-pointer group shrink-0"
-            >
-              {profile.profile_image ? (
-                <img
-                  src={profile.profile_image}
-                  alt={profile.name || "Usuario"}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-editorial-gray-light/30 text-editorial-gray">
-                  <User size={32} />
+            <div ref={avatarMenuRef} className="relative shrink-0">
+              <div
+                onClick={handleImageClick}
+                className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-editorial-gray-light cursor-pointer group"
+              >
+                {profile.profile_image ? (
+                  <img
+                    src={profile.profile_image}
+                    alt={profile.name || "Usuario"}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-editorial-gray-light/30 text-editorial-gray">
+                    <User size={32} />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera size={20} className="text-white" />
                 </div>
-              )}
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Camera size={20} className="text-white" />
+                {imageLoading && (
+                  <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-full border-2 border-editorial-black/10 border-t-editorial-black animate-spin" />
+                  </div>
+                )}
               </div>
-              {imageLoading && (
-                <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-                  <div className="w-6 h-6 rounded-full border-2 border-editorial-black/10 border-t-editorial-black animate-spin" />
-                </div>
+
+              {showAvatarMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] border border-editorial-black/5 overflow-hidden z-20"
+                >
+                  <button
+                    onClick={handleSelectGallery}
+                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-editorial-black hover:bg-editorial-cream transition-colors"
+                  >
+                    <ImageIcon size={16} className="text-editorial-gray" />
+                    Agregar imagen
+                  </button>
+                  <button
+                    onClick={handleTakePhoto}
+                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-editorial-black hover:bg-editorial-cream transition-colors"
+                  >
+                    <Camera size={16} className="text-editorial-gray" />
+                    Sacar foto
+                  </button>
+                  {profile.profile_image && (
+                    <button
+                      onClick={handleRemovePhoto}
+                      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                      Eliminar foto
+                    </button>
+                  )}
+                </motion.div>
               )}
             </div>
             <input
               ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
+            />
+            <input
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="user"
@@ -179,12 +255,6 @@ function Profile() {
                 {profile.name || "Usuario"}
               </h2>
               <p className="text-sm text-editorial-gray-light">{profile.email || ""}</p>
-              <button
-                onClick={handleImageClick}
-                className="text-xs text-editorial-gray underline mt-2 hover:text-editorial-black"
-              >
-                Cambiar foto de perfil
-              </button>
             </div>
           </div>
 

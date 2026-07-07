@@ -455,6 +455,43 @@ async def get_result(
     }
 
 
+@router.post("/{vton_id}/persist")
+async def persist_vton_result(
+    vton_id: str,
+    request: Request,
+    user=Depends(require_auth),
+):
+    """Explicitly persist VTON result to R2 (idempotent)."""
+    user_id = user.user_id
+    db = get_db(request)
+    env = get_env(request)
+    vton_result = await db.get_vton_result(vton_id)
+
+    if not vton_result:
+        raise HTTPException(status_code=404, detail="VTON result not found")
+    if vton_result.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if vton_result.status != "completed":
+        raise HTTPException(status_code=400, detail="VTON not yet completed")
+
+    output_url = vton_result.output_image_url
+    if not output_url:
+        raise HTTPException(status_code=400, detail="No output image to persist")
+
+    from services.r2 import R2_PUBLIC_BASE, save_vton_output_to_r2
+
+    if R2_PUBLIC_BASE in output_url:
+        return {"status": "already_persisted", "r2_url": output_url}
+
+    try:
+        r2_url = await save_vton_output_to_r2(env, user_id, vton_id, output_url)
+        if r2_url != output_url:
+            await db.update_vton_result(vton_id, {"output_image_url": r2_url})
+        return {"status": "persisted", "r2_url": r2_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to persist: {str(e)}")
+
+
 @router.get("/history")
 async def get_user_history(
     request: Request,

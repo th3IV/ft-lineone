@@ -77,6 +77,15 @@ export const uploadProfileImage = createAsyncThunk("user/uploadProfileImage", as
   }
 });
 
+export const deleteProfileImage = createAsyncThunk("user/deleteProfileImage", async (_, { rejectWithValue }) => {
+  try {
+    await api.delete("/users/profile-image");
+    return true;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to delete profile image");
+  }
+});
+
 const userSlice = createSlice({
   name: "user",
   initialState: {
@@ -171,6 +180,12 @@ const userSlice = createSlice({
       })
       .addCase(uploadProfileImage.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(deleteProfileImage.fulfilled, (state) => {
+        if (state.user) state.user.profile_image = null;
+      })
+      .addCase(deleteProfileImage.rejected, (state, action) => {
         state.error = action.payload;
       });
   },

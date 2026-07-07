@@ -224,11 +224,20 @@ function ModalVTON({ product, isOpen, onClose }) {
                       >
                         <input {...getInputProps()} />
                         {userImage ? (
-                          <img
-                            src={userImage}
-                            alt="Tu foto"
-                            className="w-full h-full object-cover"
-                          />
+                          <div className="relative w-full h-full">
+                            <img
+                              src={userImage}
+                              alt="Tu foto"
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setUserImage(null); reset(); }}
+                              className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors z-10"
+                              title="Eliminar foto"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
                         ) : (
                           <div className="text-center p-4">
                             <Upload
@@ -236,9 +245,7 @@ function ModalVTON({ product, isOpen, onClose }) {
                               className="mx-auto text-editorial-gray-light mb-2"
                             />
                             <p className="text-xs text-editorial-gray">
-                              {isDragActive
-                                ? "Suelta tu foto aqui"
-                                : "Sube tu foto (max. 10MB)"}
+                              Ingresar imagen o sacar foto
                             </p>
                           </div>
                         )}

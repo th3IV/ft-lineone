@@ -160,3 +160,14 @@ async def upload_profile_image_route(
     await db.update_user(user.user_id, {"profile_image": public_url})
 
     return {"status": "updated", "profile_image": public_url}
+
+
+@router.delete("/profile-image")
+async def delete_profile_image(
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    """Delete user profile image."""
+    db = get_db(request)
+    await db.update_user(user.user_id, {"profile_image": None})
+    return {"status": "deleted"}

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { uploadImage, prefetchImage, fetchGarmentAsBase64, prefetchGarment, requestTryOn, pollResult } from "../services/vton";
+import { uploadImage, prefetchImage, fetchGarmentAsBase64, prefetchGarment, requestTryOn, pollResult, persistVtonResult } from "../services/vton";
 
 export function useVtonPolling() {
   const [loading, setLoading] = useState(false);
@@ -143,6 +143,13 @@ export function useVtonPolling() {
       }
       setResultImage(imageUrl);
       setLoading(false);
+
+      try {
+        await persistVtonResult(vtonId);
+      } catch (err) {
+        console.warn("[VTON] Persist call failed (non-blocking):", err);
+      }
+
       return imageUrl;
     } else {
       const imageUrl = tryOnRes.output_image_url || tryOnRes.image_url;
