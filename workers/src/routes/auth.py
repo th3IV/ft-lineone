@@ -35,11 +35,17 @@ async def register(user_data: UserCreate, request: Request):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    user = await db.create_user({
+    user_data_dict = {
         "email": user_data.email,
         "name": user_data.name,
         "password_hash": hash_password(user_data.password),
-    })
+    }
+    if user_data.age is not None:
+        user_data_dict["age"] = user_data.age
+    if user_data.gender is not None:
+        user_data_dict["body_measurements"] = {"gender": user_data.gender}
+
+    user = await db.create_user(user_data_dict)
 
     access_token = create_access_token(user.id, user.email, env=env)
     refresh_token = create_refresh_token(user.id, user.email, env=env)

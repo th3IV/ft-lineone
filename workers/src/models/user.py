@@ -12,6 +12,8 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
+    gender: Optional[str] = None
+    age: Optional[int] = None
 
 
 class UserLogin(BaseModel):

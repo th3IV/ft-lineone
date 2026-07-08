@@ -11,11 +11,16 @@ function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [gender, setGender] = useState("");
+  const [age, setAge] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     dispatch(clearError());
-    const result = await dispatch(registerUser({ name, email, password }));
+    const payload = { name, email, password };
+    if (gender) payload.gender = gender;
+    if (age) payload.age = parseInt(age, 10);
+    const result = await dispatch(registerUser(payload));
     if (registerUser.fulfilled.match(result)) {
       navigate("/onboarding");
     }
@@ -79,6 +84,33 @@ function RegisterPage() {
               className="w-full border-b border-editorial-black/10 rounded-none px-0 py-3 text-sm bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
               placeholder="Minimo 8 caracteres"
             />
+          </div>
+
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full border-b border-editorial-black/10 rounded-none px-0 py-3 text-sm bg-transparent focus:outline-none focus:border-editorial-black transition-colors text-editorial-black"
+              >
+                <option value="">Sexo</option>
+                <option value="masculino">Masculino</option>
+                <option value="femenino">Femenino</option>
+                <option value="no_binario">No binario</option>
+                <option value="prefiero_no_decir">Prefiero no decir</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <input
+                type="number"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                min={13}
+                max={120}
+                className="w-full border-b border-editorial-black/10 rounded-none px-0 py-3 text-sm bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
+                placeholder="Edad"
+              />
+            </div>
           </div>
 
           <button

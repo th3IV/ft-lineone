@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { User, Settings, Clock, Sparkles, Heart, Camera, Shirt, Image as ImageIcon, Trash2 } from "lucide-react";
+import { User, Settings, Clock, Sparkles, Heart, Camera, Image as ImageIcon, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { fetchProfile, updateProfile, updateMeasurements, updatePreferences, uploadProfileImage, deleteProfileImage } from "../store/userSlice";
+import { fetchProfile, updateProfile, updateMeasurements, updatePreferences, uploadProfileImage, deleteProfileImage, logoutUser } from "../store/userSlice";
 import { fetchFavorites } from "../store/favoritesSlice";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -26,9 +26,9 @@ const PREFERENCES_DEFAULT = {
   occasions: [],
 };
 
-const QUIZ_COLORS = ["negro", "blanco", "gris", "azul", "beige", "marrón", "verde", "rosa"];
-const QUIZ_STYLES = ["minimalista", "streetwear", "casual", "formal", "bohemio", "deportivo"];
-const QUIZ_OCCASIONS = ["oficina", "cafe", "fiesta", "gym", "paseo", "formal"];
+const QUIZ_COLORS = ["negro", "blanco", "gris", "azul", "beige", "marrón", "verde", "rosa", "rojo", "naranja", "amarillo", "morado", "turquesa", "dorado"];
+const QUIZ_STYLES = ["minimalista", "streetwear", "casual", "formal", "bohemio", "deportivo", "elegante", "urbano", "vintage", "artístico", "clásico", "moderno"];
+const QUIZ_OCCASIONS = ["oficina", "café", "fiesta", "gym", "paseo", "formal", "viaje", "cita", "playa", "deporte"];
 const BODY_SHAPES = ["reloj", "pera", "rectangulo", "triangulo", "ovalo"];
 
 function Profile() {
@@ -134,7 +134,6 @@ function Profile() {
     { id: "profile", label: "Perfil", shortLabel: "Perfil", icon: User },
     { id: "measurements", label: "Medidas", shortLabel: "Medidas", icon: Settings },
     { id: "preferences", label: "Preferencias", shortLabel: "Prefs", icon: Sparkles },
-    { id: "quiz", label: "Quiz", shortLabel: "Quiz", icon: Shirt },
     { id: "favorites", label: "Favoritos", shortLabel: "Favs", icon: Heart },
     { id: "history", label: "Historial", shortLabel: "Historial", icon: Clock },
   ];
@@ -347,6 +346,18 @@ function Profile() {
               </button>
             )}
           </div>
+
+          <div className="pt-4 border-t border-editorial-gray-light">
+            <button
+              onClick={async () => {
+                await dispatch(logoutUser());
+                navigate("/");
+              }}
+              className="w-full py-2.5 px-4 bg-red-500/10 text-red-400 rounded-xl border border-red-500/20 hover:bg-red-500/20 transition-all text-sm font-medium"
+            >
+              Cerrar sesión
+            </button>
+          </div>
         </motion.div>
       )}
 
@@ -450,30 +461,23 @@ function Profile() {
           className="space-y-5 sm:space-y-8"
         >
           <div>
-            <label className="editorial-label">Tallas preferidas</label>
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-2">
-              {Object.entries({
-                upper: "Parte superior",
-                lower: "Parte inferior",
-              }).map(([key, label]) => (
-                <div key={key}>
-                  <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-editorial-gray-light mb-1 block">
-                    {label}
-                  </span>
-                  <input
-                    type="text"
-                    value={preferences.sizes?.[key] || ""}
-                    onChange={(e) =>
-                      setPreferences({
-                        ...preferences,
-                        sizes: { ...preferences.sizes, [key]: e.target.value },
-                      })
-                    }
-                    disabled={editingSection !== "preferences"}
-                    className={`input-line w-full text-sm ${editingSection !== "preferences" ? "opacity-60 cursor-not-allowed" : ""}`}
-                    placeholder="Ej: S, 38"
-                  />
-                </div>
+            <label className="editorial-label">¿Qué formas de cuerpo te identifican?</label>
+            <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
+              {BODY_SHAPES.map((shape) => (
+                <button
+                  key={shape}
+                  onClick={() => {
+                    if (editingSection !== "preferences") return;
+                    setMeasurements({ ...measurements, bodyShape: shape });
+                  }}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
+                    measurements.bodyShape === shape
+                      ? "bg-editorial-black text-white"
+                      : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
+                  } ${editingSection !== "preferences" ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  {shape}
+                </button>
               ))}
             </div>
           </div>
@@ -481,71 +485,93 @@ function Profile() {
           <div>
             <label className="editorial-label">Estilos que te gustan</label>
             <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
-              {["minimalista", "streetwear", "casual", "formal", "bohemio", "deportivo"].map(
-                (style) => (
-                  <button
-                    key={style}
-                    onClick={() => {
-                      if (editingSection !== "preferences") return;
-                      const styles = preferences.styles || [];
-                      const updated = styles.includes(style)
-                        ? styles.filter((s) => s !== style)
-                        : [...styles, style];
-                      setPreferences({ ...preferences, styles: updated });
-                    }}
-                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
-                      preferences.styles?.includes(style)
-                        ? "bg-editorial-black text-white"
-                        : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
-                    } ${editingSection !== "preferences" ? "opacity-50 cursor-not-allowed" : ""}`}
-                  >
-                    {style}
-                  </button>
-                )
-              )}
+              {QUIZ_STYLES.map((style) => (
+                <button
+                  key={style}
+                  onClick={() => {
+                    if (editingSection !== "preferences") return;
+                    const styles = preferences.styles || [];
+                    const updated = styles.includes(style)
+                      ? styles.filter((s) => s !== style)
+                      : [...styles, style];
+                    setPreferences({ ...preferences, styles: updated });
+                  }}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
+                    preferences.styles?.includes(style)
+                      ? "bg-editorial-black text-white"
+                      : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
+                  } ${editingSection !== "preferences" ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  {style}
+                </button>
+              ))}
             </div>
           </div>
 
           <div>
             <label className="editorial-label">Colores preferidos</label>
             <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
-              {["negro", "blanco", "gris", "azul", "beige", "marrón", "verde", "rosa"].map(
-                (color) => (
-                  <button
-                    key={color}
-                    onClick={() => {
-                      const colors = preferences.colors || [];
-                      const updated = colors.includes(color)
-                        ? colors.filter((c) => c !== color)
-                        : [...colors, color];
-                      setPreferences({ ...preferences, colors: updated });
-                    }}
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 transition-all ${
-                      preferences.colors?.includes(color)
-                        ? "border-editorial-black scale-110"
-                        : "border-editorial-gray-light hover:border-editorial-gray"
-                    }`}
-                    style={{
-                      backgroundColor:
-                        color === "negro"
-                          ? "#000"
-                          : color === "blanco"
-                          ? "#fff"
-                          : color === "gris"
-                          ? "#9CA3AF"
-                          : color === "azul"
-                          ? "#3B82F6"
-                          : color === "beige"
-                          ? "#D4C5A9"
-                          : color === "marrón"
-                          ? "#92400E"
-                          : color === "verde"
-                          ? "#22C55E"
-                          : "#F472B6",
-                    }}
-                  />
-                )
-              )}
+              {QUIZ_COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => {
+                    if (editingSection !== "preferences") return;
+                    const colors = preferences.colors || [];
+                    const updated = colors.includes(color)
+                      ? colors.filter((c) => c !== color)
+                      : [...colors, color];
+                    setPreferences({ ...preferences, colors: updated });
+                  }}
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 transition-all ${
+                    preferences.colors?.includes(color)
+                      ? "border-editorial-black scale-110"
+                      : "border-editorial-gray-light hover:border-editorial-gray"
+                  } ${editingSection !== "preferences" ? "opacity-50 cursor-not-allowed" : ""}`}
+                  style={{
+                    backgroundColor:
+                      color === "negro" ? "#000"
+                      : color === "blanco" ? "#fff"
+                      : color === "gris" ? "#9CA3AF"
+                      : color === "azul" ? "#3B82F6"
+                      : color === "beige" ? "#D4C5A9"
+                      : color === "marrón" ? "#92400E"
+                      : color === "verde" ? "#22C55E"
+                      : color === "rosa" ? "#F472B6"
+                      : color === "rojo" ? "#EF4444"
+                      : color === "naranja" ? "#F97316"
+                      : color === "amarillo" ? "#EAB308"
+                      : color === "morado" ? "#A855F7"
+                      : color === "turquesa" ? "#14B8A6"
+                      : "#D4AF37",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="editorial-label">¿Para qué ocasiones buscas ropa?</label>
+            <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
+              {QUIZ_OCCASIONS.map((occasion) => (
+                <button
+                  key={occasion}
+                  onClick={() => {
+                    if (editingSection !== "preferences") return;
+                    const occasions = preferences.occasions || [];
+                    const updated = occasions.includes(occasion)
+                      ? occasions.filter((o) => o !== occasion)
+                      : [...occasions, occasion];
+                    setPreferences({ ...preferences, occasions: updated });
+                  }}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
+                    preferences.occasions?.includes(occasion)
+                      ? "bg-editorial-black text-white"
+                      : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
+                  } ${editingSection !== "preferences" ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  {occasion}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -560,6 +586,7 @@ function Profile() {
                 </button>
                 <button
                   onClick={async () => {
+                    await dispatch(updateMeasurements(measurements));
                     await dispatch(updatePreferences(preferences));
                     toast.success("Preferencias guardadas");
                     setEditingSection(null);
@@ -577,174 +604,6 @@ function Profile() {
                 Editar
               </button>
             )}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Quiz Tab */}
-      {activeTab === "quiz" && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="space-y-5 sm:space-y-8"
-        >
-          <div className="bg-editorial-gray-light/10 p-4 sm:p-6 rounded-lg border border-editorial-gray-light">
-            <h3 className="text-base sm:text-lg font-display font-semibold text-editorial-black mb-2">
-              Tu estilo en 1 minuto
-            </h3>
-            <p className="text-xs sm:text-sm text-editorial-gray mb-4 sm:mb-6">
-              Responde este quiz para que nuestro asistente te recomiende prendas que encajen contigo.
-            </p>
-
-            <div className="space-y-4 sm:space-y-6">
-              <div>
-                <label className="editorial-label">¿Qué formas de cuerpo te identifican?</label>
-                <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
-                  {BODY_SHAPES.map((shape) => (
-                    <button
-                      key={shape}
-                      onClick={() => setMeasurements({ ...measurements, bodyShape: shape })}
-                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
-                        measurements.bodyShape === shape
-                          ? "bg-editorial-black text-white"
-                          : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
-                      }`}
-                    >
-                      {shape}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="editorial-label">¿Qué colores prefieres?</label>
-                <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
-                  {QUIZ_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => {
-                      if (editingSection !== "preferences") return;
-                      const colors = preferences.colors || [];
-                      const updated = colors.includes(color)
-                        ? colors.filter((c) => c !== color)
-                        : [...colors, color];
-                      setPreferences({ ...preferences, colors: updated });
-                    }}
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 transition-all ${
-                      preferences.colors?.includes(color)
-                        ? "border-editorial-black scale-110"
-                        : "border-editorial-gray-light hover:border-editorial-gray"
-                    } ${editingSection !== "preferences" ? "opacity-50 cursor-not-allowed" : ""}`}
-                  >
-                    {color}
-                  </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="editorial-label">¿Qué estilos te representan?</label>
-                <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
-                  {QUIZ_STYLES.map((style) => (
-                    <button
-                      key={style}
-                      onClick={() => {
-                        const styles = preferences.styles || [];
-                        const updated = styles.includes(style)
-                          ? styles.filter((s) => s !== style)
-                          : [...styles, style];
-                        setPreferences({ ...preferences, styles: updated });
-                      }}
-                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
-                        preferences.styles?.includes(style)
-                          ? "bg-editorial-black text-white"
-                          : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
-                      }`}
-                    >
-                      {style}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="editorial-label">¿Para qué ocasiones buscas ropa?</label>
-                <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
-                  {QUIZ_OCCASIONS.map((occasion) => (
-                    <button
-                      key={occasion}
-                      onClick={() => {
-                        const occasions = preferences.occasions || [];
-                        const updated = occasions.includes(occasion)
-                          ? occasions.filter((o) => o !== occasion)
-                          : [...occasions, occasion];
-                        setPreferences({ ...preferences, occasions: updated });
-                      }}
-                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
-                        preferences.occasions?.includes(occasion)
-                          ? "bg-editorial-black text-white"
-                          : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
-                      }`}
-                    >
-                      {occasion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                {Object.entries({ upper: "Talla superior", lower: "Talla inferior" }).map(([key, label]) => (
-                  <div key={key}>
-                    <label className="editorial-label text-[10px] sm:text-xs">{label}</label>
-                    <input
-                      type="text"
-                      value={preferences.sizes?.[key] || ""}
-                      onChange={(e) =>
-                        setPreferences({
-                          ...preferences,
-                          sizes: { ...preferences.sizes, [key]: e.target.value },
-                        })
-                      }
-                      disabled={editingSection !== "quiz"}
-                      className={`input-line w-full text-sm ${editingSection !== "quiz" ? "opacity-60 cursor-not-allowed" : ""}`}
-                      placeholder="Ej: S, 38"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 sm:pt-6">
-              {editingSection === "quiz" ? (
-                <>
-                  <button
-                    onClick={() => setEditingSection(null)}
-                    className="btn-outline w-full sm:w-auto"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={async () => {
-                      await dispatch(updateMeasurements(measurements));
-                      await dispatch(updatePreferences(preferences));
-                      toast.success("Perfil de estilo guardado");
-                      setEditingSection(null);
-                    }}
-                    className="btn-primary w-full sm:w-auto"
-                  >
-                    Guardar
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setEditingSection("quiz")}
-                  className="btn-primary w-full sm:w-auto"
-                >
-                  Editar
-                </button>
-              )}
-            </div>
           </div>
         </motion.div>
       )}
