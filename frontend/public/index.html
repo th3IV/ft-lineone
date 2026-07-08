@@ -19,5 +19,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <script async src="https://securepubads.g.doubleclick.net/tag/js/gpt.js"></script>
+    <script>
+      window.googletag = window.googletag || { cmd: [] };
+      googletag.cmd.push(function() {
+        googletag.pubads().addEventListener("slotRenderEnded", function(event) {
+          window.dispatchEvent(new CustomEvent("gpt-ad-event", { detail: event }));
+        });
+      });
+    </script>
   </body>
 </html>
