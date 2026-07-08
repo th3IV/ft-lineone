@@ -13,7 +13,7 @@ async def upload_vton_result(env, user_id: str, vton_id: str, image_bytes: bytes
     """
     key = f"vton/{user_id}/{vton_id}.jpg"
 
-    await env.BUCKET.put(
+    await env.R2.put(
         key,
         image_bytes,
         http_metadata={"contentType": "image/jpeg"},
@@ -39,7 +39,7 @@ async def upload_profile_image(env, user_id: str, image_bytes: bytes, content_ty
     """
     key = f"profiles/{user_id}/avatar.jpg"
 
-    await env.BUCKET.put(
+    await env.R2.put(
         key,
         image_bytes,
         http_metadata={"contentType": content_type},

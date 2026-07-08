@@ -134,7 +134,7 @@ async def upload_profile_image_route(
 ):
     """Upload a user profile image (base64) to R2 and update the user record."""
     env = get_env(request)
-    if not env or not getattr(env, "BUCKET", None):
+    if not env or not getattr(env, "R2", None):
         raise HTTPException(status_code=500, detail="R2 bucket not configured")
 
     # Extract data URI prefix and bytes

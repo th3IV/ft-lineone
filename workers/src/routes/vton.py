@@ -408,7 +408,10 @@ async def get_result(
     user_id = user.user_id
     db = get_db(request)
     env = get_env(request)
-    vton_result = await db.get_vton_result(vton_id)
+    try:
+        vton_result = await db.get_vton_result(vton_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     if not vton_result:
         raise HTTPException(status_code=404, detail="VTON result not found")
@@ -445,8 +448,19 @@ async def get_result(
                 vton_result.status = "failed"
                 vton_result.error_message = result.get("error")
         except Exception as e:
-            import traceback
+            import traceback, json
             traceback.print_exc()
+            print(json.dumps({"event": "vton_poll_failed", "vton_id": vton_id, "error": str(e)}))
+            try:
+                await db.update_vton_result(vton_id, {
+                    "status": "failed",
+                    "error_message": f"Polling error: {str(e)}",
+                    "completed_at": datetime.utcnow().isoformat(),
+                })
+                vton_result.status = "failed"
+                vton_result.error_message = f"Polling error: {str(e)}"
+            except Exception:
+                pass
 
     return {
         "status": vton_result.status,
