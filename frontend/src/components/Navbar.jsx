@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, User, LogOut, Settings, Sparkles } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, Crown } from "lucide-react";
+import { useFeatureGate } from "../hooks/useFeatureGate";
 import { loginUser, logoutUser } from "../store/userSlice";
 
 function Navbar() {
@@ -17,6 +18,7 @@ function Navbar() {
   const { user, isAuthenticated, loading, error } = useSelector(
     (state) => state.user
   );
+  const { isPremium } = useFeatureGate();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -94,8 +96,8 @@ function Navbar() {
                   className="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-editorial-black/5 transition-all duration-200"
                 >
                   {isAuthenticated && user?.name ? (
-                    <span className="w-7 h-7 rounded-full bg-editorial-black text-white flex items-center justify-center text-[11px] font-semibold">
-                      {user.name.charAt(0).toUpperCase()}
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold ${isPremium ? 'bg-editorial-gold text-white' : 'bg-editorial-black text-white'}`}>
+                      {isPremium ? <Crown size={12} /> : user.name.charAt(0).toUpperCase()}
                     </span>
                   ) : (
                     <User size={18} className="text-editorial-gray" />

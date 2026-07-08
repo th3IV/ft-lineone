@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { ArrowRight, Sparkles, ChevronDown, Store, Shirt } from "lucide-react";
+import { ArrowRight, Sparkles, ChevronDown, Store, Shirt, Crown, Zap } from "lucide-react";
 import { fetchProducts } from "../store/productSlice";
 import { openVtonModal } from "../store/uiSlice";
+import { useFeatureGate } from "../hooks/useFeatureGate";
+import PremiumBanner from "../components/PremiumBanner";
 import ProductGrid from "../components/ProductGrid";
 import RevealOnScroll, {
   StaggerContainer,
@@ -24,6 +26,8 @@ function Home() {
   const dispatch = useDispatch();
   const { products, loading } = useSelector((state) => state.products);
   const heroRef = useRef(null);
+  const { isPremium } = useFeatureGate();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -44,6 +48,9 @@ function Home() {
 
   return (
     <div>
+      {/* PREMIUM BANNER — visible for free users */}
+      {!isPremium && <PremiumBanner onUpgrade={() => setShowUpgradeModal(true)} />}
+
       {/* HERO SECTION */}
       <section
         ref={heroRef}
@@ -261,6 +268,35 @@ function Home() {
           </div>
         </div>
       </section>
+
+      {/* UPGRADE CTA — only for free users */}
+      {!isPremium && (
+        <section className="bg-editorial-cream-dark py-20 md:py-28">
+          <div className="max-w-[1400px] mx-auto px-5 sm:px-8">
+            <RevealOnScroll>
+              <div className="max-w-2xl mx-auto text-center">
+                <div className="w-16 h-16 rounded-full bg-editorial-black/5 flex items-center justify-center mx-auto mb-6">
+                  <Crown size={24} className="text-editorial-black" />
+                </div>
+                <p className="editorial-label mb-4">Premium</p>
+                <h2 className="section-title mb-4">
+                  Desbloquea la experiencia completa
+                </h2>
+                <p className="text-editorial-gray leading-relaxed mb-8 max-w-md mx-auto">
+                  Pruebas ilimitadas, chat con asesor de moda IA, historial completo y sin interrupciones.
+                </p>
+                <button
+                  onClick={() => setShowUpgradeModal(true)}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  <Zap size={16} />
+                  Upgrade por $4.990/mes
+                </button>
+              </div>
+            </RevealOnScroll>
+          </div>
+        </section>
+      )}
 
       {/* STORES */}
       <section className="max-w-[1400px] mx-auto px-5 sm:px-8 py-20 md:py-28">

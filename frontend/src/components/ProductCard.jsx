@@ -1,12 +1,14 @@
 import { Link } from "react-router-dom";
-import { Heart } from "lucide-react";
+import { Heart, Crown } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { toggleFavorite } from "../store/favoritesSlice";
+import { useFeatureGate } from "../hooks/useFeatureGate";
 
 function ProductCard({ product, onTryOn, index = 0 }) {
   const dispatch = useDispatch();
   const { favorites } = useSelector((state) => state.favorites);
   const { isAuthenticated } = useSelector((state) => state.user);
+  const { isPremium } = useFeatureGate();
   const isFav = favorites.includes(product.id);
 
   return (
@@ -27,10 +29,15 @@ function ProductCard({ product, onTryOn, index = 0 }) {
         <div className="absolute inset-0 bg-editorial-black/0 group-hover:bg-editorial-black/10 transition-colors duration-500" />
 
         {/* Store Badge */}
-        <div className="absolute top-3 left-3">
+        <div className="absolute top-3 left-3 flex items-center gap-2">
           <span className="editorial-label text-[9px] bg-editorial-white/90 backdrop-blur-sm text-editorial-black px-2.5 py-1 rounded-full">
             {product.store}
           </span>
+          {isPremium && (
+            <span className="w-6 h-6 rounded-full bg-editorial-gold/90 backdrop-blur-sm flex items-center justify-center">
+              <Crown size={10} className="text-white" />
+            </span>
+          )}
         </div>
 
         {/* Heart Button */}
