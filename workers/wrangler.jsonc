@@ -27,7 +27,13 @@
   "vars": {
     "JWT_ALGORITHM": "HS256",
     "CORS_ORIGINS": "https://thelineone.com,https://www.thelineone.com,http://localhost:3000,https://feat-cloudflare-migration.ft-lineone.pages.dev",
-    "CLOUDFLARE_AI_GATEWAY_ID": "ft-lineone-vton"
+    "CLOUDFLARE_AI_GATEWAY_ID": "ft-lineone-vton",
+    "TRANSBANK_COMMERCE_CODE": "597055555532",
+    "TRANSBANK_RETURN_URL": "https://thelineone.com/payment/success"
+  },
+  "secret": {
+    "TRANSBANK_API_KEY": "See wrangler secret put TRANSBANK_API_KEY",
+    "TRANSBANK_BASE_URL": "https://webpay3gint.transbank.cl"
   },
   "triggers": {
     "crons": ["*/2 * * * *"]

@@ -276,6 +276,26 @@ async def try_on(
     db = get_db(request)
     env = get_env(request)
 
+    # Check VTON usage limit
+    from datetime import datetime as _dt
+    today = _dt.utcnow().strftime("%Y-%m-%d")
+    user_obj = await db.get_user_by_id(user_id)
+    is_premium = getattr(user_obj, 'is_premium', False) or getattr(user_obj, 'plan_type', 'free') == 'premium'
+
+    if not is_premium:
+        usage = await db.get_user_usage(user_id, today)
+        if usage.get("vton_count", 0) >= 10:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "usage_limit_exceeded",
+                    "message": "Límite diario de VTON alcanzado (10/10)",
+                    "current": usage["vton_count"],
+                    "limit": 10,
+                    "upgrade_url": "/payment/upgrade",
+                },
+            )
+
     try:
         product = await db.get_product(product_id)
         if not product:
@@ -318,6 +338,10 @@ async def try_on(
             "youcam_task_id": task_id,
             "status": "processing",
         })
+
+        # Increment VTON usage
+        if not is_premium:
+            await db.increment_usage(user_id, "vton", today)
 
         return {"id": vton_id, "status": "processing"}
 

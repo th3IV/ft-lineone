@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 import asgi
 
-from routes import auth, products, vton, recommendations, scrapers, users, favorites
+from routes import auth, products, vton, recommendations, scrapers, users, favorites, payments
 from services.database import DatabaseService
 
 app = FastAPI(
@@ -100,6 +100,7 @@ app.include_router(vton.router, prefix="/api/v1/vton", tags=["VTON"])
 app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"])
 app.include_router(scrapers.router, prefix="/api/v1/scrapers", tags=["Scrapers"])
 app.include_router(favorites.router, prefix="/api/v1/favorites", tags=["Favorites"])
+app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
 
 
 @app.get("/health")

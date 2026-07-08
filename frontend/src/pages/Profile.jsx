@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { User, Settings, Clock, Sparkles, Heart, Camera, Image as ImageIcon, Trash2 } from "lucide-react";
+import { User, Settings, Clock, Sparkles, Heart, Camera, Image as ImageIcon, Trash2, Crown, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { fetchProfile, updateProfile, updateMeasurements, updatePreferences, uploadProfileImage, deleteProfileImage, logoutUser } from "../store/userSlice";
 import { fetchFavorites } from "../store/favoritesSlice";
@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import ProductGrid from "../components/ProductGrid";
 import VtonHistory from "../components/VtonHistory";
+import { createPayment } from "../services/payments";
 
 const MEASUREMENTS_DEFAULT = {
   height: "",
@@ -34,7 +35,7 @@ const BODY_SHAPES = ["reloj", "pera", "rectangulo", "triangulo", "ovalo"];
 function Profile() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { user, loading, measurements: savedMeasurements, preferences: savedPreferences } = useSelector((state) => state.user);
+  const { user, loading, measurements: savedMeasurements, preferences: savedPreferences, dailyUsage } = useSelector((state) => state.user);
   const { products: favoriteProducts, loading: favLoading } = useSelector((state) => state.favorites);
 
   const [profile, setProfile] = useState(user || {});
@@ -104,13 +105,26 @@ function Profile() {
 
   const handleRemovePhoto = async () => {
     setShowAvatarMenu(false);
-    try {
-      await dispatch(deleteProfileImage());
+    const result = await dispatch(deleteProfileImage());
+    if (result.meta.requestStatus === "fulfilled") {
       toast.success("Foto eliminada");
-    } catch {
-      toast.error("Error al eliminar la foto");
+    } else {
+      toast.error("Error al eliminar foto");
     }
   };
+
+  const handleUpgrade = async () => {
+    try {
+      const data = await createPayment();
+      if (data.url && data.token) {
+        window.location.href = `${data.url}?token=${data.token}`;
+      }
+    } catch (err) {
+      toast.error("Error al iniciar pago");
+    }
+  };
+
+  const isPremium = user?.is_premium || user?.plan_type === "premium";
 
   const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
@@ -260,12 +274,63 @@ function Profile() {
               className="hidden"
             />
             <div className="text-center sm:text-left">
-              <h2 className="text-lg font-display font-semibold text-editorial-black">
-                {profile.name || "Usuario"}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-display font-semibold text-editorial-black">
+                  {profile.name || "Usuario"}
+                </h2>
+                {isPremium && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-medium">
+                    <Crown size={10} />
+                    Premium
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-editorial-gray-light">{profile.email || ""}</p>
             </div>
           </div>
+
+          {/* Usage Stats (Free users only) */}
+          {!isPremium && dailyUsage && (
+            <div className="bg-editorial-cream/50 rounded-xl p-4 border border-editorial-gray-light">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-medium text-editorial-gray uppercase tracking-wider">Uso diario</h3>
+                <span className="text-[10px] text-editorial-gray-light">Plan Gratuito</span>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-editorial-gray">Pruebas de vestir</span>
+                    <span className="text-editorial-black font-medium">{dailyUsage.vton || 0}/10</span>
+                  </div>
+                  <div className="h-1.5 bg-editorial-gray-light/30 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-editorial-black rounded-full transition-all"
+                      style={{ width: `${Math.min(((dailyUsage.vton || 0) / 10) * 100, 100)}%` }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-editorial-gray">Recomendaciones</span>
+                    <span className="text-editorial-black font-medium">{dailyUsage.llm || 0}/10</span>
+                  </div>
+                  <div className="h-1.5 bg-editorial-gray-light/30 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-editorial-black rounded-full transition-all"
+                      style={{ width: `${Math.min(((dailyUsage.llm || 0) / 10) * 100, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleUpgrade}
+                className="mt-4 w-full py-2.5 px-4 bg-editorial-black text-white rounded-xl text-sm font-medium hover:bg-editorial-black/90 transition-all flex items-center justify-center gap-2"
+              >
+                <Zap size={14} />
+                Upgrade a Premium — $4.990/mes
+              </button>
+            </div>
+          )}
 
           {/* Name + Email + Age */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">

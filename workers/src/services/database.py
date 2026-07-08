@@ -26,6 +26,7 @@ class UserModel:
         )
         self.profile_image = row.get("profile_image")
         self.is_premium = bool(row.get("is_premium", 0))
+        self.plan_type = row.get("plan_type", "free")
         self.age = row.get("age")
         self.created_at = row.get("created_at", datetime.utcnow().isoformat())
 
@@ -163,6 +164,55 @@ class DatabaseService:
     async def set_premium_status(self, user_id: str, is_premium: bool) -> bool:
         """Set premium status for a user."""
         return await self.update_user(user_id, {"is_premium": 1 if is_premium else 0})
+
+    async def get_user_usage(self, user_id: str, date: str) -> dict:
+        """Get user usage for a specific date. Creates record if not exists."""
+        result = await self.db.prepare(
+            "SELECT * FROM user_usage WHERE user_id = ? AND date = ?"
+        ).bind(user_id, date).first()
+
+        if not result:
+            await self.db.prepare(
+                "INSERT INTO user_usage (user_id, date, vton_count, llm_count) VALUES (?, ?, 0, 0)"
+            ).bind(user_id, date).run()
+            return {"vton_count": 0, "llm_count": 0}
+
+        return {
+            "vton_count": result.get("vton_count", 0),
+            "llm_count": result.get("llm_count", 0),
+        }
+
+    async def increment_usage(self, user_id: str, usage_type: str, date: str) -> int:
+        """Increment usage counter and return new count."""
+        column = f"{usage_type}_count"
+        await self.db.prepare(
+            f"UPDATE user_usage SET {column} = {column} + 1 WHERE user_id = ? AND date = ?"
+        ).bind(user_id, date).run()
+
+        result = await self.db.prepare(
+            f"SELECT {column} FROM user_usage WHERE user_id = ? AND date = ?"
+        ).bind(user_id, date).first()
+        return result.get(column, 0) if result else 0
+
+    async def can_use_feature(self, user_id: str, usage_type: str) -> dict:
+        """Check if user can use a feature. Returns {allowed, current, limit}."""
+        user = await self.get_user_by_id(user_id)
+        is_premium = getattr(user, 'is_premium', False) or getattr(user, 'plan_type', 'free') == 'premium'
+
+        if is_premium:
+            return {"allowed": True, "current": 0, "limit": -1}
+
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        usage = await self.get_user_usage(user_id, today)
+
+        limit = 10
+        current = usage.get(f"{usage_type}_count", 0)
+
+        return {
+            "allowed": current < limit,
+            "current": current,
+            "limit": limit,
+        }
 
     async def get_product(self, product_id: str) -> Optional[ProductModel]:
         """Get product by ID."""

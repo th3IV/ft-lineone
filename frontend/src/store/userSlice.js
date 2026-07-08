@@ -95,6 +95,7 @@ const userSlice = createSlice({
     isAuthenticated: !!localStorage.getItem("token"),
     measurements: null,
     preferences: null,
+    dailyUsage: { vton: 0, llm: 0, limit: 10 },
     loading: false,
     error: null,
   },
@@ -111,6 +112,7 @@ const userSlice = createSlice({
         state.isAuthenticated = false;
         state.measurements = null;
         state.preferences = null;
+        state.dailyUsage = { vton: 0, llm: 0, limit: 10 };
       })
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
@@ -160,9 +162,12 @@ const userSlice = createSlice({
           created_at: data.created_at,
           profile_image: data.profile_image || null,
           age: data.age || null,
+          plan_type: data.plan_type || "free",
+          is_premium: data.is_premium || false,
         };
         state.measurements = data.body_measurements || {};
         state.preferences = data.preferences || {};
+        state.dailyUsage = data.daily_usage || { vton: 0, llm: 0, limit: 10 };
       })
       .addCase(updateProfile.fulfilled, (state, action) => {
         if (state.user) {

@@ -1,5 +1,6 @@
 """Recommendation routes."""
 
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request, Depends
 from typing import Optional
 from pydantic import BaseModel
@@ -30,6 +31,26 @@ async def get_recommendations(
     """Get personalized product recommendations."""
     db = get_db(request)
     llm_service = LLMService(request.app.state.env)
+
+    # Check LLM usage limit
+    user_obj = await db.get_user_by_id(user.user_id)
+    is_premium = getattr(user_obj, 'is_premium', False) or getattr(user_obj, 'plan_type', 'free') == 'premium'
+
+    if not is_premium:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        usage = await db.get_user_usage(user.user_id, today)
+        if usage.get("llm_count", 0) >= 10:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "usage_limit_exceeded",
+                    "message": "Límite diario de recomendaciones alcanzado (10/10)",
+                    "current": usage["llm_count"],
+                    "limit": 10,
+                    "upgrade_url": "/payment/upgrade",
+                },
+            )
+        await db.increment_usage(user.user_id, "llm", today)
 
     # Read actual user preferences from DB
     user_obj = await db.get_user_by_id(user.user_id)
@@ -121,6 +142,29 @@ async def style_chat(
     db = get_db(request)
     llm_service = LLMService(request.app.state.env)
 
+    # Check LLM usage limit for authenticated users
+    if user:
+        user_obj = await db.get_user_by_id(user.user_id)
+        is_premium = getattr(user_obj, 'is_premium', False) or getattr(user_obj, 'plan_type', 'free') == 'premium'
+
+        if not is_premium:
+            today = datetime.utcnow().strftime("%Y-%m-%d")
+            usage = await db.get_user_usage(user.user_id, today)
+            if usage.get("llm_count", 0) >= 10:
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "error": "usage_limit_exceeded",
+                        "message": "Límite diario de recomendaciones alcanzado (10/10)",
+                        "current": usage["llm_count"],
+                        "limit": 10,
+                        "upgrade_url": "/payment/upgrade",
+                    },
+                )
+            await db.increment_usage(user.user_id, "llm", today)
+    else:
+        user_obj = None
+
     product_name = "unknown product"
     product_category = "unknown"
 
@@ -132,8 +176,7 @@ async def style_chat(
 
     # Build user context from preferences if authenticated
     user_context = ""
-    if user:
-        user_obj = await db.get_user_by_id(user.user_id)
+    if user and user_obj:
         if user_obj:
             parts = []
             if user_obj.preferences:

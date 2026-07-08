@@ -61,6 +61,33 @@ CREATE TABLE IF NOT EXISTS favorites (
     UNIQUE(user_id, product_id)
 );
 
+-- User daily usage tracking
+CREATE TABLE IF NOT EXISTS user_usage (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    vton_count INTEGER DEFAULT 0,
+    llm_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id, date)
+);
+
+-- Payment transactions
+CREATE TABLE IF NOT EXISTS payments (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    user_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    currency TEXT DEFAULT 'CLP',
+    status TEXT DEFAULT 'pending',
+    transbank_token TEXT,
+    plan_type TEXT DEFAULT 'premium',
+    period_start DATETIME,
+    period_end DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 -- Indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_products_store ON products(store);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);

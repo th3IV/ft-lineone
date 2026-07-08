@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Upload, Sparkles, Loader2, AlertCircle, Camera, RefreshCw } from "lucide-react";
+import { X, Upload, Sparkles, Loader2, AlertCircle, Camera, RefreshCw, Crown, Zap } from "lucide-react";
 import { useSelector } from "react-redux";
 import { compressImage } from "../utils/compressImage";
 import { useVtonPolling } from "../hooks/useVtonPolling";
+import { createPayment } from "../services/payments";
+import { useNavigate } from "react-router-dom";
 
 const PHOTO_TIPS = [
   "Foto de cuerpo completo, de frente",
@@ -18,9 +20,14 @@ function ModalVTON({ product, isOpen, onClose }) {
   const [facingMode, setFacingMode] = useState("user");
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const { isAuthenticated } = useSelector((state) => state.user);
+  const navigate = useNavigate();
+  const { isAuthenticated, user, dailyUsage } = useSelector((state) => state.user);
   const { loading, error, resultImage, progress, generate, reset } =
     useVtonPolling();
+
+  const isPremium = user?.is_premium || user?.plan_type === "premium";
+  const vtonUsage = dailyUsage?.vton || 0;
+  const isLimitReached = !isPremium && vtonUsage >= 10;
 
   const onDrop = useCallback(
     async (acceptedFiles) => {
@@ -139,6 +146,17 @@ function ModalVTON({ product, isOpen, onClose }) {
     setUserImage(null);
     reset();
     onClose();
+  };
+
+  const handleUpgrade = async () => {
+    try {
+      const data = await createPayment();
+      if (data.url && data.token) {
+        window.location.href = `${data.url}?token=${data.token}`;
+      }
+    } catch (err) {
+      console.error("Payment error:", err);
+    }
   };
 
   return (
@@ -333,9 +351,31 @@ function ModalVTON({ product, isOpen, onClose }) {
                 </div>
               </div>
 
+              {/* Usage limit block */}
+              {isLimitReached && (
+                <div className="bg-editorial-cream/80 rounded-xl p-4 border border-editorial-gray-light">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                      <Crown size={18} className="text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-editorial-black">Límite diario alcanzado</p>
+                      <p className="text-xs text-editorial-gray">Has usado tus 10 pruebas de vestir de hoy</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleUpgrade}
+                    className="w-full py-2.5 px-4 bg-editorial-black text-white rounded-xl text-sm font-medium hover:bg-editorial-black/90 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Zap size={14} />
+                    Upgrade a Premium — $4.990/mes
+                  </button>
+                </div>
+              )}
+
               <button
                 onClick={handleGenerate}
-                disabled={!userImage || loading}
+                disabled={!userImage || loading || isLimitReached}
                 className="w-full btn-primary py-3 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {loading ? (

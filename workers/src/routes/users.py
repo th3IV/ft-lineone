@@ -57,6 +57,11 @@ async def get_current_user(request: Request, user: dict = Depends(require_auth))
     measurements = user_obj.body_measurements or {}
     gender = measurements.get("gender", "")
 
+    # Get daily usage
+    from datetime import datetime
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    usage = await db.get_user_usage(user.user_id, today)
+
     return {
         "id": user_obj.id,
         "email": user_obj.email,
@@ -67,7 +72,13 @@ async def get_current_user(request: Request, user: dict = Depends(require_auth))
         "preferences": user_obj.preferences or {},
         "profile_image": user_obj.profile_image,
         "is_premium": user_obj.is_premium,
+        "plan_type": getattr(user_obj, 'plan_type', 'free'),
         "age": user_obj.age,
+        "daily_usage": {
+            "vton": usage.get("vton_count", 0),
+            "llm": usage.get("llm_count", 0),
+            "limit": 0 if (user_obj.is_premium or getattr(user_obj, 'plan_type', 'free') == 'premium') else 10,
+        },
     }
 
 

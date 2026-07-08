@@ -12,6 +12,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import OnboardingQuiz from "./pages/OnboardingQuiz";
 import NotFound from "./pages/NotFound";
+import SuccessPage from "./pages/SuccessPage";
 import ChatFlotante from "./components/ChatFlotante";
 import ModalVTON from "./components/ModalVTON";
 import { closeVtonModal } from "./store/uiSlice";
@@ -88,6 +89,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <OnboardingQuiz />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/payment/success"
+              element={
+                <ProtectedRoute>
+                  <SuccessPage />
                 </ProtectedRoute>
               }
             />
