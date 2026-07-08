@@ -105,7 +105,7 @@ function App() {
           </Routes>
         </PageTransition>
       </main>
-      {isPremium && <ChatFlotante />}
+      <ChatFlotante />
       <ModalVTON
         product={vtonModal.product}
         isOpen={vtonModal.isOpen}

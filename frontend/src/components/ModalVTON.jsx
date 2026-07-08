@@ -5,8 +5,10 @@ import { X, Upload, Sparkles, Loader2, AlertCircle, Camera, RefreshCw, Crown, Za
 import { useSelector } from "react-redux";
 import { compressImage } from "../utils/compressImage";
 import { useVtonPolling } from "../hooks/useVtonPolling";
-import { createPayment, redirectToWebpay } from "../services/payments";
-import { useNavigate } from "react-router-dom";
+import { useFeatureGate } from "../hooks/useFeatureGate";
+import UpgradeModal from "./UpgradeModal";
+import RemainingUses from "./RemainingUses";
+import HypnoticLoader from "./HypnoticLoader";
 
 const PHOTO_TIPS = [
   "Foto de cuerpo completo, de frente",
@@ -20,14 +22,23 @@ function ModalVTON({ product, isOpen, onClose }) {
   const [facingMode, setFacingMode] = useState("user");
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const navigate = useNavigate();
-  const { isAuthenticated, user, dailyUsage } = useSelector((state) => state.user);
+  const { isAuthenticated } = useSelector((state) => state.user);
   const { loading, error, resultImage, progress, generate, reset } =
     useVtonPolling();
+  const {
+    isPremium,
+    vtonUsed,
+    vtonRemaining,
+    canUseVton,
+    getUsageColor,
+    showUpgrade,
+    showUpgradeModal,
+    hideUpgradeModal,
+    handleUpgrade,
+    limits,
+  } = useFeatureGate();
 
-  const isPremium = user?.is_premium || user?.plan_type === "premium";
-  const vtonUsage = dailyUsage?.vton || 0;
-  const isLimitReached = !isPremium && vtonUsage >= 10;
+  const isLimitReached = !canUseVton;
 
   const onDrop = useCallback(
     async (acceptedFiles) => {
@@ -139,6 +150,10 @@ function ModalVTON({ product, isOpen, onClose }) {
       window.location.href = "/login";
       return;
     }
+    if (isLimitReached) {
+      showUpgradeModal();
+      return;
+    }
     await generate(product.id, userImage, product.image_url);
   };
 
@@ -146,17 +161,6 @@ function ModalVTON({ product, isOpen, onClose }) {
     setUserImage(null);
     reset();
     onClose();
-  };
-
-  const handleUpgrade = async () => {
-    try {
-      const data = await createPayment();
-      if (data.url && data.token) {
-        redirectToWebpay(data.url, data.token);
-      }
-    } catch (err) {
-      console.error("Payment error:", err);
-    }
   };
 
   return (
@@ -327,15 +331,7 @@ function ModalVTON({ product, isOpen, onClose }) {
                   <p className="editorial-label">Resultado</p>
                   <div className="aspect-[3/4] bg-editorial-cream-light border border-editorial-gray-light flex items-center justify-center overflow-hidden">
                     {loading ? (
-                      <div className="text-center">
-                        <Loader2
-                          size={28}
-                          className="mx-auto text-editorial-gray-light animate-spin mb-2"
-                        />
-                        <p className="text-xs text-editorial-gray">
-                          Generando...
-                        </p>
-                      </div>
+                      <HypnoticLoader variant="generating" />
                     ) : resultImage ? (
                       <img
                         src={resultImage}
@@ -351,6 +347,16 @@ function ModalVTON({ product, isOpen, onClose }) {
                 </div>
               </div>
 
+              {/* Remaining uses for free users */}
+              {!isPremium && (
+                <RemainingUses
+                  type="vton"
+                  used={vtonUsed}
+                  limit={limits.vton}
+                  color={getUsageColor(vtonUsed)}
+                />
+              )}
+
               {/* Usage limit block */}
               {isLimitReached && (
                 <div className="bg-editorial-cream/80 rounded-xl p-4 border border-editorial-gray-light">
@@ -364,7 +370,7 @@ function ModalVTON({ product, isOpen, onClose }) {
                     </div>
                   </div>
                   <button
-                    onClick={handleUpgrade}
+                    onClick={showUpgradeModal}
                     className="w-full py-2.5 px-4 bg-editorial-black text-white rounded-xl text-sm font-medium hover:bg-editorial-black/90 transition-all flex items-center justify-center gap-2"
                   >
                     <Zap size={14} />
@@ -392,6 +398,11 @@ function ModalVTON({ product, isOpen, onClose }) {
               </button>
             </div>
           </motion.div>
+          <UpgradeModal
+            isOpen={showUpgrade}
+            onClose={hideUpgradeModal}
+            onUpgrade={handleUpgrade}
+          />
         </div>
       )}
     </AnimatePresence>

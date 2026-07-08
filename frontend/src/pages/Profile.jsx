@@ -8,7 +8,10 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import ProductGrid from "../components/ProductGrid";
 import VtonHistory from "../components/VtonHistory";
-import { createPayment, redirectToWebpay } from "../services/payments";
+import { useFeatureGate } from "../hooks/useFeatureGate";
+import UpgradeModal from "../components/UpgradeModal";
+import RemainingUses from "../components/RemainingUses";
+import PremiumBadge from "../components/PremiumBadge";
 
 const MEASUREMENTS_DEFAULT = {
   height: "",
@@ -37,6 +40,17 @@ function Profile() {
   const navigate = useNavigate();
   const { user, loading, measurements: savedMeasurements, preferences: savedPreferences, dailyUsage } = useSelector((state) => state.user);
   const { products: favoriteProducts, loading: favLoading } = useSelector((state) => state.favorites);
+  const {
+    isPremium,
+    vtonUsed,
+    llmUsed,
+    getUsageColor,
+    showUpgrade,
+    showUpgradeModal,
+    hideUpgradeModal,
+    handleUpgrade,
+    limits,
+  } = useFeatureGate();
 
   const [profile, setProfile] = useState(user || {});
   const [measurements, setMeasurements] = useState(MEASUREMENTS_DEFAULT);
@@ -113,19 +127,6 @@ function Profile() {
     }
   };
 
-  const handleUpgrade = async () => {
-    try {
-      const data = await createPayment();
-      if (data.url && data.token) {
-        redirectToWebpay(data.url, data.token);
-      }
-    } catch (err) {
-      toast.error("Error al iniciar pago");
-    }
-  };
-
-  const isPremium = user?.is_premium || user?.plan_type === "premium";
-
   const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -153,6 +154,7 @@ function Profile() {
   ];
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -278,12 +280,7 @@ function Profile() {
                 <h2 className="text-lg font-display font-semibold text-editorial-black">
                   {profile.name || "Usuario"}
                 </h2>
-                {isPremium && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-medium">
-                    <Crown size={10} />
-                    Premium
-                  </span>
-                )}
+                {isPremium && <PremiumBadge size="sm" />}
               </div>
               <p className="text-sm text-editorial-gray-light">{profile.email || ""}</p>
             </div>
@@ -296,34 +293,22 @@ function Profile() {
                 <h3 className="text-xs font-medium text-editorial-gray uppercase tracking-wider">Uso diario</h3>
                 <span className="text-[10px] text-editorial-gray-light">Plan Gratuito</span>
               </div>
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-editorial-gray">Pruebas de vestir</span>
-                    <span className="text-editorial-black font-medium">{dailyUsage.vton || 0}/10</span>
-                  </div>
-                  <div className="h-1.5 bg-editorial-gray-light/30 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-editorial-black rounded-full transition-all"
-                      style={{ width: `${Math.min(((dailyUsage.vton || 0) / 10) * 100, 100)}%` }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-editorial-gray">Recomendaciones</span>
-                    <span className="text-editorial-black font-medium">{dailyUsage.llm || 0}/10</span>
-                  </div>
-                  <div className="h-1.5 bg-editorial-gray-light/30 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-editorial-black rounded-full transition-all"
-                      style={{ width: `${Math.min(((dailyUsage.llm || 0) / 10) * 100, 100)}%` }}
-                    />
-                  </div>
-                </div>
+              <div className="space-y-4">
+                <RemainingUses
+                  type="vton"
+                  used={vtonUsed}
+                  limit={limits.vton}
+                  color={getUsageColor(vtonUsed)}
+                />
+                <RemainingUses
+                  type="llm"
+                  used={llmUsed}
+                  limit={limits.llm}
+                  color={getUsageColor(llmUsed)}
+                />
               </div>
               <button
-                onClick={handleUpgrade}
+                onClick={showUpgradeModal}
                 className="mt-4 w-full py-2.5 px-4 bg-editorial-black text-white rounded-xl text-sm font-medium hover:bg-editorial-black/90 transition-all flex items-center justify-center gap-2"
               >
                 <Zap size={14} />
@@ -714,6 +699,12 @@ function Profile() {
         </motion.div>
       )}
     </motion.div>
+    <UpgradeModal
+      isOpen={showUpgrade}
+      onClose={hideUpgradeModal}
+      onUpgrade={handleUpgrade}
+    />
+    </>
   );
 }
 

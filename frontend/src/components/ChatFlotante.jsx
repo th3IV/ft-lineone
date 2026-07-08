@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X, Sparkles, User } from "lucide-react";
+import { MessageCircle, X, Sparkles, User, Crown } from "lucide-react";
 import { useSelector } from "react-redux";
 import api from "../services/api";
+import { useFeatureGate } from "../hooks/useFeatureGate";
+import UpgradeModal from "./UpgradeModal";
 
 const quickQuestions = [
   "Que me recomiendas para una fiesta?",
@@ -68,6 +70,18 @@ function Avatar({ src, fallback, className }) {
 
 function ChatFlotante() {
   const { user } = useSelector((state) => state.user);
+  const {
+    isPremium,
+    llmUsed,
+    llmRemaining,
+    canUseLlm,
+    getUsageColor,
+    showUpgrade,
+    showUpgradeModal,
+    hideUpgradeModal,
+    handleUpgrade,
+    limits,
+  } = useFeatureGate();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -81,6 +95,10 @@ function ChatFlotante() {
 
   const sendMessage = async (text) => {
     if (!text.trim()) return;
+    if (!canUseLlm) {
+      showUpgradeModal();
+      return;
+    }
 
     const userMsg = { role: "user", text: text.trim(), products: [] };
     setMessages((prev) => [...prev, userMsg]);
@@ -162,14 +180,37 @@ function ChatFlotante() {
                 <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
                   <Sparkles size={16} />
                 </div>
-                <div>
+                <div className="flex-1">
                   <h3 className="font-display font-semibold text-sm">
                     Asesor de Imagen
                   </h3>
                   <p className="text-[11px] text-white/50">IA de moda</p>
                 </div>
+                {!isPremium && (
+                  <div className="text-right">
+                    <p className="text-[10px] text-white/40">
+                      {llmRemaining}/{limits.llm} mensajes
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Upgrade banner for free users */}
+            {!isPremium && llmRemaining <= 3 && llmRemaining > 0 && (
+              <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center gap-2">
+                <Crown size={12} className="text-amber-600" />
+                <p className="text-[10px] text-amber-700 flex-1">
+                  Te quedan {llmRemaining} mensajes. Upgrade para ilimitado.
+                </p>
+                <button
+                  onClick={showUpgradeModal}
+                  className="text-[10px] font-medium text-amber-700 underline"
+                >
+                  Upgrade
+                </button>
+              </div>
+            )}
 
             {/* Messages */}
             <div className="h-80 overflow-y-auto p-4 space-y-3">
@@ -234,33 +275,49 @@ function ChatFlotante() {
                   <button
                     key={i}
                     onClick={() => sendMessage(q)}
-                    className="text-[11px] px-3 py-1.5 rounded-full border border-editorial-black/10 text-editorial-gray hover:border-editorial-black hover:text-editorial-black transition-all duration-200"
+                    disabled={!canUseLlm}
+                    className="text-[11px] px-3 py-1.5 rounded-full border border-editorial-black/10 text-editorial-gray hover:border-editorial-black hover:text-editorial-black transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     {q}
                   </button>
                 ))}
               </div>
-              <form onSubmit={handleSubmit} className="flex gap-2">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Escribe tu pregunta..."
-                  className="flex-1 text-[13px] border-b border-editorial-black/10 rounded-none px-0 py-2 bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
-                  disabled={loading}
-                />
+              {canUseLlm ? (
+                <form onSubmit={handleSubmit} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Escribe tu pregunta..."
+                    className="flex-1 text-[13px] border-b border-editorial-black/10 rounded-none px-0 py-2 bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
+                    disabled={loading}
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || !input.trim()}
+                     className="text-[12px] font-medium text-editorial-black disabled:opacity-30 transition-colors"
+                  >
+                    Enviar
+                  </button>
+                </form>
+              ) : (
                 <button
-                  type="submit"
-                  disabled={loading || !input.trim()}
-                   className="text-[12px] font-medium text-editorial-black disabled:opacity-30 transition-colors"
+                  onClick={showUpgradeModal}
+                  className="w-full py-2.5 bg-editorial-black text-white rounded-xl text-xs font-medium flex items-center justify-center gap-2"
                 >
-                  Enviar
+                  <Crown size={12} />
+                  Upgrade para继续 chateando
                 </button>
-              </form>
+              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+      <UpgradeModal
+        isOpen={showUpgrade}
+        onClose={hideUpgradeModal}
+        onUpgrade={handleUpgrade}
+      />
     </>
   );
 }
