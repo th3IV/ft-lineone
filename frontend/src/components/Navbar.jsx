@@ -71,6 +71,11 @@ function Navbar() {
           <div className="flex items-center justify-between h-14">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2.5 group">
+              <img
+                src="/logo.jpg"
+                alt="FT. THE LINE ONE"
+                className="w-8 h-8 rounded-full object-cover"
+              />
               <span className="text-[15px] font-display italic font-semibold tracking-[0.15em] text-editorial-black">
                 FT. THE LINE ONE
               </span>
