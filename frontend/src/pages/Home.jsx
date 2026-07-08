@@ -271,31 +271,76 @@ function Home() {
 
       {/* UPGRADE CTA — only for free users */}
       {!isPremium && (
-        <section className="bg-editorial-cream-dark py-20 md:py-28">
-          <div className="max-w-[1400px] mx-auto px-5 sm:px-8">
-            <RevealOnScroll>
-              <div className="max-w-2xl mx-auto text-center">
-                <div className="w-16 h-16 rounded-full bg-editorial-black/5 flex items-center justify-center mx-auto mb-6">
-                  <Crown size={24} className="text-editorial-black" />
-                </div>
-                <p className="editorial-label mb-4">Premium</p>
-                <h2 className="section-title mb-4">
-                  Desbloquea la experiencia completa
-                </h2>
-                <p className="text-editorial-gray leading-relaxed mb-8 max-w-md mx-auto">
-                  Pruebas ilimitadas, chat con asesor de moda IA, historial completo y sin interrupciones.
-                </p>
-                <button
-                  onClick={() => setShowUpgradeModal(true)}
-                  className="btn-primary inline-flex items-center gap-2"
-                >
-                  <Zap size={16} />
-                  Upgrade por $4.990/mes
-                </button>
+        <RevealOnScroll>
+          <motion.button
+            onClick={() => setShowUpgradeModal(true)}
+            whileHover={{ scale: 1.005 }}
+            whileTap={{ scale: 0.995 }}
+            transition={{ duration: 0.2 }}
+            className="relative w-full overflow-hidden cursor-pointer py-20 md:py-28 block"
+            style={{
+              background:
+                "linear-gradient(90deg, #0a0a0a 0%, #1a1a2e 25%, #7c3aed 50%, #1a1a2e 75%, #0a0a0a 100%)",
+              backgroundSize: "400% 100%",
+            }}
+          >
+            {/* Shimmer overlay */}
+            <div className="absolute inset-0 animate-shimmer pointer-events-none" />
+
+            {/* Particulas flotantes */}
+            <Sparkles
+              size={20}
+              className="absolute top-8 left-[15%] text-white/20 animate-float-particle pointer-events-none"
+              style={{ animationDelay: "0s" }}
+            />
+            <Sparkles
+              size={14}
+              className="absolute top-12 right-[20%] text-white/15 animate-float-particle pointer-events-none"
+              style={{ animationDelay: "1.5s" }}
+            />
+            <Sparkles
+              size={16}
+              className="absolute bottom-10 left-[30%] text-white/20 animate-float-particle pointer-events-none"
+              style={{ animationDelay: "3s" }}
+            />
+            <Sparkles
+              size={12}
+              className="absolute bottom-8 right-[35%] text-white/15 animate-float-particle pointer-events-none"
+              style={{ animationDelay: "4.5s" }}
+            />
+            <Sparkles
+              size={18}
+              className="absolute top-1/2 left-[10%] text-white/10 animate-float-particle pointer-events-none"
+              style={{ animationDelay: "2s" }}
+            />
+
+            {/* Contenido */}
+            <div className="relative max-w-[1400px] mx-auto px-5 sm:px-8 text-center pointer-events-none">
+              {/* Crown con glow pulsante */}
+              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-6 animate-pulse-glow">
+                <Crown size={28} className="text-editorial-gold relative z-10" />
               </div>
-            </RevealOnScroll>
-          </div>
-        </section>
+
+              <p className="text-[11px] tracking-[0.2em] uppercase text-white/40 font-medium mb-4">
+                Premium
+              </p>
+              <h2 className="font-display text-3xl md:text-4xl tracking-tight text-white mb-4">
+                Desbloquea la experiencia completa
+              </h2>
+              <p className="text-white/50 leading-relaxed mb-6 max-w-md mx-auto text-sm md:text-base">
+                Pruebas ilimitadas, chat con asesor de moda IA, historial
+                completo y sin interrupciones.
+              </p>
+              <span className="inline-flex items-center gap-2 text-editorial-gold font-semibold text-lg md:text-xl">
+                $4.990/mes
+                <Sparkles
+                  size={16}
+                  className="animate-sparkle-twinkle"
+                />
+              </span>
+            </div>
+          </motion.button>
+        </RevealOnScroll>
       )}
 
       {/* STORES */}

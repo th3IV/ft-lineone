@@ -37,6 +37,10 @@ module.exports = {
         "scale-in": "scaleIn 0.3s ease-out forwards",
         "underline-expand": "underlineExpand 0.3s ease-out forwards",
         "pulse-soft": "pulseSoft 2s ease-in-out infinite",
+        "shimmer": "shimmer 3s ease-in-out infinite",
+        "float-particle": "floatParticle 6s ease-in-out infinite",
+        "pulse-glow": "pulseGlow 2s ease-in-out infinite",
+        "sparkle-twinkle": "sparkleTwinkle 1.5s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -71,6 +75,22 @@ module.exports = {
         pulseSoft: {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.5" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        floatParticle: {
+          "0%, 100%": { transform: "translateY(0) scale(1)", opacity: "0.6" },
+          "50%": { transform: "translateY(-20px) scale(1.15)", opacity: "1" },
+        },
+        pulseGlow: {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(184, 134, 11, 0.4)" },
+          "50%": { boxShadow: "0 0 20px 8px rgba(184, 134, 11, 0.15)" },
+        },
+        sparkleTwinkle: {
+          "0%, 100%": { opacity: "0.3", transform: "scale(0.8)" },
+          "50%": { opacity: "1", transform: "scale(1.2)" },
         },
       },
       transitionTimingFunction: {
