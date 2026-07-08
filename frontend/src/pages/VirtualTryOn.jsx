@@ -7,12 +7,16 @@ import { fetchProducts } from "../store/productSlice";
 import { useVtonPolling } from "../hooks/useVtonPolling";
 import VirtualMirror from "../components/VirtualMirror";
 import RevealOnScroll from "../components/RevealOnScroll";
+import { useFeatureGate } from "../hooks/useFeatureGate";
+import PremiumBanner from "../components/PremiumBanner";
+import UpgradeModal from "../components/UpgradeModal";
 
 function VirtualTryOn() {
   const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
   const { products } = useSelector((state) => state.products);
   const { isAuthenticated } = useSelector((state) => state.user);
+  const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade } = useFeatureGate();
 
   const [selectedProductId, setSelectedProductId] = useState(
     searchParams.get("product") || ""
@@ -112,6 +116,8 @@ function VirtualTryOn() {
         </h1>
       </motion.div>
 
+      {!isPremium && <PremiumBanner onUpgrade={showUpgradeModal} />}
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -179,6 +185,7 @@ function VirtualTryOn() {
           </div>
         </RevealOnScroll>
       )}
+      <UpgradeModal isOpen={showUpgrade} onClose={hideUpgradeModal} onUpgrade={handleUpgrade} />
     </div>
   );
 }

@@ -11,6 +11,9 @@ import {
 import { openVtonModal } from "../store/uiSlice";
 import ProductGrid from "../components/ProductGrid";
 import SidebarFiltros from "../components/SidebarFiltros";
+import { useFeatureGate } from "../hooks/useFeatureGate";
+import PremiumBanner from "../components/PremiumBanner";
+import UpgradeModal from "../components/UpgradeModal";
 
 function Catalog() {
   const dispatch = useDispatch();
@@ -21,6 +24,7 @@ function Catalog() {
 
   const [search, setSearch] = useState(searchParams.get("q") || "");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade } = useFeatureGate();
 
   useEffect(() => {
     const params = {};
@@ -82,6 +86,7 @@ function Catalog() {
 
   return (
     <div className="max-w-[1400px] mx-auto px-5 sm:px-8 py-10">
+      {!isPremium && <PremiumBanner onUpgrade={showUpgradeModal} />}
       <div className="flex gap-8">
         <SidebarFiltros
           isOpen={sidebarOpen}
@@ -160,6 +165,7 @@ function Catalog() {
           )}
         </div>
       </div>
+      <UpgradeModal isOpen={showUpgrade} onClose={hideUpgradeModal} onUpgrade={handleUpgrade} />
     </div>
   );
 }

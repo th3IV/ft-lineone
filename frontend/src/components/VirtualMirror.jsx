@@ -91,7 +91,12 @@ function VirtualMirror({
     const canvas = document.createElement("canvas");
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
-    canvas.getContext("2d").drawImage(videoRef.current, 0, 0);
+    const ctx = canvas.getContext("2d");
+    if (facingMode === "user") {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(videoRef.current, 0, 0);
     canvas.toBlob(
       async (blob) => {
         if (blob) {
@@ -149,6 +154,7 @@ function VirtualMirror({
                 playsInline
                 muted
                 className="w-full h-full object-cover"
+                style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
               />
               <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-3">
                 <button
