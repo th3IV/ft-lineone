@@ -27,7 +27,7 @@ function Home() {
   const dispatch = useDispatch();
   const { products, loading } = useSelector((state) => state.products);
   const heroRef = useRef(null);
-  const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade } = useFeatureGate();
+  const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade, upgradeLoading, upgradeError } = useFeatureGate();
 
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -463,6 +463,8 @@ function Home() {
         isOpen={showUpgrade}
         onClose={hideUpgradeModal}
         onUpgrade={handleUpgrade}
+        loading={upgradeLoading}
+        error={upgradeError}
       />
     </div>
   );

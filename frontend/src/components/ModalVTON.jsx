@@ -35,6 +35,8 @@ function ModalVTON({ product, isOpen, onClose }) {
     showUpgradeModal,
     hideUpgradeModal,
     handleUpgrade,
+    upgradeLoading,
+    upgradeError,
     limits,
   } = useFeatureGate();
 
@@ -408,6 +410,8 @@ function ModalVTON({ product, isOpen, onClose }) {
             isOpen={showUpgrade}
             onClose={hideUpgradeModal}
             onUpgrade={handleUpgrade}
+            loading={upgradeLoading}
+            error={upgradeError}
           />
         </div>
       )}

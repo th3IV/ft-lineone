@@ -5,10 +5,18 @@ import time
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
+import js
+from pyodide.ffi import to_js as _to_js
+from js import Object
 
 from middleware.security import require_auth
 
 router = APIRouter()
+
+
+def to_js(obj):
+    """Convert Python objects to JS with dict_converter for proper dict->Object mapping."""
+    return _to_js(obj, dict_converter=Object.fromEntries)
 
 
 def get_db(request: Request):
@@ -17,6 +25,14 @@ def get_db(request: Request):
 
 def get_env(request: Request):
     return getattr(request.app.state, "env", None)
+
+
+def _transbank_headers(commerce_code, api_key):
+    return {
+        "Content-Type": "application/json",
+        "Tbk-Api-Key-Id": commerce_code,
+        "Tbk-Api-Key-Secret": api_key,
+    }
 
 
 class CreatePaymentRequest(BaseModel):
@@ -56,28 +72,27 @@ async def create_payment(
     return_url = getattr(env, "TRANSBANK_RETURN_URL", "https://thelineone.com/payment/success")
 
     try:
-        import urllib.request
-        import urllib.error
-
         payload = json.dumps({
             "buy_order": buy_order,
             "session_id": user.user_id,
             "amount": amount,
             "return_url": return_url,
-        }).encode("utf-8")
+        })
 
-        req = urllib.request.Request(
+        resp = await js.fetch(
             f"{base_url}/rswebpaytransaction/api/webpay/v1.2/transactions",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Tbk-Api-Key-Id": commerce_code,
-                "Tbk-Api-Key-Secret": api_key,
-            },
+            to_js({
+                "method": "POST",
+                "headers": _transbank_headers(commerce_code, api_key),
+                "body": payload,
+            })
         )
 
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
+        text = await resp.text()
+        data = json.loads(text)
+
+        if int(resp.status) >= 400:
+            raise HTTPException(status_code=502, detail=f"Transbank error: {data}")
 
         now = datetime.utcnow().isoformat()
         period_end = (datetime.utcnow() + timedelta(days=30)).isoformat()
@@ -101,10 +116,10 @@ async def create_payment(
             "buy_order": buy_order,
         }
 
-    except urllib.error.HTTPError:
-        raise HTTPException(status_code=502, detail="Payment gateway error")
-    except Exception:
-        raise HTTPException(status_code=500, detail="Payment creation failed")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Payment creation failed: {str(e)}")
 
 
 @router.post("/confirm")
@@ -125,21 +140,19 @@ async def confirm_payment(
         raise HTTPException(status_code=500, detail="Payment configuration missing")
 
     try:
-        import urllib.request
-        import urllib.error
-
-        req = urllib.request.Request(
+        resp = await js.fetch(
             f"{base_url}/rswebpaytransaction/api/webpay/v1.2/transactions/{body.token}",
-            method="PUT",
-            headers={
-                "Content-Type": "application/json",
-                "Tbk-Api-Key-Id": commerce_code,
-                "Tbk-Api-Key-Secret": api_key,
-            },
+            to_js({
+                "method": "PUT",
+                "headers": _transbank_headers(commerce_code, api_key),
+            })
         )
 
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
+        text = await resp.text()
+        data = json.loads(text)
+
+        if int(resp.status) >= 400:
+            return {"status": "error", "detail": f"Transbank error: {data}"}
 
         if data.get("response_code") == 0 and data.get("status") == "AUTHORIZED":
             payment = await db.db.prepare(
@@ -166,9 +179,6 @@ async def confirm_payment(
             ).bind(body.token).run()
             return {"status": "error", "response_code": data.get("response_code")}
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode() if e.fp else str(e)
-        return {"status": "error", "detail": error_body}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
@@ -203,21 +213,19 @@ async def payment_webhook(
         return {"status": "ok"}  # Already processed
 
     try:
-        import urllib.request
-        import urllib.error
-
-        req = urllib.request.Request(
+        resp = await js.fetch(
             f"{base_url}/rswebpaytransaction/api/webpay/v1.2/transactions/{token}",
-            method="PUT",
-            headers={
-                "Content-Type": "application/json",
-                "Tbk-Api-Key-Id": commerce_code,
-                "Tbk-Api-Key-Secret": api_key,
-            },
+            to_js({
+                "method": "PUT",
+                "headers": _transbank_headers(commerce_code, api_key),
+            })
         )
 
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
+        text = await resp.text()
+        data = json.loads(text)
+
+        if int(resp.status) >= 400:
+            return {"status": "error", "detail": f"Transbank error: {data}"}
 
         if data.get("response_code") == 0 and data.get("status") == "AUTHORIZED":
             uid = payment.get("user_id")
@@ -230,10 +238,8 @@ async def payment_webhook(
 
         return {"status": "ok"}
 
-    except urllib.error.HTTPError:
-        return {"status": "error", "detail": "Transbank communication failed"}
-    except Exception:
-        return {"status": "error", "detail": "Internal error"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
 @router.get("/status")

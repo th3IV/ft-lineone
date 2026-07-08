@@ -9,7 +9,7 @@ const BENEFITS = [
   { icon: Zap, text: "Sin interrupciones ni limites" },
 ];
 
-function UpgradeModal({ isOpen, onClose, onUpgrade }) {
+function UpgradeModal({ isOpen, onClose, onUpgrade, loading, error }) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -65,12 +65,25 @@ function UpgradeModal({ isOpen, onClose, onUpgrade }) {
 
             {/* CTA */}
             <div className="px-6 pt-5 pb-6">
+              {error && (
+                <p className="text-xs text-red-500 text-center mb-3">{error}</p>
+              )}
               <button
                 onClick={onUpgrade}
-                className="w-full py-3.5 bg-editorial-black text-white rounded-xl text-sm font-semibold hover:bg-editorial-black/90 transition-all flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(0,0,0,0.15)]"
+                disabled={loading}
+                className="w-full py-3.5 bg-editorial-black text-white rounded-xl text-sm font-semibold hover:bg-editorial-black/90 transition-all flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(0,0,0,0.15)] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Zap size={15} />
-                Upgrade por $4.990/mes
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <Zap size={15} />
+                    Upgrade por $4.990/mes
+                  </>
+                )}
               </button>
               <div className="flex items-center justify-center gap-3 mt-3">
                 <button

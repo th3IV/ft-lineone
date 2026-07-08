@@ -80,6 +80,8 @@ function ChatFlotante() {
     showUpgradeModal,
     hideUpgradeModal,
     handleUpgrade,
+    upgradeLoading,
+    upgradeError,
     limits,
   } = useFeatureGate();
 
@@ -313,6 +315,8 @@ function ChatFlotante() {
         isOpen={showUpgrade}
         onClose={hideUpgradeModal}
         onUpgrade={handleUpgrade}
+        loading={upgradeLoading}
+        error={upgradeError}
       />
     </>
   );

@@ -16,7 +16,7 @@ function VirtualTryOn() {
   const dispatch = useDispatch();
   const { products } = useSelector((state) => state.products);
   const { isAuthenticated } = useSelector((state) => state.user);
-  const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade } = useFeatureGate();
+  const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade, upgradeLoading, upgradeError } = useFeatureGate();
 
   const [selectedProductId, setSelectedProductId] = useState(
     searchParams.get("product") || ""
@@ -185,7 +185,7 @@ function VirtualTryOn() {
           </div>
         </RevealOnScroll>
       )}
-      <UpgradeModal isOpen={showUpgrade} onClose={hideUpgradeModal} onUpgrade={handleUpgrade} />
+      <UpgradeModal isOpen={showUpgrade} onClose={hideUpgradeModal} onUpgrade={handleUpgrade} loading={upgradeLoading} error={upgradeError} />
     </div>
   );
 }

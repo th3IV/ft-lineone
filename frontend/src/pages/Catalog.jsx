@@ -24,7 +24,7 @@ function Catalog() {
 
   const [search, setSearch] = useState(searchParams.get("q") || "");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade } = useFeatureGate();
+  const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade, upgradeLoading, upgradeError } = useFeatureGate();
 
   useEffect(() => {
     const params = {};
@@ -165,7 +165,7 @@ function Catalog() {
           )}
         </div>
       </div>
-      <UpgradeModal isOpen={showUpgrade} onClose={hideUpgradeModal} onUpgrade={handleUpgrade} />
+      <UpgradeModal isOpen={showUpgrade} onClose={hideUpgradeModal} onUpgrade={handleUpgrade} loading={upgradeLoading} error={upgradeError} />
     </div>
   );
 }

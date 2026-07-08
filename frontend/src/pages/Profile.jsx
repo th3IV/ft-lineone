@@ -50,6 +50,8 @@ function Profile() {
     showUpgradeModal,
     hideUpgradeModal,
     handleUpgrade,
+    upgradeLoading,
+    upgradeError,
     limits,
   } = useFeatureGate();
 
@@ -745,6 +747,8 @@ function Profile() {
       isOpen={showUpgrade}
       onClose={hideUpgradeModal}
       onUpgrade={handleUpgrade}
+      loading={upgradeLoading}
+      error={upgradeError}
     />
     {cropModalImage && (
       <ImageCropModal

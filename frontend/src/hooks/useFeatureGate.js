@@ -8,6 +8,8 @@ export function useFeatureGate() {
   const dispatch = useDispatch();
   const { user, dailyUsage } = useSelector((state) => state.user);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState(null);
 
   const isPremium = user?.is_premium || user?.plan_type === "premium";
 
@@ -30,13 +32,20 @@ export function useFeatureGate() {
   const hideUpgradeModal = useCallback(() => setShowUpgrade(false), []);
 
   const handleUpgrade = useCallback(async () => {
+    setUpgradeLoading(true);
+    setUpgradeError(null);
     try {
       const data = await createPayment();
       if (data.url && data.token) {
         redirectToWebpay(data.url, data.token);
+      } else {
+        setUpgradeError("No se pudo crear la transaccion. Intenta nuevamente.");
       }
     } catch (err) {
       console.error("Payment error:", err);
+      setUpgradeError("Error al conectar con la pasarela de pago. Intenta nuevamente.");
+    } finally {
+      setUpgradeLoading(false);
     }
   }, []);
 
@@ -54,6 +63,8 @@ export function useFeatureGate() {
     showUpgradeModal,
     hideUpgradeModal,
     handleUpgrade,
+    upgradeLoading,
+    upgradeError,
     limits: LIMITS,
   };
 }
