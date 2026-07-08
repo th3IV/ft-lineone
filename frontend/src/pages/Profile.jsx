@@ -77,20 +77,18 @@ function Profile() {
   useEffect(() => {
     if (user) {
       setProfile(user);
-    }
-    if (savedMeasurements && Object.keys(savedMeasurements).length > 0) {
-      setMeasurements({ ...MEASUREMENTS_DEFAULT, ...savedMeasurements });
-    }
-    if (savedPreferences && Object.keys(savedPreferences).length > 0) {
+      const m = user.body_measurements || {};
+      setMeasurements({ ...MEASUREMENTS_DEFAULT, ...m });
+      const p = user.preferences || {};
       setPreferences({
-        sizes: savedPreferences.sizes || { upper: "", lower: "" },
-        brands: savedPreferences.brands || [],
-        colors: savedPreferences.colors || [],
-        styles: savedPreferences.styles || [],
-        occasions: savedPreferences.occasions || [],
+        sizes: p.sizes || { upper: "", lower: "" },
+        brands: p.brands || [],
+        colors: p.colors || [],
+        styles: p.styles || [],
+        occasions: p.occasions || [],
       });
     }
-  }, [user, savedMeasurements, savedPreferences]);
+  }, [user]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -400,11 +398,11 @@ function Profile() {
           <div>
             <label className="editorial-label">Género</label>
             <div className="flex gap-2 sm:gap-3 mt-2 flex-wrap">
-              {["femenino", "masculino", "unisex", "otro"].map((g) => (
+              {["hombre", "mujer", "unisex", "otro"].map((g) => (
                 <button
                   key={g}
                   onClick={() => isEditing && setProfile({ ...profile, gender: g })}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs transition-all ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs capitalize transition-all ${
                     profile.gender === g
                       ? "bg-editorial-black text-white"
                       : "border border-editorial-gray-light text-editorial-gray hover:border-editorial-black"
@@ -472,7 +470,7 @@ function Profile() {
               hips: "Caderas (cm)",
             })
               .filter(([key]) => {
-                if (profile.gender === "masculino") {
+                if (profile.gender === "hombre") {
                   return !["chest", "waist"].includes(key);
                 }
                 return true;

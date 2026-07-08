@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, User, LogOut, Settings, Crown } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, Crown, Sparkles } from "lucide-react";
 import { useFeatureGate } from "../hooks/useFeatureGate";
 import { loginUser, logoutUser } from "../store/userSlice";
 
@@ -229,12 +229,12 @@ function Navbar() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-40 bg-editorial-cream md:hidden"
+            className="fixed inset-0 z-[60] bg-editorial-black md:hidden"
           >
             <div className="flex flex-col h-full pt-20 px-8">
               <button
                 onClick={() => setIsOpen(false)}
-                className="absolute top-4 right-4 p-2 rounded-lg text-editorial-gray hover:text-editorial-black"
+                className="absolute top-4 right-4 p-2 rounded-lg text-white/60 hover:text-white"
               >
                 <X size={22} />
               </button>
@@ -249,7 +249,7 @@ function Navbar() {
                   >
                     <Link
                       to={to}
-                       className="block py-4 text-2xl font-display text-editorial-black transition-colors"
+                      className="block py-4 text-2xl font-display text-white transition-colors"
                       onClick={() => setIsOpen(false)}
                     >
                       {label}
@@ -263,7 +263,7 @@ function Navbar() {
                 >
                   <Link
                     to={isAuthenticated ? "/profile" : "/login"}
-                     className="block py-4 text-2xl font-display text-editorial-black transition-colors"
+                    className="block py-4 text-2xl font-display text-white transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     {isAuthenticated ? "Perfil" : "Ingresar"}

@@ -120,7 +120,11 @@ const userSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload.user;
+        state.user = {
+          ...action.payload.user,
+          body_measurements: action.payload.user?.body_measurements || {},
+          preferences: action.payload.user?.preferences || {},
+        };
         state.token = action.payload.access_token;
         state.isAuthenticated = true;
         state.measurements = action.payload.user?.body_measurements || null;
@@ -164,6 +168,8 @@ const userSlice = createSlice({
           age: data.age || null,
           plan_type: data.plan_type || "free",
           is_premium: data.is_premium || false,
+          body_measurements: data.body_measurements || {},
+          preferences: data.preferences || {},
         };
         state.measurements = data.body_measurements || {};
         state.preferences = data.preferences || {};

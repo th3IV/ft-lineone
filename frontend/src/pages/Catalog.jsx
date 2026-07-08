@@ -9,6 +9,7 @@ import {
   clearFilters,
 } from "../store/productSlice";
 import { openVtonModal } from "../store/uiSlice";
+import { normalizeGender } from "../utils/normalize";
 import ProductGrid from "../components/ProductGrid";
 import SidebarFiltros from "../components/SidebarFiltros";
 import { useFeatureGate } from "../hooks/useFeatureGate";
@@ -29,7 +30,7 @@ function Catalog() {
   useEffect(() => {
     const params = {};
     if (filters.store) params.store = filters.store;
-    if (filters.gender) params.gender = filters.gender;
+    if (filters.gender) params.gender = normalizeGender(filters.gender);
     if (filters.clothingType?.length)
       params.clothing_type = filters.clothingType.join(",");
     if (filters.size) params.size = filters.size;

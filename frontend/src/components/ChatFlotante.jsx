@@ -153,28 +153,24 @@ function ChatFlotante() {
         onClick={handleToggleChat}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-editorial-black text-white shadow-[0_8px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.3)] transition-shadow duration-300 flex items-center justify-center"
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.3)] transition-shadow duration-300 flex items-center justify-center"
       >
+        <img
+          src="/logo.jpg"
+          alt="FT. THE LINE ONE"
+          className="w-14 h-14 rounded-full object-cover"
+        />
         <AnimatePresence mode="wait">
-          {isOpen ? (
+          {isOpen && (
             <motion.div
               key="close"
               initial={{ rotate: -90, opacity: 0 }}
               animate={{ rotate: 0, opacity: 1 }}
               exit={{ rotate: 90, opacity: 0 }}
               transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-editorial-black flex items-center justify-center"
             >
-              <X size={20} />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="chat"
-              initial={{ rotate: 90, opacity: 0 }}
-              animate={{ rotate: 0, opacity: 1 }}
-              exit={{ rotate: -90, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <MessageCircle size={20} />
+              <X size={20} className="text-white" />
             </motion.div>
           )}
         </AnimatePresence>

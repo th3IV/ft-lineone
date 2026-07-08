@@ -232,7 +232,7 @@ function OnboardingQuiz() {
                     { key: "hips", label: "Caderas (cm)", type: "number" },
                   ]
                     .filter((field) => {
-                      if (user?.gender === "masculino") {
+                      if (user?.gender === "hombre") {
                         return !["chest", "waist"].includes(field.key);
                       }
                       return true;

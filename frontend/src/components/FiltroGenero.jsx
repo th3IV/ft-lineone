@@ -1,4 +1,4 @@
-const generos = ["Hombre", "Mujer"];
+const generos = ["hombre", "mujer"];
 
 function FiltroGenero({ selected, onChange }) {
   return (
@@ -9,7 +9,7 @@ function FiltroGenero({ selected, onChange }) {
           <button
             key={g}
             onClick={() => onChange(selected === g ? null : g)}
-            className={`tag-pill ${
+            className={`tag-pill capitalize ${
               selected === g
                 ? "tag-pill-active"
                 : "bg-editorial-white text-editorial-gray hover:border-editorial-black/20"

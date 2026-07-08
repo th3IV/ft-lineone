@@ -22,7 +22,7 @@ function RegisterPage() {
     if (age) payload.age = parseInt(age, 10);
     const result = await dispatch(registerUser(payload));
     if (registerUser.fulfilled.match(result)) {
-      navigate("/onboarding");
+      navigate("/catalog");
     }
   };
 
@@ -94,9 +94,9 @@ function RegisterPage() {
                 className="w-full border-b border-editorial-black/10 rounded-none px-0 py-3 text-sm bg-transparent focus:outline-none focus:border-editorial-black transition-colors text-editorial-black"
               >
                 <option value="">Sexo</option>
-                <option value="masculino">Masculino</option>
-                <option value="femenino">Femenino</option>
-                <option value="no_binario">No binario</option>
+                <option value="hombre">Hombre</option>
+                <option value="mujer">Mujer</option>
+                <option value="unisex">No binario</option>
                 <option value="prefiero_no_decir">Prefiero no decir</option>
               </select>
             </div>
