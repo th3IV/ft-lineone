@@ -1,6 +1,7 @@
 """Scraper scheduler for Cloudflare Workers Cron Triggers."""
 
 import asyncio
+import json
 from datetime import datetime, timezone
 
 from services.database import DatabaseService

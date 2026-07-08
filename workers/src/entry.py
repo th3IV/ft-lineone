@@ -1,5 +1,6 @@
 """FT-LineOne API - Cloudflare Workers Python Entry Point."""
 
+import asyncio
 import json
 import re
 import time
@@ -272,11 +273,14 @@ class Default(WorkerEntrypoint):
         print(json.dumps({"event": "cron_start", "cron": cron_expr}))
 
         # Run scrapers (independent — failure doesn't block VTON)
+        # Timeout: 25s to ensure VTON polling and cleanup always run
         try:
             runner = ScraperRunner(env, max_products=max_products)
             try:
-                results = await runner.run_all_scrapers()
+                results = await asyncio.wait_for(runner.run_all_scrapers(), timeout=25)
                 print(json.dumps({"event": "cron_scrapers_complete", "cron": cron_expr, "results": results}))
+            except asyncio.TimeoutError:
+                print(json.dumps({"event": "cron_scrapers_timeout", "cron": cron_expr}))
             finally:
                 await runner.close()
         except Exception as e:
@@ -289,9 +293,11 @@ class Default(WorkerEntrypoint):
         except Exception as e:
             print(json.dumps({"event": "cron_vton_error", "error": str(e)}))
 
-        # Clean up corrupted product data
+        # Clean up corrupted product data (capped at 10s)
         try:
-            cleanup_results = await cleanup_corrupted_data(env)
+            cleanup_results = await asyncio.wait_for(cleanup_corrupted_data(env), timeout=10)
             print(json.dumps({"event": "cron_cleanup_complete", "cron": cron_expr, "results": cleanup_results}))
+        except asyncio.TimeoutError:
+            print(json.dumps({"event": "cron_cleanup_timeout", "cron": cron_expr}))
         except Exception as e:
             print(json.dumps({"event": "cron_cleanup_error", "error": str(e)}))

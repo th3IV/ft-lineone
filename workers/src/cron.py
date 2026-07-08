@@ -28,9 +28,13 @@ async def process_pending_vton_tasks(env):
             status = result.get("status", "processing")
 
             if status == "completed":
+                output_url = result.get("output_url", "")
+                # Save to R2 for persistent storage (prevents broken images from expired freeimage.host URLs)
+                from services.r2 import save_vton_output_to_r2
+                r2_url = await save_vton_output_to_r2(env, task.user_id, task.id, output_url)
                 await db.update_vton_result(task.id, {
                     "status": "completed",
-                    "output_image_url": result.get("output_url"),
+                    "output_image_url": r2_url,
                     "completed_at": datetime.utcnow().isoformat(),
                 })
                 processed += 1
@@ -92,15 +96,19 @@ def _is_valid_color(color: str, product_name: str) -> bool:
 
 
 async def cleanup_corrupted_data(env):
-    """Clean up products with corrupted colors (colors that are actually sizes)."""
+    """Clean up products with corrupted colors (colors that are actually sizes).
+    
+    Capped at 20 pages (2000 products) per cron cycle to prevent timeouts.
+    """
     db = DatabaseService(env)
 
-    # Get all products (paginated)
+    # Get all products (paginated) — capped to avoid consuming entire cron budget
     page = 1
+    max_pages = 20
     total_fixed = 0
     total_checked = 0
 
-    while True:
+    while page <= max_pages:
         products, total = await db.get_products({}, page=page, limit=100)
         if not products:
             break

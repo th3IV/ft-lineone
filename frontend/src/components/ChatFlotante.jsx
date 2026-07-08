@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X, Sparkles, User, Crown } from "lucide-react";
@@ -84,36 +84,33 @@ function ChatFlotante() {
   } = useFeatureGate();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [showTooltip, setShowTooltip] = useState(false);
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      text: "Hola! Soy Liney, tu Asesor de Imagen IA personal. Preguntame sobre moda, combinaciones o tendencias. estoy aqui para ayudarte a encontrar el look perfecto.",
+      text: isPremium
+        ? "Hola! Soy Liney, tu Asesor de Imagen IA personal. Preguntame sobre moda, combinaciones o tendencias. Estoy aqui para ayudarte a encontrar el look perfecto."
+        : `Hola! Soy Liney, tu Asesor de Imagen IA. Tienes ${limits.llm - llmUsed} mensajes gratis hoy. Preguntame sobre moda, combinaciones o tendencias.`,
       products: [],
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Auto-hide tooltip after 3s
-  useEffect(() => {
-    if (!showTooltip) return;
-    const timer = setTimeout(() => setShowTooltip(false), 3000);
-    return () => clearTimeout(timer);
-  }, [showTooltip]);
-
   const handleToggleChat = () => {
-    if (!isPremium) {
-      setShowTooltip(true);
-      return;
-    }
     setIsOpen((prev) => !prev);
   };
 
   const sendMessage = async (text) => {
     if (!text.trim()) return;
     if (!canUseLlm) {
-      showUpgradeModal();
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: "Se acabaron tus mensajes de hoy. Opta por la version Premium para un chat ilimitado.",
+          products: [],
+        },
+      ]);
       return;
     }
 
@@ -181,27 +178,9 @@ function ChatFlotante() {
         </AnimatePresence>
       </motion.button>
 
-      {/* Premium-only tooltip */}
+      {/* Chat Panel */}
       <AnimatePresence>
-        {showTooltip && !isPremium && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-24 right-6 z-50 bg-editorial-black text-white px-4 py-2.5 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.2)] flex items-center gap-2.5 text-xs font-medium tracking-wide max-w-[200px]"
-          >
-            <Crown size={14} className="text-amber-400 shrink-0" />
-            <span>Uso solo con el Premium</span>
-            <div className="absolute -bottom-1.5 right-7 w-3 h-3 bg-editorial-black rotate-45" />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Chat Panel — solo para premium */}
-      {isPremium && (
-        <AnimatePresence>
-          {isOpen && (
+        {isOpen && (
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -325,7 +304,6 @@ function ChatFlotante() {
             </motion.div>
           )}
         </AnimatePresence>
-      )}
 
       <UpgradeModal
         isOpen={showUpgrade}
