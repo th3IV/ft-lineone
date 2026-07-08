@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X, Sparkles, User, Crown } from "lucide-react";
@@ -82,7 +82,9 @@ function ChatFlotante() {
     handleUpgrade,
     limits,
   } = useFeatureGate();
+
   const [isOpen, setIsOpen] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -92,6 +94,21 @@ function ChatFlotante() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Auto-hide tooltip after 3s
+  useEffect(() => {
+    if (!showTooltip) return;
+    const timer = setTimeout(() => setShowTooltip(false), 3000);
+    return () => clearTimeout(timer);
+  }, [showTooltip]);
+
+  const handleToggleChat = () => {
+    if (!isPremium) {
+      setShowTooltip(true);
+      return;
+    }
+    setIsOpen((prev) => !prev);
+  };
 
   const sendMessage = async (text) => {
     if (!text.trim()) return;
@@ -134,7 +151,7 @@ function ChatFlotante() {
     <>
       {/* Toggle Button */}
       <motion.button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggleChat}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-editorial-black text-white shadow-[0_8px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.3)] transition-shadow duration-300 flex items-center justify-center"
@@ -164,155 +181,152 @@ function ChatFlotante() {
         </AnimatePresence>
       </motion.button>
 
-      {/* Chat Panel */}
+      {/* Premium-only tooltip */}
       <AnimatePresence>
-        {isOpen && (
+        {showTooltip && !isPremium && (
           <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            initial={{ opacity: 0, y: 8, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 bg-editorial-white rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-editorial-black/5 overflow-hidden"
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-24 right-6 z-50 bg-editorial-black text-white px-4 py-2.5 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.2)] flex items-center gap-2.5 text-xs font-medium tracking-wide max-w-[200px]"
           >
-            {/* Header */}
-            <div className="bg-editorial-black p-4 text-white">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
-                  <Sparkles size={16} />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-display font-semibold text-sm">
-                    Asesor de Imagen
-                  </h3>
-                  <p className="text-[11px] text-white/50">IA de moda</p>
-                </div>
-                {!isPremium && (
-                  <div className="text-right">
-                    <p className="text-[10px] text-white/40">
-                      {llmRemaining}/{limits.llm} mensajes
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Upgrade banner for free users */}
-            {!isPremium && llmRemaining <= 3 && llmRemaining > 0 && (
-              <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center gap-2">
-                <Crown size={12} className="text-amber-600" />
-                <p className="text-[10px] text-amber-700 flex-1">
-                  Te quedan {llmRemaining} mensajes. Upgrade para ilimitado.
-                </p>
-                <button
-                  onClick={showUpgradeModal}
-                  className="text-[10px] font-medium text-amber-700 underline"
-                >
-                  Upgrade
-                </button>
-              </div>
-            )}
-
-            {/* Messages */}
-            <div className="h-80 overflow-y-auto p-4 space-y-3">
-              {messages.map((msg, i) => (
-                <div key={i} className="space-y-2">
-                  <div
-                    className={`flex items-end gap-2 ${
-                      msg.role === "user" ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    {msg.role === "assistant" && (
-                      <div className="w-6 h-6 rounded-full bg-editorial-black/5 flex items-center justify-center shrink-0">
-                        <Sparkles size={12} className="text-editorial-black" />
-                      </div>
-                    )}
-                    <div
-                      className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed ${
-                        msg.role === "user"
-                          ? "bg-editorial-black text-white rounded-br-md"
-                          : "bg-editorial-cream text-editorial-charcoal rounded-bl-md"
-                      }`}
-                    >
-                      {msg.role === "assistant" ? renderAdvice(msg.text) : msg.text}
-                    </div>
-                    {msg.role === "user" && (
-                      <Avatar
-                        src={user?.profile_image}
-                        fallback={<User size={12} />}
-                        className="w-6 h-6 shrink-0"
-                      />
-                    )}
-                  </div>
-                  {msg.products && msg.products.length > 0 && (
-                    <div className="flex gap-2 pl-2 overflow-x-auto">
-                      {msg.products.map((product) => (
-                        <ProductMiniCard key={product.id} product={product} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="bg-editorial-cream rounded-2xl rounded-bl-md px-4 py-3">
-                    <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-editorial-gray-light rounded-full animate-pulse-soft" />
-                      <span className="w-1.5 h-1.5 bg-editorial-gray-light rounded-full animate-pulse-soft [animation-delay:0.2s]" />
-                      <span className="w-1.5 h-1.5 bg-editorial-gray-light rounded-full animate-pulse-soft [animation-delay:0.4s]" />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Questions */}
-            <div className="border-t border-editorial-black/5 p-3">
-              <p className="editorial-label text-[10px] mb-2">
-                Preguntas rapidas
-              </p>
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {quickQuestions.map((q, i) => (
-                  <button
-                    key={i}
-                    onClick={() => sendMessage(q)}
-                    disabled={!canUseLlm}
-                    className="text-[11px] px-3 py-1.5 rounded-full border border-editorial-black/10 text-editorial-gray hover:border-editorial-black hover:text-editorial-black transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-              {canUseLlm ? (
-                <form onSubmit={handleSubmit} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Escribe tu pregunta..."
-                    className="flex-1 text-[13px] border-b border-editorial-black/10 rounded-none px-0 py-2 bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
-                    disabled={loading}
-                  />
-                  <button
-                    type="submit"
-                    disabled={loading || !input.trim()}
-                     className="text-[12px] font-medium text-editorial-black disabled:opacity-30 transition-colors"
-                  >
-                    Enviar
-                  </button>
-                </form>
-              ) : (
-                <button
-                  onClick={showUpgradeModal}
-                  className="w-full py-2.5 bg-editorial-black text-white rounded-xl text-xs font-medium flex items-center justify-center gap-2"
-                >
-                  <Crown size={12} />
-                  Upgrade para继续 chateando
-                </button>
-              )}
-            </div>
+            <Crown size={14} className="text-amber-400 shrink-0" />
+            <span>Uso solo con el Premium</span>
+            <div className="absolute -bottom-1.5 right-7 w-3 h-3 bg-editorial-black rotate-45" />
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Chat Panel — solo para premium */}
+      {isPremium && (
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 bg-editorial-white rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-editorial-black/5 overflow-hidden"
+            >
+              {/* Header */}
+              <div className="bg-editorial-black p-4 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
+                    <Sparkles size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-display font-semibold text-sm">
+                      Asesor de Imagen
+                    </h3>
+                    <p className="text-[11px] text-white/50">IA de moda</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="h-80 overflow-y-auto p-4 space-y-3">
+                {messages.map((msg, i) => (
+                  <div key={i} className="space-y-2">
+                    <div
+                      className={`flex items-end gap-2 ${
+                        msg.role === "user" ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      {msg.role === "assistant" && (
+                        <div className="w-6 h-6 rounded-full bg-editorial-black/5 flex items-center justify-center shrink-0">
+                          <Sparkles size={12} className="text-editorial-black" />
+                        </div>
+                      )}
+                      <div
+                        className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed ${
+                          msg.role === "user"
+                            ? "bg-editorial-black text-white rounded-br-md"
+                            : "bg-editorial-cream text-editorial-charcoal rounded-bl-md"
+                        }`}
+                      >
+                        {msg.role === "assistant" ? renderAdvice(msg.text) : msg.text}
+                      </div>
+                      {msg.role === "user" && (
+                        <Avatar
+                          src={user?.profile_image}
+                          fallback={<User size={12} />}
+                          className="w-6 h-6 shrink-0"
+                        />
+                      )}
+                    </div>
+                    {msg.products && msg.products.length > 0 && (
+                      <div className="flex gap-2 pl-2 overflow-x-auto">
+                        {msg.products.map((product) => (
+                          <ProductMiniCard key={product.id} product={product} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {loading && (
+                  <div className="flex justify-start">
+                    <div className="bg-editorial-cream rounded-2xl rounded-bl-md px-4 py-3">
+                      <div className="flex gap-1">
+                        <span className="w-1.5 h-1.5 bg-editorial-gray-light rounded-full animate-pulse-soft" />
+                        <span className="w-1.5 h-1.5 bg-editorial-gray-light rounded-full animate-pulse-soft [animation-delay:0.2s]" />
+                        <span className="w-1.5 h-1.5 bg-editorial-gray-light rounded-full animate-pulse-soft [animation-delay:0.4s]" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Questions + Input */}
+              <div className="border-t border-editorial-black/5 p-3">
+                <p className="editorial-label text-[10px] mb-2">
+                  Preguntas rapidas
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {quickQuestions.map((q, i) => (
+                    <button
+                      key={i}
+                      onClick={() => sendMessage(q)}
+                      disabled={!canUseLlm}
+                      className="text-[11px] px-3 py-1.5 rounded-full border border-editorial-black/10 text-editorial-gray hover:border-editorial-black hover:text-editorial-black transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+                {canUseLlm ? (
+                  <form onSubmit={handleSubmit} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Escribe tu pregunta..."
+                      className="flex-1 text-[13px] border-b border-editorial-black/10 rounded-none px-0 py-2 bg-transparent focus:outline-none focus:border-editorial-black transition-colors"
+                      disabled={loading}
+                    />
+                    <button
+                      type="submit"
+                      disabled={loading || !input.trim()}
+                      className="text-[12px] font-medium text-editorial-black disabled:opacity-30 transition-colors"
+                    >
+                      Enviar
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    onClick={showUpgradeModal}
+                    className="w-full py-2.5 bg-editorial-black text-white rounded-xl text-xs font-medium flex items-center justify-center gap-2"
+                  >
+                    <Crown size={12} />
+                    Upgrade para seguir chateando
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
+
       <UpgradeModal
         isOpen={showUpgrade}
         onClose={hideUpgradeModal}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { User, Settings, Clock, Sparkles, Heart, Camera, Image as ImageIcon, Trash2, Crown, Zap } from "lucide-react";
+import { User, Settings, Clock, Sparkles, Heart, Camera, Image as ImageIcon, Trash2, Crown, Zap, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
 import { fetchProfile, updateProfile, updateMeasurements, updatePreferences, uploadProfileImage, deleteProfileImage, logoutUser } from "../store/userSlice";
 import { fetchFavorites } from "../store/favoritesSlice";
@@ -397,14 +397,15 @@ function Profile() {
             )}
           </div>
 
-          <div className="pt-4 border-t border-editorial-gray-light">
+          <div className="pt-6">
             <button
               onClick={async () => {
                 await dispatch(logoutUser());
                 navigate("/");
               }}
-              className="w-full py-2.5 px-4 bg-red-500/10 text-red-400 rounded-xl border border-red-500/20 hover:bg-red-500/20 transition-all text-sm font-medium"
+              className="w-full flex items-center justify-center gap-2.5 py-3 px-4 border border-editorial-gray-light/60 text-editorial-gray rounded-full text-sm font-medium tracking-wide hover:bg-editorial-cream hover:text-editorial-black hover:border-editorial-gray transition-all duration-300 active:scale-[0.97]"
             >
+              <LogOut size={15} strokeWidth={1.5} />
               Cerrar sesión
             </button>
           </div>
