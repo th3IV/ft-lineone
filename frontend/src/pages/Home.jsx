@@ -274,10 +274,10 @@ function Home() {
         <RevealOnScroll>
           <motion.button
             onClick={() => setShowUpgradeModal(true)}
-            whileHover={{ scale: 1.005 }}
-            whileTap={{ scale: 0.995 }}
-            transition={{ duration: 0.2 }}
-            className="relative w-full overflow-hidden cursor-pointer py-20 md:py-28 block"
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="group relative w-full overflow-hidden cursor-pointer py-20 md:py-28 block"
             style={{
               background:
                 "linear-gradient(90deg, #0a0a0a 0%, #1a1a2e 25%, #7c3aed 50%, #1a1a2e 75%, #0a0a0a 100%)",
@@ -285,57 +285,71 @@ function Home() {
             }}
           >
             {/* Shimmer overlay */}
-            <div className="absolute inset-0 animate-shimmer pointer-events-none" />
+            <div
+              className="absolute inset-0 pointer-events-none transition-all duration-500"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)",
+                backgroundSize: "200% 100%",
+                animation: "shimmer 3s ease-in-out infinite",
+              }}
+            />
 
-            {/* Particulas flotantes */}
+            {/* Brillo extra en hover */}
+            <div className="absolute inset-0 bg-white/0 group-hover:bg-white/5 transition-all duration-500 pointer-events-none" />
+
+            {/* Particulas flotantes — mas visibles en hover */}
             <Sparkles
               size={20}
-              className="absolute top-8 left-[15%] text-white/20 animate-float-particle pointer-events-none"
+              className="absolute top-8 left-[15%] text-white/20 animate-float-particle group-hover:text-white/50 pointer-events-none transition-colors duration-500"
               style={{ animationDelay: "0s" }}
             />
             <Sparkles
               size={14}
-              className="absolute top-12 right-[20%] text-white/15 animate-float-particle pointer-events-none"
+              className="absolute top-12 right-[20%] text-white/15 animate-float-particle group-hover:text-white/40 pointer-events-none transition-colors duration-500"
               style={{ animationDelay: "1.5s" }}
             />
             <Sparkles
               size={16}
-              className="absolute bottom-10 left-[30%] text-white/20 animate-float-particle pointer-events-none"
+              className="absolute bottom-10 left-[30%] text-white/20 animate-float-particle group-hover:text-white/50 pointer-events-none transition-colors duration-500"
               style={{ animationDelay: "3s" }}
             />
             <Sparkles
               size={12}
-              className="absolute bottom-8 right-[35%] text-white/15 animate-float-particle pointer-events-none"
+              className="absolute bottom-8 right-[35%] text-white/15 animate-float-particle group-hover:text-white/40 pointer-events-none transition-colors duration-500"
               style={{ animationDelay: "4.5s" }}
             />
             <Sparkles
               size={18}
-              className="absolute top-1/2 left-[10%] text-white/10 animate-float-particle pointer-events-none"
+              className="absolute top-1/2 left-[10%] text-white/10 animate-float-particle group-hover:text-white/35 pointer-events-none transition-colors duration-500"
               style={{ animationDelay: "2s" }}
             />
 
             {/* Contenido */}
             <div className="relative max-w-[1400px] mx-auto px-5 sm:px-8 text-center pointer-events-none">
-              {/* Crown con glow pulsante */}
-              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-6 animate-pulse-glow">
-                <Crown size={28} className="text-editorial-gold relative z-10" />
+              {/* Crown con glow pulsante — rota y crece en hover */}
+              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-6 animate-pulse-glow group-hover:bg-white/20 transition-all duration-500">
+                <Crown
+                  size={28}
+                  className="text-editorial-gold relative z-10 transition-all duration-500 group-hover:scale-125 group-hover:rotate-12"
+                />
               </div>
 
-              <p className="text-[11px] tracking-[0.2em] uppercase text-white/40 font-medium mb-4">
+              <p className="text-[11px] tracking-[0.2em] uppercase text-white/40 font-medium mb-4 group-hover:text-white/60 transition-colors duration-300">
                 Premium
               </p>
-              <h2 className="font-display text-3xl md:text-4xl tracking-tight text-white mb-4">
+              <h2 className="font-display text-3xl md:text-4xl tracking-tight text-white mb-4 group-hover:text-white transition-colors duration-300">
                 Desbloquea la experiencia completa
               </h2>
-              <p className="text-white/50 leading-relaxed mb-6 max-w-md mx-auto text-sm md:text-base">
+              <p className="text-white/50 leading-relaxed mb-6 max-w-md mx-auto text-sm md:text-base group-hover:text-white/70 transition-colors duration-300">
                 Pruebas ilimitadas, chat con asesor de moda IA, historial
                 completo y sin interrupciones.
               </p>
-              <span className="inline-flex items-center gap-2 text-editorial-gold font-semibold text-lg md:text-xl">
+              <span className="inline-flex items-center gap-2 text-editorial-gold font-semibold text-lg md:text-xl group-hover:text-white transition-colors duration-300">
                 $4.990/mes
                 <Sparkles
                   size={16}
-                  className="animate-sparkle-twinkle"
+                  className="animate-sparkle-twinkle group-hover:scale-125 transition-transform duration-300"
                 />
               </span>
             </div>
