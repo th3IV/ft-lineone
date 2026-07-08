@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -7,6 +7,7 @@ import { fetchProducts } from "../store/productSlice";
 import { openVtonModal } from "../store/uiSlice";
 import { useFeatureGate } from "../hooks/useFeatureGate";
 import PremiumBanner from "../components/PremiumBanner";
+import UpgradeModal from "../components/UpgradeModal";
 import ProductGrid from "../components/ProductGrid";
 import RevealOnScroll, {
   StaggerContainer,
@@ -26,8 +27,7 @@ function Home() {
   const dispatch = useDispatch();
   const { products, loading } = useSelector((state) => state.products);
   const heroRef = useRef(null);
-  const { isPremium } = useFeatureGate();
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade } = useFeatureGate();
 
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -49,7 +49,7 @@ function Home() {
   return (
     <div>
       {/* PREMIUM BANNER — visible for free users */}
-      {!isPremium && <PremiumBanner onUpgrade={() => setShowUpgradeModal(true)} />}
+      {!isPremium && <PremiumBanner onUpgrade={showUpgradeModal} />}
 
       {/* HERO SECTION */}
       <section
@@ -273,7 +273,7 @@ function Home() {
       {!isPremium && (
         <RevealOnScroll>
           <motion.button
-            onClick={() => setShowUpgradeModal(true)}
+            onClick={showUpgradeModal}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -458,6 +458,12 @@ function Home() {
           </div>
         </div>
       </footer>
+
+      <UpgradeModal
+        isOpen={showUpgrade}
+        onClose={hideUpgradeModal}
+        onUpgrade={handleUpgrade}
+      />
     </div>
   );
 }
