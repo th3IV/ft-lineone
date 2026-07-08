@@ -171,7 +171,7 @@ async def upload_profile_image_route(
     try:
         public_url = await upload_profile_image(env, user.user_id, image_bytes, content_type)
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to upload image")
+        raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
 
     db = get_db(request)
     await db.update_user(user.user_id, {"profile_image": public_url})

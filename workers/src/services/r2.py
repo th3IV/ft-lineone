@@ -1,6 +1,14 @@
-"""R2 Storage service for uploading VTON result images."""
+"""R2 Storage service for uploading images to Cloudflare R2."""
 
-import base64
+import json
+import js
+from pyodide.ffi import to_js as _to_js
+from js import Object
+
+
+def to_js(obj):
+    """Convert Python objects to JS with dict_converter for proper dict->Object mapping."""
+    return _to_js(obj, dict_converter=Object.fromEntries)
 
 
 R2_PUBLIC_BASE = "https://pub-ae92531aa2144de7aad7a3510e7b31ff.r2.dev"
@@ -15,8 +23,8 @@ async def upload_vton_result(env, user_id: str, vton_id: str, image_bytes: bytes
 
     await env.R2.put(
         key,
-        image_bytes,
-        http_metadata={"contentType": "image/jpeg"},
+        js.Uint8Array.new(image_bytes),
+        to_js({"httpMetadata": {"contentType": "image/jpeg"}}),
     )
 
     return f"{R2_PUBLIC_BASE}/{key}"
@@ -24,12 +32,11 @@ async def upload_vton_result(env, user_id: str, vton_id: str, image_bytes: bytes
 
 async def download_image_as_bytes(url: str) -> bytes:
     """Download an image from a URL and return raw bytes."""
-    import httpx
-
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        return resp.content
+    resp = await js.fetch(url, to_js({"method": "GET"}))
+    if int(resp.status) >= 400:
+        raise Exception(f"Failed to download image: {resp.status}")
+    array_buffer = await resp.arrayBuffer()
+    return js.Uint8Array.new(array_buffer).to_py()
 
 
 async def upload_profile_image(env, user_id: str, image_bytes: bytes, content_type: str = "image/jpeg") -> str:
@@ -41,8 +48,8 @@ async def upload_profile_image(env, user_id: str, image_bytes: bytes, content_ty
 
     await env.R2.put(
         key,
-        image_bytes,
-        http_metadata={"contentType": content_type},
+        js.Uint8Array.new(image_bytes),
+        to_js({"httpMetadata": {"contentType": content_type}}),
     )
 
     return f"{R2_PUBLIC_BASE}/{key}"
@@ -58,8 +65,6 @@ async def save_vton_output_to_r2(env, user_id: str, vton_id: str, output_url: st
         r2_url = await upload_vton_result(env, user_id, vton_id, image_bytes)
         return r2_url
     except Exception as e:
-        # If R2 upload fails, fall back to the original URL
-        import json
         print(json.dumps({
             "event": "r2_upload_failed",
             "vton_id": vton_id,
