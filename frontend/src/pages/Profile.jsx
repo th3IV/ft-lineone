@@ -319,13 +319,42 @@ function Profile() {
                   color={getUsageColor(llmUsed)}
                 />
               </div>
-              <button
+              <motion.button
                 onClick={showUpgradeModal}
-                className="mt-4 w-full py-2.5 px-4 bg-editorial-black text-white rounded-xl text-sm font-medium hover:bg-editorial-black/90 transition-all flex items-center justify-center gap-2"
+                whileHover={{ scale: 1.03, boxShadow: "0 0 28px rgba(236,72,153,0.35)" }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="mt-4 w-full relative overflow-hidden rounded-xl text-sm font-medium text-white cursor-pointer group"
+                style={{
+                  background: "linear-gradient(135deg, #0a0a0a 0%, #831843 35%, #7c3aed 65%, #0a0a0a 100%)",
+                  backgroundSize: "300% 300%",
+                  animation: "shimmer 4s ease-in-out infinite",
+                }}
               >
-                <Zap size={14} />
-                Upgrade a Premium — $4.990/mes
-              </button>
+                {/* Shimmer overlay */}
+                <div
+                  className="absolute inset-0 pointer-events-none transition-all duration-500"
+                  style={{
+                    background: "linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)",
+                    backgroundSize: "200% 200%",
+                    animation: "shimmer 3s ease-in-out infinite",
+                  }}
+                />
+                {/* Border glow on hover */}
+                <div className="absolute inset-0 rounded-xl border border-white/0 group-hover:border-white/20 transition-all duration-500 pointer-events-none" />
+                {/* Extra brillo hover */}
+                <div className="absolute inset-0 bg-white/0 group-hover:bg-white/5 transition-all duration-500 pointer-events-none" />
+                <div className="relative flex items-center justify-center gap-2 py-2.5 px-4">
+                  <div className="relative w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0 animate-pulse-glow group-hover:bg-white/20 transition-all duration-500">
+                    <Zap size={12} className="text-editorial-gold relative z-10 transition-all duration-500 group-hover:scale-125 group-hover:rotate-12" />
+                  </div>
+                  Upgrade a Premium — $4.990/mes
+                  <Sparkles size={10} className="text-white/40 animate-sparkle-twinkle group-hover:text-white/80 group-hover:scale-125 transition-all duration-300" />
+                </div>
+                {/* Sparkles flotantes */}
+                <Sparkles size={8} className="absolute top-0.5 right-3 text-white/20 animate-float-particle group-hover:text-white/50 transition-colors duration-500" style={{ animationDelay: "0s" }} />
+                <Sparkles size={6} className="absolute bottom-0.5 left-4 text-white/15 animate-float-particle group-hover:text-white/40 transition-colors duration-500" style={{ animationDelay: "1.5s" }} />
+              </motion.button>
             </div>
           )}
 
