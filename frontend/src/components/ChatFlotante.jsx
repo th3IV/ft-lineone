@@ -90,7 +90,7 @@ function ChatFlotante() {
     {
       role: "assistant",
       text: isPremium
-        ? "Hola! Soy Liney, tu Asesor de Imagen IA personal. Preguntame sobre moda, combinaciones o tendencias. Estoy aqui para ayudarte a encontrar el look perfecto."
+        ? "Bienvenido de vuelta. Tu asesor IA premium esta listo. Que necesitas hoy?"
         : `Hola! Soy Liney, tu Asesor de Imagen IA. Tienes ${limits.llm - llmUsed} mensajes gratis hoy. Preguntame sobre moda, combinaciones o tendencias.`,
       products: [],
     },

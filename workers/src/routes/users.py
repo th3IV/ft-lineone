@@ -171,6 +171,15 @@ async def upload_profile_image_route(
     try:
         public_url = await upload_profile_image(env, user.user_id, image_bytes, content_type)
     except Exception as e:
+        import json
+        print(json.dumps({
+            "event": "profile_image_upload_error",
+            "user_id": user.user_id,
+            "image_size": len(image_bytes),
+            "content_type": content_type,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }))
         raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
 
     db = get_db(request)

@@ -23,7 +23,7 @@ async def upload_vton_result(env, user_id: str, vton_id: str, image_bytes: bytes
 
     await env.R2.put(
         key,
-        js.Uint8Array.new(image_bytes),
+        image_bytes,
         to_js({"httpMetadata": {"contentType": "image/jpeg"}}),
     )
 
@@ -46,11 +46,22 @@ async def upload_profile_image(env, user_id: str, image_bytes: bytes, content_ty
     """
     key = f"profiles/{user_id}/avatar.jpg"
 
-    await env.R2.put(
-        key,
-        js.Uint8Array.new(image_bytes),
-        to_js({"httpMetadata": {"contentType": content_type}}),
-    )
+    try:
+        await env.R2.put(
+            key,
+            image_bytes,
+            to_js({"httpMetadata": {"contentType": content_type}}),
+        )
+    except Exception as e:
+        print(json.dumps({
+            "event": "r2_put_error",
+            "key": key,
+            "image_bytes_len": len(image_bytes),
+            "content_type": content_type,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }))
+        raise
 
     return f"{R2_PUBLIC_BASE}/{key}"
 

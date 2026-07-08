@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Clock } from "lucide-react";
 import { fetchProducts } from "../store/productSlice";
 import { useVtonPolling } from "../hooks/useVtonPolling";
+import HypnoticLoader from "../components/HypnoticLoader";
 import VirtualMirror from "../components/VirtualMirror";
 import RevealOnScroll from "../components/RevealOnScroll";
 import { useFeatureGate } from "../hooks/useFeatureGate";
@@ -145,9 +146,9 @@ function VirtualTryOn() {
         </div>
       )}
 
-      {loading && progress.elapsed > 0 && (
-        <div className="mb-6 p-3 bg-editorial-cream border border-editorial-black/10 rounded-xl text-sm text-editorial-gray">
-          Generando... ({progress.elapsed}s transcurridos)
+      {loading && (
+        <div className="mb-8 p-6 bg-editorial-cream border border-editorial-black/10 rounded-2xl">
+          <HypnoticLoader variant="generating" />
         </div>
       )}
 

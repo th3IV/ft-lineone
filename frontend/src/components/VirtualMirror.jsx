@@ -2,6 +2,7 @@ import { useCallback, useState, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import { Camera, Upload, Sparkles, AlertCircle, RefreshCw, X } from "lucide-react";
 import { compressImage } from "../utils/compressImage";
+import HypnoticLoader from "./HypnoticLoader";
 
 const PHOTO_TIPS = [
   "Foto de cuerpo completo, de frente",
@@ -278,12 +279,7 @@ function VirtualMirror({
                     </p>
                   </>
                 ) : (
-                  <>
-                    <div className="w-8 h-8 rounded-full border-2 border-editorial-black/10 border-t-editorial-black animate-spin" />
-                    <p className="mt-2 text-xs text-editorial-gray">
-                      Procesando... ({loadingTime}s)
-                    </p>
-                  </>
+                  <HypnoticLoader variant="generating" />
                 )}
               </div>
             ) : resultImage ? (

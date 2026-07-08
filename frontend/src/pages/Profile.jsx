@@ -13,6 +13,7 @@ import UpgradeModal from "../components/UpgradeModal";
 import RemainingUses from "../components/RemainingUses";
 import PremiumBadge from "../components/PremiumBadge";
 import ImageCropModal from "../components/ImageCropModal";
+import HypnoticLoader from "../components/HypnoticLoader";
 
 const MEASUREMENTS_DEFAULT = {
   height: "",
@@ -232,8 +233,8 @@ function Profile() {
                   <Camera size={20} className="text-white hidden sm:block" />
                 </div>
                 {imageLoading && (
-                  <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-                    <div className="w-6 h-6 rounded-full border-2 border-editorial-black/10 border-t-editorial-black animate-spin" />
+                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                    <HypnoticLoader variant="uploading" className="scale-50" />
                   </div>
                 )}
               </div>
