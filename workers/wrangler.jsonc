@@ -33,6 +33,6 @@
     "TRANSBANK_RETURN_URL": "https://thelineone.com/payment/success"
   },
   "triggers": {
-    "crons": ["*/2 * * * *"]
+    "crons": ["*/10 * * * *"]
   }
 }
