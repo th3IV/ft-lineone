@@ -1,8 +1,6 @@
-"""Payment routes — Transbank WebPay Plus integration."""
+"""Payment routes — Transbank WebPay Plus REST API integration."""
 
 import json
-import hashlib
-import hmac
 import time
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Request, Depends
@@ -25,7 +23,7 @@ class CreatePaymentRequest(BaseModel):
     plan_type: str = "premium"
 
 
-class WebhookRequest(BaseModel):
+class ConfirmPaymentRequest(BaseModel):
     token: str
 
 
@@ -35,19 +33,17 @@ async def create_payment(
     request: Request,
     user: dict = Depends(require_auth),
 ):
-    """Create a Transbank WebPay transaction."""
+    """Create a Transbank WebPay Plus transaction."""
     env = get_env(request)
     db = get_db(request)
 
     if body.plan_type != "premium":
         raise HTTPException(status_code=400, detail="Invalid plan type")
 
-    # Get user info
     user_obj = await db.get_user_by_id(user.user_id)
     if not user_obj:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Transbank credentials
     commerce_code = getattr(env, "TRANSBANK_COMMERCE_CODE", "")
     api_key = getattr(env, "TRANSBANK_API_KEY", "")
     base_url = getattr(env, "TRANSBANK_BASE_URL", "https://webpay3gint.transbank.cl")
@@ -55,12 +51,10 @@ async def create_payment(
     if not commerce_code or not api_key:
         raise HTTPException(status_code=500, detail="Payment configuration missing")
 
-    # Create unique buy order
     buy_order = f"FT{user.user_id[:8]}{int(time.time())}"
     amount = 4990
     return_url = getattr(env, "TRANSBANK_RETURN_URL", "https://thelineone.com/payment/success")
 
-    # Create transaction via Transbank API
     try:
         import urllib.request
         import urllib.error
@@ -73,21 +67,20 @@ async def create_payment(
         }).encode("utf-8")
 
         req = urllib.request.Request(
-            f"{base_url}/rswebpaytransaction/api/v1.0/transactions",
+            f"{base_url}/rswebpaytransaction/api/v1.2/transactions",
             data=payload,
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"WSK {commerce_code} {api_key}",
+                "Tbk-Api-Key-Id": commerce_code,
+                "Tbk-Api-Key-Secret": api_key,
             },
         )
 
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
 
-        # Save payment record
-        from datetime import datetime as _dt
-        now = _dt.utcnow().isoformat()
-        period_end = (_dt.utcnow() + timedelta(days=30)).isoformat()
+        now = datetime.utcnow().isoformat()
+        period_end = (datetime.utcnow() + timedelta(days=30)).isoformat()
 
         await db.db.prepare(
             """INSERT INTO payments (id, user_id, amount, currency, status, transbank_token, plan_type, period_start, period_end)
@@ -115,12 +108,13 @@ async def create_payment(
         raise HTTPException(status_code=500, detail=f"Payment creation failed: {str(e)}")
 
 
-@router.post("/webhook")
-async def payment_webhook(
-    body: WebhookRequest,
+@router.post("/confirm")
+async def confirm_payment(
+    body: ConfirmPaymentRequest,
     request: Request,
+    user: dict = Depends(require_auth),
 ):
-    """Handle Transbank payment callback."""
+    """Confirm a Transbank transaction after user returns from payment page."""
     env = get_env(request)
     db = get_db(request)
 
@@ -128,17 +122,20 @@ async def payment_webhook(
     api_key = getattr(env, "TRANSBANK_API_KEY", "")
     base_url = getattr(env, "TRANSBANK_BASE_URL", "https://webpay3gint.transbank.cl")
 
-    # Confirm transaction
+    if not commerce_code or not api_key:
+        raise HTTPException(status_code=500, detail="Payment configuration missing")
+
     try:
         import urllib.request
         import urllib.error
 
         req = urllib.request.Request(
-            f"{base_url}/rswebpaytransaction/api/v1.0/transactions/{body.token}",
+            f"{base_url}/rswebpaytransaction/api/v1.2/transactions/{body.token}",
             method="PUT",
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"WSK {commerce_code} {api_key}",
+                "Tbk-Api-Key-Id": commerce_code,
+                "Tbk-Api-Key-Secret": api_key,
             },
         )
 
@@ -146,27 +143,85 @@ async def payment_webhook(
             data = json.loads(resp.read().decode())
 
         if data.get("response_code") == 0 and data.get("status") == "AUTHORIZED":
-            # Payment successful — activate premium
-            buy_order = data.get("buy_order", "")
-            user_id = buy_order[:8]  # Extract user_id prefix
-
-            # Find payment record and activate
             payment = await db.db.prepare(
                 "SELECT * FROM payments WHERE transbank_token = ?"
             ).bind(body.token).first()
 
             if payment:
-                uid = payment.get("user_id", user_id)
+                uid = payment.get("user_id")
 
-                # Update user to premium
                 await db.db.prepare(
                     "UPDATE users SET is_premium = 1, plan_type = 'premium' WHERE id = ?"
                 ).bind(uid).run()
 
-                # Update payment status
                 await db.db.prepare(
                     "UPDATE payments SET status = 'completed' WHERE transbank_token = ?"
                 ).bind(body.token).run()
+
+                return {"status": "success", "response_code": data.get("response_code")}
+            else:
+                return {"status": "error", "detail": "Payment record not found"}
+        else:
+            await db.db.prepare(
+                "UPDATE payments SET status = 'failed' WHERE transbank_token = ?"
+            ).bind(body.token).run()
+            return {"status": "error", "response_code": data.get("response_code")}
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode() if e.fp else str(e)
+        return {"status": "error", "detail": error_body}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.post("/webhook")
+async def payment_webhook(
+    request: Request,
+):
+    """Handle Transbank webhook notification."""
+    env = get_env(request)
+    db = get_db(request)
+
+    commerce_code = getattr(env, "TRANSBANK_COMMERCE_CODE", "")
+    api_key = getattr(env, "TRANSBANK_API_KEY", "")
+    base_url = getattr(env, "TRANSBANK_BASE_URL", "https://webpay3gint.transbank.cl")
+
+    body = await request.json()
+    token = body.get("token_ws") or body.get("token")
+
+    if not token:
+        return {"status": "error", "detail": "No token provided"}
+
+    try:
+        import urllib.request
+        import urllib.error
+
+        req = urllib.request.Request(
+            f"{base_url}/rswebpaytransaction/api/v1.2/transactions/{token}",
+            method="PUT",
+            headers={
+                "Content-Type": "application/json",
+                "Tbk-Api-Key-Id": commerce_code,
+                "Tbk-Api-Key-Secret": api_key,
+            },
+        )
+
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+
+        if data.get("response_code") == 0 and data.get("status") == "AUTHORIZED":
+            payment = await db.db.prepare(
+                "SELECT * FROM payments WHERE transbank_token = ?"
+            ).bind(token).first()
+
+            if payment:
+                uid = payment.get("user_id")
+                await db.db.prepare(
+                    "UPDATE users SET is_premium = 1, plan_type = 'premium' WHERE id = ?"
+                ).bind(uid).run()
+                await db.db.prepare(
+                    "UPDATE payments SET status = 'completed' WHERE transbank_token = ?"
+                ).bind(token).run()
 
         return {"status": "ok"}
 
@@ -189,7 +244,6 @@ async def payment_status(
     if not user_obj:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Get last payment
     last_payment = await db.db.prepare(
         "SELECT * FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT 1"
     ).bind(user.user_id).first()

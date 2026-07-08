@@ -33,7 +33,8 @@ function App() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { vtonModal } = useSelector((state) => state.ui);
-  const { isAuthenticated } = useSelector((state) => state.user);
+  const { isAuthenticated, user } = useSelector((state) => state.user);
+  const isPremium = user?.is_premium || user?.plan_type === "premium";
 
   useEffect(() => {
     setUnauthorizedCallback(() => {
@@ -104,7 +105,7 @@ function App() {
           </Routes>
         </PageTransition>
       </main>
-      <ChatFlotante />
+      {isPremium && <ChatFlotante />}
       <ModalVTON
         product={vtonModal.product}
         isOpen={vtonModal.isOpen}

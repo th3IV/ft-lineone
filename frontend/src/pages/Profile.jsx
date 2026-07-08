@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import ProductGrid from "../components/ProductGrid";
 import VtonHistory from "../components/VtonHistory";
-import { createPayment } from "../services/payments";
+import { createPayment, redirectToWebpay } from "../services/payments";
 
 const MEASUREMENTS_DEFAULT = {
   height: "",
@@ -117,7 +117,7 @@ function Profile() {
     try {
       const data = await createPayment();
       if (data.url && data.token) {
-        window.location.href = `${data.url}?token=${data.token}`;
+        redirectToWebpay(data.url, data.token);
       }
     } catch (err) {
       toast.error("Error al iniciar pago");

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CheckCircle, Crown, ArrowLeft } from "lucide-react";
+import { CheckCircle, Crown, ArrowLeft, XCircle } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { fetchProfile } from "../store/userSlice";
+import api from "../services/api";
 
 function SuccessPage() {
   const navigate = useNavigate();
@@ -12,24 +13,36 @@ function SuccessPage() {
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    if (!token) {
+    const tokenWs = searchParams.get("token_ws");
+    const tbkToken = searchParams.get("TBK_TOKEN");
+
+    // User cancelled or timed out
+    if (!tokenWs && tbkToken) {
+      setStatus("cancelled");
+      return;
+    }
+
+    if (!tokenWs) {
       setStatus("error");
       return;
     }
 
-    // Poll for status update
-    const checkPayment = async () => {
+    const confirmPayment = async () => {
       try {
-        await dispatch(fetchProfile());
-        setStatus("success");
+        const result = await api.post("/payments/confirm", { token: tokenWs });
+
+        if (result.data?.status === "success") {
+          await dispatch(fetchProfile());
+          setStatus("success");
+        } else {
+          setStatus("error");
+        }
       } catch {
         setStatus("error");
       }
     };
 
-    const timer = setTimeout(checkPayment, 2000);
-    return () => clearTimeout(timer);
+    confirmPayment();
   }, [searchParams, dispatch]);
 
   return (
@@ -75,6 +88,24 @@ function SuccessPage() {
               className="btn-primary w-full"
             >
               Volver a mi perfil
+            </button>
+          </>
+        )}
+
+        {status === "cancelled" && (
+          <>
+            <h1 className="text-2xl font-display font-bold text-editorial-black mb-2">
+              Pago cancelado
+            </h1>
+            <p className="text-editorial-gray mb-6">
+              No se realizó ningún cobro. Puedes intentar nuevamente cuando quieras.
+            </p>
+            <button
+              onClick={() => navigate("/profile")}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              <ArrowLeft size={16} />
+              Volver al perfil
             </button>
           </>
         )}

@@ -5,7 +5,7 @@ import { X, Upload, Sparkles, Loader2, AlertCircle, Camera, RefreshCw, Crown, Za
 import { useSelector } from "react-redux";
 import { compressImage } from "../utils/compressImage";
 import { useVtonPolling } from "../hooks/useVtonPolling";
-import { createPayment } from "../services/payments";
+import { createPayment, redirectToWebpay } from "../services/payments";
 import { useNavigate } from "react-router-dom";
 
 const PHOTO_TIPS = [
@@ -152,7 +152,7 @@ function ModalVTON({ product, isOpen, onClose }) {
     try {
       const data = await createPayment();
       if (data.url && data.token) {
-        window.location.href = `${data.url}?token=${data.token}`;
+        redirectToWebpay(data.url, data.token);
       }
     } catch (err) {
       console.error("Payment error:", err);
