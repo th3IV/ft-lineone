@@ -18,7 +18,7 @@ def to_js(obj):
 
 
 FREEIMAGE_API = "https://freeimage.host/api/1/upload"
-FREEIMAGE_KEY = "6d207e02198a847aa98d0a2a901485a5"
+FREEIMAGE_KEY_FALLBACK = "6d207e02198a847aa98d0a2a901485a5"
 
 
 def _url_encode_b64(b64: str) -> str:
@@ -26,10 +26,11 @@ def _url_encode_b64(b64: str) -> str:
     return b64.replace("+", "%2B").replace("/", "%2F").replace("=", "%3D")
 
 
-async def _upload_to_freeimage(base64_data: str, filename: str = "photo.jpg") -> str:
+async def _upload_to_freeimage(base64_data: str, filename: str = "photo.jpg", api_key: str = "") -> str:
     """Upload a base64 image to freeimage.host and return the public URL."""
+    key = api_key or FREEIMAGE_KEY_FALLBACK
     encoded = _url_encode_b64(base64_data)
-    body = f"key={FREEIMAGE_KEY}&image={encoded}&format=json"
+    body = f"key={key}&image={encoded}&format=json"
 
     resp = await js.fetch(
         FREEIMAGE_API,
@@ -56,20 +57,21 @@ async def _upload_to_freeimage(base64_data: str, filename: str = "photo.jpg") ->
     return url
 
 
-async def upload_user_photo(base64_data: str, filename: str = "photo.jpg") -> str:
+async def upload_user_photo(base64_data: str, filename: str = "photo.jpg", api_key: str = "") -> str:
     """Upload a base64 user photo to freeimage.host and return the public URL.
 
     Args:
         base64_data: Raw base64 string (WITHOUT the data:...;base64, prefix).
         filename: Desired filename for the upload.
+        api_key: freeimage.host API key (falls back to hardcoded if empty).
 
     Returns:
         Public HTTPS URL of the uploaded image.
     """
-    return await _upload_to_freeimage(base64_data, filename)
+    return await _upload_to_freeimage(base64_data, filename, api_key)
 
 
-async def upload_garment_image(image_url: str) -> str:
+async def upload_garment_image(image_url: str, api_key: str = "") -> str:
     """Download a garment image from any URL and re-upload to freeimage.host.
 
     YouCam blocks most e-commerce CDNs (mauiandsons.cl, static.zara.net, etc.).
@@ -107,4 +109,4 @@ async def upload_garment_image(image_url: str) -> str:
     if not b64 or len(b64) < 100:
         raise Exception("Downloaded image too small or empty")
 
-    return await _upload_to_freeimage(b64, "garment.jpg")
+    return await _upload_to_freeimage(b64, "garment.jpg", api_key)

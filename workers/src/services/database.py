@@ -182,8 +182,12 @@ class DatabaseService:
             "llm_count": result.get("llm_count", 0),
         }
 
+    _ALLOWED_USAGE_TYPES = {"vton", "llm"}
+
     async def increment_usage(self, user_id: str, usage_type: str, date: str) -> int:
         """Increment usage counter and return new count."""
+        if usage_type not in self._ALLOWED_USAGE_TYPES:
+            raise ValueError(f"Invalid usage_type: {usage_type}")
         column = f"{usage_type}_count"
         await self.db.prepare(
             f"UPDATE user_usage SET {column} = {column} + 1 WHERE user_id = ? AND date = ?"

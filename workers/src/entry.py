@@ -87,7 +87,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     }))
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Internal server error: {str(exc)}"},
+        content={"detail": "Internal server error"},
         headers=headers,
     )
 
@@ -241,7 +241,7 @@ class Default(WorkerEntrypoint):
             h = _cors_headers(origin)
             h["Content-Type"] = "application/json"
             return Response(
-                json.dumps({"detail": str(e)}).encode("utf-8"),
+                json.dumps({"detail": "Internal server error"}).encode("utf-8"),
                 status=500,
                 headers=h,
             )

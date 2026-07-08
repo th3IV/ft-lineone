@@ -111,14 +111,14 @@ async def run_scrapers(request: Request, user: dict = Depends(require_auth)):
         results = await runner.run_all_scrapers()
         return {"status": "completed", "results": results}
     except Exception as e:
-        return {"status": "error", "error": str(e), "type": type(e).__name__}
+        return {"status": "error", "error": "Scraper execution failed"}
     finally:
         await runner.close()
 
 
 @router.post("/trigger")
-async def trigger_scrapers(request: Request):
-    """Public endpoint to trigger scrapers (no auth required). Use from frontend on first load."""
+async def trigger_scrapers(request: Request, user: dict = Depends(require_auth)):
+    """Trigger all scrapers. Requires authentication."""
     from scrapers.scheduler import ScraperRunner
 
     runner = ScraperRunner(request.app.state.env, max_products=10)
@@ -132,12 +132,11 @@ async def trigger_scrapers(request: Request):
 
 
 @router.post("/reset/{store}")
-async def reset_store(store: str, request: Request):
+async def reset_store(store: str, request: Request, user: dict = Depends(require_auth)):
     """EMERGENCY ONLY: Delete all products from a store and re-scrape.
 
-    This endpoint is for emergency use only when data is severely corrupted
-    and the automatic cleanup in the cron cannot fix it.
-
+    Requires authentication. This endpoint is for emergency use only when data
+    is severely corrupted and the automatic cleanup in the cron cannot fix it.
     Normal data cleanup happens automatically every 2 minutes via cron.
     """
     from scrapers.scheduler import ScraperRunner

@@ -137,7 +137,7 @@ async def prefetch_image(
         public_url = await upload_user_photo(raw_b64)
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Image upload failed: {str(e)}"
+            status_code=500, detail="Image upload failed"
         )
 
     return {"public_url": public_url, "status": "uploaded"}
@@ -159,7 +159,7 @@ async def prefetch_garment(
         public_url = await upload_garment_image(garment_url)
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Garment upload failed: {str(e)}"
+            status_code=500, detail="Garment upload failed"
         )
 
     return {"public_url": public_url, "status": "uploaded"}
@@ -351,7 +351,7 @@ async def try_on(
         import traceback
         traceback.print_exc()
         raise HTTPException(
-            status_code=500, detail=f"VTON request failed: {str(e)}"
+            status_code=500, detail="VTON request failed"
         )
 
 
@@ -419,7 +419,7 @@ async def youcam_webhook(request: Request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return {"status": "error", "detail": str(e)}
+        return {"status": "error", "detail": "Webhook processing failed"}
 
 
 @router.get("/result/{vton_id}")
@@ -435,7 +435,7 @@ async def get_result(
     try:
         vton_result = await db.get_vton_result(vton_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to save result")
 
     if not vton_result:
         raise HTTPException(status_code=404, detail="VTON result not found")

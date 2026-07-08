@@ -101,11 +101,10 @@ async def create_payment(
             "buy_order": buy_order,
         }
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode() if e.fp else str(e)
-        raise HTTPException(status_code=502, detail=f"Transbank error: {error_body}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Payment creation failed: {str(e)}")
+    except urllib.error.HTTPError:
+        raise HTTPException(status_code=502, detail="Payment gateway error")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Payment creation failed")
 
 
 @router.post("/confirm")
@@ -192,6 +191,17 @@ async def payment_webhook(
     if not token:
         return {"status": "error", "detail": "No token provided"}
 
+    # Verify token exists in our DB before calling Transbank (prevents abuse)
+    payment = await db.db.prepare(
+        "SELECT * FROM payments WHERE transbank_token = ?"
+    ).bind(token).first()
+
+    if not payment:
+        return {"status": "error", "detail": "Unknown token"}
+
+    if payment.get("status") == "completed":
+        return {"status": "ok"}  # Already processed
+
     try:
         import urllib.request
         import urllib.error
@@ -210,26 +220,20 @@ async def payment_webhook(
             data = json.loads(resp.read().decode())
 
         if data.get("response_code") == 0 and data.get("status") == "AUTHORIZED":
-            payment = await db.db.prepare(
-                "SELECT * FROM payments WHERE transbank_token = ?"
-            ).bind(token).first()
-
-            if payment:
-                uid = payment.get("user_id")
-                await db.db.prepare(
-                    "UPDATE users SET is_premium = 1, plan_type = 'premium' WHERE id = ?"
-                ).bind(uid).run()
-                await db.db.prepare(
-                    "UPDATE payments SET status = 'completed' WHERE transbank_token = ?"
-                ).bind(token).run()
+            uid = payment.get("user_id")
+            await db.db.prepare(
+                "UPDATE users SET is_premium = 1, plan_type = 'premium' WHERE id = ?"
+            ).bind(uid).run()
+            await db.db.prepare(
+                "UPDATE payments SET status = 'completed' WHERE transbank_token = ?"
+            ).bind(token).run()
 
         return {"status": "ok"}
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode() if e.fp else str(e)
-        return {"status": "error", "detail": error_body}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
+    except urllib.error.HTTPError:
+        return {"status": "error", "detail": "Transbank communication failed"}
+    except Exception:
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/status")

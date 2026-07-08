@@ -1,6 +1,7 @@
 """User profile routes."""
 
 import base64
+import hmac
 import re
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
@@ -170,7 +171,7 @@ async def upload_profile_image_route(
     try:
         public_url = await upload_profile_image(env, user.user_id, image_bytes, content_type)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to upload image")
 
     db = get_db(request)
     await db.update_user(user.user_id, {"profile_image": public_url})
@@ -206,7 +207,7 @@ async def set_premium(
         raise HTTPException(status_code=500, detail="ADMIN_KEY not configured")
 
     header_key = request.headers.get("X-Admin-Key", "")
-    if header_key != admin_key:
+    if not hmac.compare_digest(header_key, admin_key):
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     db = get_db(request)
