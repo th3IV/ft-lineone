@@ -258,21 +258,25 @@ function ChatFlotante() {
 
               {/* Quick Questions + Input */}
               <div className="border-t border-editorial-black/5 p-3">
-                <p className="editorial-label text-[10px] mb-2">
-                  Preguntas rapidas
-                </p>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {quickQuestions.map((q, i) => (
-                    <button
-                      key={i}
-                      onClick={() => sendMessage(q)}
-                      disabled={!canUseLlm}
-                      className="text-[11px] px-3 py-1.5 rounded-full border border-editorial-black/10 text-editorial-gray hover:border-editorial-black hover:text-editorial-black transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
+                {messages.filter(m => m.role === "user").length === 0 && (
+                  <>
+                    <p className="editorial-label text-[10px] mb-2">
+                      Preguntas rapidas
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {quickQuestions.map((q, i) => (
+                        <button
+                          key={i}
+                          onClick={() => sendMessage(q)}
+                          disabled={!canUseLlm}
+                          className="text-[11px] px-3 py-1.5 rounded-full border border-editorial-black/10 text-editorial-gray hover:border-editorial-black hover:text-editorial-black transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
                 {canUseLlm ? (
                   <form onSubmit={handleSubmit} className="flex gap-2">
                     <input

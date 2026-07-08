@@ -67,7 +67,7 @@ async def create_payment(
         }).encode("utf-8")
 
         req = urllib.request.Request(
-            f"{base_url}/rswebpaytransaction/api/v1.2/transactions",
+            f"{base_url}/rswebpaytransaction/api/webpay/v1.2/transactions",
             data=payload,
             headers={
                 "Content-Type": "application/json",
@@ -129,7 +129,7 @@ async def confirm_payment(
         import urllib.error
 
         req = urllib.request.Request(
-            f"{base_url}/rswebpaytransaction/api/v1.2/transactions/{body.token}",
+            f"{base_url}/rswebpaytransaction/api/webpay/v1.2/transactions/{body.token}",
             method="PUT",
             headers={
                 "Content-Type": "application/json",
@@ -207,7 +207,7 @@ async def payment_webhook(
         import urllib.error
 
         req = urllib.request.Request(
-            f"{base_url}/rswebpaytransaction/api/v1.2/transactions/{token}",
+            f"{base_url}/rswebpaytransaction/api/webpay/v1.2/transactions/{token}",
             method="PUT",
             headers={
                 "Content-Type": "application/json",
