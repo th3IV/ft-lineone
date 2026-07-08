@@ -12,6 +12,7 @@ import { useFeatureGate } from "../hooks/useFeatureGate";
 import UpgradeModal from "../components/UpgradeModal";
 import RemainingUses from "../components/RemainingUses";
 import PremiumBadge from "../components/PremiumBadge";
+import ImageCropModal from "../components/ImageCropModal";
 
 const MEASUREMENTS_DEFAULT = {
   height: "",
@@ -58,6 +59,7 @@ function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
   const [imageLoading, setImageLoading] = useState(false);
+  const [cropModalImage, setCropModalImage] = useState(null);
   const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
   const fileInputRef = useRef(null);
@@ -121,6 +123,7 @@ function Profile() {
     setShowAvatarMenu(false);
     const result = await dispatch(deleteProfileImage());
     if (result.meta.requestStatus === "fulfilled") {
+      setProfile((prev) => ({ ...prev, profile_image: null }));
       toast.success("Foto eliminada");
     } else {
       toast.error("Error al eliminar foto");
@@ -132,17 +135,26 @@ function Profile() {
     if (!file) return;
 
     setImageLoading(true);
-    try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result;
-        await dispatch(uploadProfileImage(base64));
-        setImageLoading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCropModalImage(reader.result);
       setImageLoading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropConfirm = async (croppedBase64) => {
+    setCropModalImage(null);
+    setImageLoading(true);
+    const result = await dispatch(uploadProfileImage(croppedBase64));
+    if (result.meta.requestStatus === "fulfilled") {
+      const url = result.payload?.profile_image;
+      if (url) setProfile((prev) => ({ ...prev, profile_image: url }));
+      toast.success("Foto actualizada");
+    } else {
+      toast.error("Error al subir foto");
     }
+    setImageLoading(false);
   };
 
   const tabs = [
@@ -203,9 +215,9 @@ function Profile() {
                 onClick={handleImageClick}
                 className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-editorial-gray-light cursor-pointer group"
               >
-                {profile.profile_image ? (
+                {(profile.profile_image || user?.profile_image) ? (
                   <img
-                    src={profile.profile_image}
+                    src={profile.profile_image || user?.profile_image}
                     alt={profile.name || "Usuario"}
                     className="w-full h-full object-cover"
                   />
@@ -705,6 +717,13 @@ function Profile() {
       onClose={hideUpgradeModal}
       onUpgrade={handleUpgrade}
     />
+    {cropModalImage && (
+      <ImageCropModal
+        image={cropModalImage}
+        onConfirm={handleCropConfirm}
+        onCancel={() => setCropModalImage(null)}
+      />
+    )}
     </>
   );
 }
