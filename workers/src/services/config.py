@@ -7,7 +7,9 @@ VTON_DAILY_LIMIT_PREMIUM = -1  # sentinel: unlimited
 LLM_DAILY_LIMIT_PREMIUM = -1
 
 # ── Scraper safety ─────────────────────────────────────────────────
-MIN_PRODUCTS_SCRAPED_BEFORE_CLEANUP = 3
+MIN_PRODUCTS_SCRAPED_BEFORE_CLEANUP = 10
+MIN_SCRAPE_COVERAGE_RATIO = 0.5
+STALE_PRODUCT_THRESHOLD_HOURS = 48
 
 # ── Image constraints ──────────────────────────────────────────────
 MAX_USER_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB

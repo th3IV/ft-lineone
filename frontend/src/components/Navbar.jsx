@@ -43,6 +43,8 @@ function Navbar() {
         setEmail("");
         setPassword("");
         setUserMenuOpen(false);
+        const quizDone = res.payload?.user?.preferences?.quiz_completed;
+        navigate(quizDone ? "/catalog" : "/onboarding");
       }
     });
   };

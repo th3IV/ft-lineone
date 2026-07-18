@@ -33,8 +33,14 @@ function PageLoader() {
 }
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useSelector((state) => state.user);
+  const { isAuthenticated, profileStatus } = useSelector((state) => state.user);
   if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  if (profileStatus === "loading" || profileStatus === "idle") {
+    return <PageLoader />;
+  }
+  if (profileStatus === "failed" || profileStatus === "unauthenticated") {
     return <Navigate to="/login" replace />;
   }
   return children;

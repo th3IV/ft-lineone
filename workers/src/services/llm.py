@@ -251,7 +251,7 @@ class LLMService:
             )
 
             result = await self.ai.run(
-                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                "@cf/meta/llama-4-scout-17b-16e-instruct",
                 {
                     "messages": [
                         {"role": "system", "content": RECOMMENDATION_SYSTEM_PROMPT},
@@ -304,7 +304,7 @@ class LLMService:
             )
 
             result = await self.ai.run(
-                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                "@cf/meta/llama-4-scout-17b-16e-instruct",
                 {
                     "messages": [
                         {"role": "system", "content": CHAT_SYSTEM_PROMPT},
@@ -389,7 +389,7 @@ class LLMService:
 
             import json as _json
 
-            model = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+            model = "@cf/meta/llama-4-scout-17b-16e-instruct"
             messages = [
                 {"role": "system", "content": CHAT_SYSTEM_PROMPT},
                 {"role": "user", "content": "\n".join(prompt_parts)},

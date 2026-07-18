@@ -133,23 +133,15 @@ async def trigger_scrapers(request: Request, user: dict = Depends(require_admin)
 
 @router.post("/reset/{store}")
 async def reset_store(store: str, request: Request, user: dict = Depends(require_admin)):
-    """EMERGENCY ONLY: Delete all products from a store and re-scrape.
+    """Re-scrape a store WITHOUT deleting first (safe upsert).
 
-    Requires authentication. This endpoint is for emergency use only when data
-    is severely corrupted and the automatic cleanup in the cron cannot fix it.
-    Normal data cleanup happens automatically every 2 minutes via cron.
+    Previously this endpoint deleted all products then re-scraped, which could
+    wipe the catalog if the scraper failed. Now it only upserts — existing
+    products are updated, new ones are added, and stale cleanup is handled
+    by the normal cron with proper grace periods.
     """
     from scrapers.scheduler import ScraperRunner
 
-    db = request.app.state.db
-
-    # Delete all products from the store
-    try:
-        deleted_count = await db.delete_products_by_store(store)
-    except Exception as e:
-        return {"status": "error", "error": f"Failed to delete: {str(e)}"}
-
-    # Re-scrape the store
     runner = ScraperRunner(request.app.state.env, max_products=20)
     try:
         if store not in runner.scrapers:
@@ -159,8 +151,8 @@ async def reset_store(store: str, request: Request, user: dict = Depends(require
         return {
             "status": "completed",
             "store": store,
-            "deleted_count": deleted_count,
             "scrape_result": result,
+            "note": "No products deleted — safe upsert only. Stale cleanup runs via cron.",
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}

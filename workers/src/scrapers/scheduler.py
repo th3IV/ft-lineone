@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone, timedelta
 
 from services.database import DatabaseService
-from services.config import MIN_PRODUCTS_SCRAPED_BEFORE_CLEANUP
+from services.config import MIN_PRODUCTS_SCRAPED_BEFORE_CLEANUP, MIN_SCRAPE_COVERAGE_RATIO, STALE_PRODUCT_THRESHOLD_HOURS
 
 
 # Rate limiting: seconds between requests per store
@@ -129,7 +129,8 @@ class ScraperRunner:
         """Run a single scraper and return results.
 
         Uses UPSERT for zero-downtime: products are updated in-place,
-        and stale products are cleaned up only after a successful scrape.
+        and stale products are cleaned up only after a successful scrape
+        with adequate coverage (at least 50% of existing catalog or 10 absolute).
         """
         scrape_start = datetime.now(timezone.utc)
         rate_limit = RATE_LIMITS.get(store_name, 2.0)
@@ -138,16 +139,21 @@ class ScraperRunner:
         total_products = 0
         total_upserted = 0
         total_errors = 0
+        empty_queries = 0
+        total_queries = 0
 
         try:
             if store_config.get("type") == "search":
                 # Search-based scrapers (Falabella, HM, FashionPark)
                 queries = store_config.get("queries", [])
                 for query in queries:
+                    total_queries += 1
                     for attempt in range(RETRY_MAX_ATTEMPTS):
                         try:
                             products = await scraper.search_products(query, max_items=self.max_products)
-                            if len(products) < 5:
+                            if len(products) == 0:
+                                empty_queries += 1
+                            elif len(products) < 5:
                                 print(f"[{store_name}] Query '{query}' returned only {len(products)} products (min 5)")
                             total_products += len(products)
                             for product in products:
@@ -176,15 +182,19 @@ class ScraperRunner:
                                 await asyncio.sleep(delay)
                             else:
                                 total_errors += 1
+                                empty_queries += 1
                     await asyncio.sleep(rate_limit)
             else:
                 # Category-based scrapers (Maui, Zara)
                 categories = store_config.get("categories", [])
                 for category in categories:
+                    total_queries += 1
                     for attempt in range(RETRY_MAX_ATTEMPTS):
                         try:
                             products = await scraper.scrape_category(category, max_items=self.max_products)
-                            if len(products) < 5:
+                            if len(products) == 0:
+                                empty_queries += 1
+                            elif len(products) < 5:
                                 print(f"[{store_name}] Category '{category}' returned only {len(products)} products (min 5)")
                             total_products += len(products)
                             for product in products:
@@ -213,21 +223,35 @@ class ScraperRunner:
                                 await asyncio.sleep(delay)
                             else:
                                 total_errors += 1
+                                empty_queries += 1
                     await asyncio.sleep(rate_limit)
 
             end_time = datetime.now(timezone.utc)
             duration = (end_time - scrape_start).total_seconds()
 
             # Cleanup: remove stale products only if scrape completed successfully
-            # AND produced enough results to avoid deleting on scraper failure
+            # with adequate coverage. Uses dynamic ratio + absolute minimum.
             deleted = 0
-            if (
-                total_products > 0
-                and total_upserted >= MIN_PRODUCTS_SCRAPED_BEFORE_CLEANUP
-                and total_errors < total_products
-            ):
-                scrape_start_iso = scrape_start.isoformat()
-                deleted = await self.cleanup_stale_products(store_name, scrape_start_iso)
+            if total_products > 0 and total_errors < total_products:
+                existing_count = await self.db.count_products_by_store(store_name)
+                coverage_ratio = total_upserted / existing_count if existing_count > 0 else 1.0
+                # Block cleanup if: too few products, low coverage, or too many empty queries
+                if (
+                    total_upserted >= MIN_PRODUCTS_SCRAPED_BEFORE_CLEANUP
+                    and coverage_ratio >= MIN_SCRAPE_COVERAGE_RATIO
+                    and empty_queries < total_queries
+                ):
+                    deleted = await self.cleanup_stale_products(store_name, scrape_start.isoformat())
+                else:
+                    print(json.dumps({
+                        "event": "cleanup_skipped_low_coverage",
+                        "store": store_name,
+                        "upserted": total_upserted,
+                        "existing": existing_count,
+                        "coverage_ratio": round(coverage_ratio, 2),
+                        "empty_queries": empty_queries,
+                        "total_queries": total_queries,
+                    }))
 
             return {
                 "status": "completed",
@@ -235,6 +259,7 @@ class ScraperRunner:
                 "upserted_products": total_upserted,
                 "stale_deleted": deleted,
                 "errors": total_errors,
+                "empty_queries": empty_queries,
                 "duration_seconds": round(duration, 1),
             }
 
@@ -313,30 +338,24 @@ class ScraperRunner:
             return {"status": "error", "error": str(e), "product_name": product.name}
 
     async def cleanup_stale_products(self, store_name: str, scrape_start_time: str):
-        """Remove products not seen during this scrape run (stale/discontinued).
+        """Remove products not seen in the last 48 hours (multi-run threshold).
 
-        Only deletes products whose last_seen < scrape_start_time AND are older
-        than STALE_GRACE_PERIOD. This prevents deleting products from a previous
-        scraper run that just hasn't been re-scraped yet.
+        Uses STALE_PRODUCT_THRESHOLD_HOURS so products aren't deleted just because
+        a single scrape run didn't cover them (e.g. max_products caps).
+        The scrape_start_time parameter is kept for API compatibility but
+        the actual deletion uses the 48h cutoff from config.
         """
         try:
-            grace_cutoff = (datetime.now(timezone.utc) - STALE_GRACE_PERIOD).isoformat()
-            # Only delete if scrape_start_time is before grace cutoff
-            # (meaning the scrape ran long enough ago to be confident)
-            if scrape_start_time > grace_cutoff:
-                print(json.dumps({
-                    "event": "cleanup_skipped",
-                    "store": store_name,
-                    "reason": "scrape_too_recent",
-                    "grace_until": grace_cutoff,
-                }))
-                return 0
-
-            result = await self.db.delete_stale_products(store_name, scrape_start_time)
+            result = await self.db.delete_stale_products(
+                store_name,
+                scrape_start_time,
+                stale_hours=STALE_PRODUCT_THRESHOLD_HOURS,
+            )
             print(json.dumps({
                 "event": "cleanup_stale",
                 "store": store_name,
                 "deleted": result,
+                "threshold_hours": STALE_PRODUCT_THRESHOLD_HOURS,
             }))
             return result
         except Exception as e:

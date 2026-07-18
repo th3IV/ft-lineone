@@ -1,7 +1,7 @@
 """Cloudflare D1 Database Service using native D1 bindings."""
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 import uuid
 
@@ -304,6 +304,13 @@ class DatabaseService:
         "Polerones": ["polerón", "buzo", "sudadera"],
     }
 
+    async def count_products_by_store(self, store: str) -> int:
+        """Count total products for a store."""
+        result = await self.db.prepare(
+            "SELECT COUNT(*) as cnt FROM products WHERE store = ?"
+        ).bind(store).first()
+        return result.get("cnt", 0) if result else 0
+
     async def get_products(self, filters: dict, page: int = 1, limit: int = 20):
         """Get products with filters.
 
@@ -467,15 +474,17 @@ class DatabaseService:
         ).bind(store).run()
         return result.changes if hasattr(result, 'changes') else 0
 
-    async def delete_stale_products(self, store: str, before_time: str) -> int:
-        """Delete products from a store whose last_seen is older than before_time.
+    async def delete_stale_products(self, store: str, before_time: str, stale_hours: int = 48) -> int:
+        """Delete products from a store whose last_seen is older than the stale threshold.
 
-        Used after scraping to remove discontinued/out-of-stock products.
-        Only call this after a successful scrape run.
+        Uses a multi-run threshold (default 48h) so products aren't deleted just
+        because a single scrape run didn't cover them (e.g. max_products caps).
+        Only call this after a successful scrape with adequate coverage.
         """
+        cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=stale_hours)).isoformat()
         result = await self.db.prepare(
             "DELETE FROM products WHERE store = ? AND last_seen < ?"
-        ).bind(store, before_time).run()
+        ).bind(store, cutoff_iso).run()
         return result.changes if hasattr(result, 'changes') else 0
 
     async def update_product_sizes(self, product_id: str, sizes: list[str], colors: list[str] = None) -> bool:
