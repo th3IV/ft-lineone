@@ -3,13 +3,23 @@
   "skills": {
     "paths": [".opencode/skills"]
   },
-  "model": "ollama/dolphin3-tools",
+  "model": "cloudflare/@cf/meta/llama-4-scout-17b-16e-instruct",
   "provider": {
-    "ollama": {
-      "api": "openai",
+    "cloudflare": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Cloudflare Workers AI",
       "options": {
-        "apiKey": "ollama",
-        "baseURL": "http://localhost:11434/v1"
+        "baseURL": "https://api.cloudflare.com/client/v4/accounts/{env:CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+        "apiKey": "{env:CLOUDFLARE_API_KEY}"
+      },
+      "models": {
+        "@cf/meta/llama-4-scout-17b-16e-instruct": {
+          "name": "Llama 4 Scout 17B",
+          "limit": {
+            "context": 131072,
+            "output": 8192
+          }
+        }
       }
     }
   }
