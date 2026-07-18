@@ -51,6 +51,22 @@ const STEPS = [
     ],
   },
   {
+    id: "avoided_colors",
+    title: "¿Hay colores que NO uses?",
+    subtitle: "Los evitaremos en tus recomendaciones",
+    type: "colors",
+    options: [
+      { value: "negro", label: "Negro", hex: "#000000" },
+      { value: "blanco", label: "Blanco", hex: "#FFFFFF" },
+      { value: "gris", label: "Gris", hex: "#9CA3AF" },
+      { value: "azul", label: "Azul", hex: "#3B82F6" },
+      { value: "beige", label: "Beige", hex: "#D4C5A9" },
+      { value: "marron", label: "Marron", hex: "#92400E" },
+      { value: "verde", label: "Verde", hex: "#22C55E" },
+      { value: "rosa", label: "Rosa", hex: "#F472B6" },
+    ],
+  },
+  {
     id: "measurements",
     title: "Tus medidas (opcional)",
     subtitle: "Ayudanos a recomendarte la talla perfecta",
@@ -66,6 +82,7 @@ function OnboardingQuiz() {
   const [selections, setSelections] = useState({
     occasions: [],
     colors: [],
+    avoided_colors: [],
     styles: [],
     measurements: {
       height: "",
@@ -107,6 +124,7 @@ function OnboardingQuiz() {
       quiz_completed: true,
       occasions: selections.occasions,
       colors: selections.colors,
+      avoided_colors: selections.avoided_colors,
       styles: selections.styles,
       sizes: user?.preferences?.sizes || { upper: "", lower: "" },
       brands: user?.preferences?.brands || [],

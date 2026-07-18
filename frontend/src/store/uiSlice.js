@@ -7,6 +7,9 @@ const uiSlice = createSlice({
       isOpen: false,
       product: null,
     },
+    upgradeModal: {
+      isOpen: false,
+    },
   },
   reducers: {
     openVtonModal(state, action) {
@@ -15,8 +18,14 @@ const uiSlice = createSlice({
     closeVtonModal(state) {
       state.vtonModal = { isOpen: false, product: null };
     },
+    openUpgradeModal(state) {
+      state.upgradeModal = { isOpen: true };
+    },
+    closeUpgradeModal(state) {
+      state.upgradeModal = { isOpen: false };
+    },
   },
 });
 
-export const { openVtonModal, closeVtonModal } = uiSlice.actions;
+export const { openVtonModal, closeVtonModal, openUpgradeModal, closeUpgradeModal } = uiSlice.actions;
 export default uiSlice.reducer;

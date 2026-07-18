@@ -28,6 +28,8 @@ class UserResponse(UserBase):
     preferences: dict = {}
     profile_image: Optional[str] = None
     is_premium: bool = False
+    plan_type: str = "free"
+    daily_usage: Optional[dict] = None
 
     class Config:
         from_attributes = True

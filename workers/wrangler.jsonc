@@ -25,12 +25,16 @@
     "binding": "AI"
   },
   "vars": {
+    "ENVIRONMENT": "production",
     "JWT_ALGORITHM": "HS256",
     "CORS_ORIGINS": "https://thelineone.com,https://www.thelineone.com,http://localhost:3000,https://feat-cloudflare-migration.ft-lineone.pages.dev",
     "CLOUDFLARE_AI_GATEWAY_ID": "ft-lineone-vton",
     "TRANSBANK_COMMERCE_CODE": "597055555532",
     "TRANSBANK_BASE_URL": "https://webpay3gint.transbank.cl",
-    "TRANSBANK_RETURN_URL": "https://thelineone.com/payment/success"
+    "TRANSBANK_RETURN_URL": "https://thelineone.com/payment/success",
+    "ADMIN_EMAILS": "godismelife09@gmail.com",
+    "PARIS_CNSTRC_KEY": "cencosud_0BmS-e",
+    "FREEIMAGE_KEY": "6d207e02198a847aa98d0a2a901485a5"
   },
   "triggers": {
     "crons": ["*/45 * * * *"]

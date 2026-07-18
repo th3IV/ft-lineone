@@ -32,6 +32,17 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest.__isRefreshRetry) {
+      // Skip refresh for the refresh endpoint itself (avoid re-entrant deadlock)
+      if (originalRequest.url?.includes("/auth/refresh")) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
+        if (onUnauthorized) {
+          onUnauthorized();
+        } else {
+          window.location.href = "/login";
+        }
+        return Promise.reject(error);
+      }
       originalRequest.__isRefreshRetry = true;
       try {
         await refreshToken();

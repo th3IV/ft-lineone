@@ -16,7 +16,8 @@ function LoginPage() {
     dispatch(clearError());
     const result = await dispatch(loginUser({ email, password }));
     if (loginUser.fulfilled.match(result)) {
-      navigate("/catalog");
+      const quizDone = result.payload?.preferences?.quiz_completed;
+      navigate(quizDone ? "/catalog" : "/onboarding");
     }
   };
 

@@ -1,7 +1,7 @@
 """Cloudflare D1 Database Service using native D1 bindings."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import uuid
 
@@ -28,7 +28,7 @@ class UserModel:
         self.is_premium = bool(row.get("is_premium", 0))
         self.plan_type = row.get("plan_type", "free")
         self.age = row.get("age")
-        self.created_at = row.get("created_at", datetime.utcnow().isoformat())
+        self.created_at = row.get("created_at", datetime.now(timezone.utc).isoformat())
 
 
 class ProductModel:
@@ -61,7 +61,7 @@ class ProductModel:
             else (row.get("colors") or [])
         )
         self.availability = bool(row.get("availability", 1))
-        self.created_at = row.get("created_at", datetime.utcnow().isoformat())
+        self.created_at = row.get("created_at", datetime.now(timezone.utc).isoformat())
 
 
 class VtonResultModel:
@@ -77,7 +77,7 @@ class VtonResultModel:
         self.garment_image_url = row.get("garment_image_url")
         self.error_message = row.get("error_message")
         self.youcam_task_id = row.get("youcam_task_id")
-        self.created_at = row.get("created_at", datetime.utcnow().isoformat())
+        self.created_at = row.get("created_at", datetime.now(timezone.utc).isoformat())
         self.completed_at = row.get("completed_at")
 
 
@@ -110,7 +110,7 @@ class DatabaseService:
     async def create_user(self, user_data: dict) -> UserModel:
         """Create a new user."""
         user_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         await self.db.prepare(
             """INSERT INTO users (id, email, name, password_hash, body_measurements, preferences, is_premium, age, created_at)
@@ -166,17 +166,27 @@ class DatabaseService:
         return await self.update_user(user_id, {"is_premium": 1 if is_premium else 0})
 
     async def get_user_usage(self, user_id: str, date: str) -> dict:
-        """Get user usage for a specific date. Creates record if not exists."""
+        """Get user usage for a specific date. Creates record if not exists (INSERT OR IGNORE)."""
+        await self.db.prepare(
+            "INSERT OR IGNORE INTO user_usage (user_id, date, vton_count, llm_count) VALUES (?, ?, 0, 0)"
+        ).bind(user_id, date).run()
+
         result = await self.db.prepare(
-            "SELECT * FROM user_usage WHERE user_id = ? AND date = ?"
+            "SELECT vton_count, llm_count FROM user_usage WHERE user_id = ? AND date = ?"
         ).bind(user_id, date).first()
 
-        if not result:
-            await self.db.prepare(
-                "INSERT INTO user_usage (user_id, date, vton_count, llm_count) VALUES (?, ?, 0, 0)"
-            ).bind(user_id, date).run()
-            return {"vton_count": 0, "llm_count": 0}
+        return {
+            "vton_count": result.get("vton_count", 0) if result else 0,
+            "llm_count": result.get("llm_count", 0) if result else 0,
+        }
 
+    async def get_user_usage_readonly(self, user_id: str, date: str) -> dict:
+        """Read-only usage lookup — no INSERT on miss. Returns zeros if no row."""
+        result = await self.db.prepare(
+            "SELECT vton_count, llm_count FROM user_usage WHERE user_id = ? AND date = ?"
+        ).bind(user_id, date).first()
+        if not result:
+            return {"vton_count": 0, "llm_count": 0}
         return {
             "vton_count": result.get("vton_count", 0),
             "llm_count": result.get("llm_count", 0),
@@ -185,10 +195,13 @@ class DatabaseService:
     _ALLOWED_USAGE_TYPES = {"vton", "llm"}
 
     async def increment_usage(self, user_id: str, usage_type: str, date: str) -> int:
-        """Increment usage counter and return new count."""
+        """Increment usage counter and return new count. Uses INSERT OR IGNORE to ensure row exists."""
         if usage_type not in self._ALLOWED_USAGE_TYPES:
             raise ValueError(f"Invalid usage_type: {usage_type}")
         column = f"{usage_type}_count"
+        await self.db.prepare(
+            "INSERT OR IGNORE INTO user_usage (user_id, date, vton_count, llm_count) VALUES (?, ?, 0, 0)"
+        ).bind(user_id, date).run()
         await self.db.prepare(
             f"UPDATE user_usage SET {column} = {column} + 1 WHERE user_id = ? AND date = ?"
         ).bind(user_id, date).run()
@@ -198,18 +211,59 @@ class DatabaseService:
         ).bind(user_id, date).first()
         return result.get(column, 0) if result else 0
 
+    async def try_increment_usage(self, user_id: str, usage_type: str, date: str, limit: int) -> dict:
+        """Atomic check-and-increment. Returns {allowed: bool, new_count: int}.
+
+        Uses a single conditional UPDATE to avoid TOCTOU race conditions.
+        If limit is -1 (unlimited), always allows.
+        """
+        if usage_type not in self._ALLOWED_USAGE_TYPES:
+            raise ValueError(f"Invalid usage_type: {usage_type}")
+        if limit == -1:
+            return {"allowed": True, "new_count": 0}
+        column = f"{usage_type}_count"
+        await self.db.prepare(
+            "INSERT OR IGNORE INTO user_usage (user_id, date, vton_count, llm_count) VALUES (?, ?, 0, 0)"
+        ).bind(user_id, date).run()
+        cursor = await self.db.prepare(
+            f"UPDATE user_usage SET {column} = {column} + 1 WHERE user_id = ? AND date = ? AND {column} < ?"
+        ).bind(user_id, date, limit).run()
+
+        if cursor and getattr(cursor, 'meta', {}).get('changes', 0) > 0:
+            result = await self.db.prepare(
+                f"SELECT {column} FROM user_usage WHERE user_id = ? AND date = ?"
+            ).bind(user_id, date).first()
+            return {"allowed": True, "new_count": result.get(column, 0) if result else 0}
+        return {"allowed": False, "new_count": 0}
+
+    async def decrement_usage(self, user_id: str, usage_type: str, date: str) -> int:
+        """Decrement usage counter (for refunds on failed VTON). Returns new count. Never goes below 0."""
+        if usage_type not in self._ALLOWED_USAGE_TYPES:
+            raise ValueError(f"Invalid usage_type: {usage_type}")
+        column = f"{usage_type}_count"
+        await self.db.prepare(
+            f"UPDATE user_usage SET {column} = MAX({column} - 1, 0) WHERE user_id = ? AND date = ?"
+        ).bind(user_id, date).run()
+
+        result = await self.db.prepare(
+            f"SELECT {column} FROM user_usage WHERE user_id = ? AND date = ?"
+        ).bind(user_id, date).first()
+        return result.get(column, 0) if result else 0
+
     async def can_use_feature(self, user_id: str, usage_type: str) -> dict:
         """Check if user can use a feature. Returns {allowed, current, limit}."""
+        from services.config import VTON_DAILY_LIMIT_FREE, LLM_DAILY_LIMIT_FREE
+
         user = await self.get_user_by_id(user_id)
         is_premium = getattr(user, 'is_premium', False) or getattr(user, 'plan_type', 'free') == 'premium'
 
         if is_premium:
             return {"allowed": True, "current": 0, "limit": -1}
 
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         usage = await self.get_user_usage(user_id, today)
 
-        limit = 10
+        limit = VTON_DAILY_LIMIT_FREE if usage_type == "vton" else LLM_DAILY_LIMIT_FREE
         current = usage.get(f"{usage_type}_count", 0)
 
         return {
@@ -342,15 +396,33 @@ class DatabaseService:
         return products, total
 
     async def create_product(self, product_data: dict) -> ProductModel:
-        """Create a new product."""
+        """Create or update a product (UPSERT).
+
+        On conflict (external_id, store): updates all fields and sets last_seen.
+        On new insert: sets last_seen = created_at.
+        """
         product_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         await self.db.prepare(
-            """INSERT OR IGNORE INTO products
+            """INSERT INTO products
                (id, external_id, name, store, price, currency, category, description,
-                original_url, image_url, image_urls, sizes, colors, availability, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                original_url, image_url, image_urls, sizes, colors, availability,
+                created_at, last_seen)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(external_id, store) DO UPDATE SET
+                name = excluded.name,
+                price = excluded.price,
+                currency = excluded.currency,
+                category = excluded.category,
+                description = excluded.description,
+                original_url = excluded.original_url,
+                image_url = excluded.image_url,
+                image_urls = excluded.image_urls,
+                sizes = excluded.sizes,
+                colors = excluded.colors,
+                availability = excluded.availability,
+                last_seen = excluded.last_seen"""
         ).bind(
             product_id,
             product_data["external_id"],
@@ -366,6 +438,7 @@ class DatabaseService:
             json.dumps(product_data.get("sizes", [])),
             json.dumps(product_data.get("colors", [])),
             1 if product_data.get("availability", True) else 0,
+            now,
             now,
         ).run()
 
@@ -392,6 +465,17 @@ class DatabaseService:
         result = await self.db.prepare(
             "DELETE FROM products WHERE store = ?"
         ).bind(store).run()
+        return result.changes if hasattr(result, 'changes') else 0
+
+    async def delete_stale_products(self, store: str, before_time: str) -> int:
+        """Delete products from a store whose last_seen is older than before_time.
+
+        Used after scraping to remove discontinued/out-of-stock products.
+        Only call this after a successful scrape run.
+        """
+        result = await self.db.prepare(
+            "DELETE FROM products WHERE store = ? AND last_seen < ?"
+        ).bind(store, before_time).run()
         return result.changes if hasattr(result, 'changes') else 0
 
     async def update_product_sizes(self, product_id: str, sizes: list[str], colors: list[str] = None) -> bool:
@@ -423,7 +507,7 @@ class DatabaseService:
     async def create_vton_result(self, data: dict) -> VtonResultModel:
         """Create a VTON result record."""
         vton_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         await self.db.prepare(
             """INSERT INTO vton_results
@@ -544,3 +628,27 @@ class DatabaseService:
             "DELETE FROM vton_results WHERE id = ? AND user_id = ?"
         ).bind(vton_id, user_id).run()
         return True
+
+    async def refund_vton_usage(self, vton_id: str, error_message: str = "Failed") -> bool:
+        """Atomically mark a VTON as failed + refund usage if not already refunded.
+
+        Uses WHERE status != 'failed' to prevent double-refund on concurrent calls.
+        Returns True if the refund was applied (first failure), False if already refunded.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        cursor = await self.db.prepare(
+            "UPDATE vton_results SET status = 'failed', error_message = ?, completed_at = ?, usage_refunded = 1 WHERE id = ? AND status != 'failed'"
+        ).bind(error_message, now, vton_id).run()
+        changes = getattr(cursor, 'meta', {}).get('changes', 0) if cursor else 0
+        if changes > 0:
+            vr = await self.db.prepare("SELECT user_id FROM vton_results WHERE id = ?").bind(vton_id).first()
+            if vr:
+                user = await self.get_user_by_id(vr["user_id"])
+                is_premium = getattr(user, 'is_premium', False) or getattr(user, 'plan_type', 'free') == 'premium'
+                if not is_premium:
+                    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                    await self.decrement_usage(vr["user_id"], "vton", today)
+                    import json as _json
+                    print(_json.dumps({"event": "vton_refund", "vton_id": vton_id, "user_id": vr["user_id"]}))
+                    return True
+        return False

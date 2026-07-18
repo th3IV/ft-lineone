@@ -22,7 +22,7 @@ function RegisterPage() {
     if (age) payload.age = parseInt(age, 10);
     const result = await dispatch(registerUser(payload));
     if (registerUser.fulfilled.match(result)) {
-      navigate("/catalog");
+      navigate("/onboarding");
     }
   };
 

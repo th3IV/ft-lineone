@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
 
-from middleware.security import require_auth
+from middleware.security import require_auth, safe_error_message
 from services.r2 import upload_profile_image
 
 router = APIRouter()
@@ -59,8 +59,8 @@ async def get_current_user(request: Request, user: dict = Depends(require_auth))
     gender = measurements.get("gender", "")
 
     # Get daily usage
-    from datetime import datetime
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     usage = await db.get_user_usage(user.user_id, today)
 
     return {
@@ -78,8 +78,35 @@ async def get_current_user(request: Request, user: dict = Depends(require_auth))
         "daily_usage": {
             "vton": usage.get("vton_count", 0),
             "llm": usage.get("llm_count", 0),
-            "limit": 0 if (user_obj.is_premium or getattr(user_obj, 'plan_type', 'free') == 'premium') else 10,
+            "limit": -1 if (user_obj.is_premium or getattr(user_obj, 'plan_type', 'free') == 'premium') else 5,
+            "plan_type": getattr(user_obj, 'plan_type', 'free'),
         },
+    }
+
+
+@router.get("/me/usage")
+async def get_my_usage(request: Request, user: dict = Depends(require_auth)):
+    """Lightweight usage endpoint — returns just counts, limit, and plan_type."""
+    db = get_db(request)
+    user_obj = await db.get_user_by_id(user.user_id)
+    if not user_obj:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    is_premium = user_obj.is_premium or getattr(user_obj, 'plan_type', 'free') == 'premium'
+    plan_type = getattr(user_obj, 'plan_type', 'free')
+
+    if is_premium:
+        return {"vton": 0, "llm": 0, "limit": -1, "plan_type": plan_type}
+
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    usage = await db.get_user_usage_readonly(user.user_id, today)
+
+    return {
+        "vton": usage["vton_count"],
+        "llm": usage["llm_count"],
+        "limit": 5,
+        "plan_type": plan_type,
     }
 
 
@@ -180,7 +207,7 @@ async def upload_profile_image_route(
             "error": str(e),
             "error_type": type(e).__name__,
         }))
-        raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload image: {safe_error_message(e, request)}")
 
     db = get_db(request)
     await db.update_user(user.user_id, {"profile_image": public_url})

@@ -2,14 +2,14 @@
 
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 import js
 from pyodide.ffi import to_js as _to_js
 from js import Object
 
-from middleware.security import require_auth
+from middleware.security import require_auth, safe_error_message
 
 router = APIRouter()
 
@@ -94,8 +94,8 @@ async def create_payment(
         if int(resp.status) >= 400:
             raise HTTPException(status_code=502, detail=f"Transbank error: {data}")
 
-        now = datetime.utcnow().isoformat()
-        period_end = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        now = datetime.now(timezone.utc).isoformat()
+        period_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
 
         await db.db.prepare(
             """INSERT INTO payments (id, user_id, amount, currency, status, transbank_token, plan_type, period_start, period_end)
@@ -119,7 +119,7 @@ async def create_payment(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Payment creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Payment creation failed: {safe_error_message(e, request)}")
 
 
 @router.post("/confirm")
@@ -159,20 +159,23 @@ async def confirm_payment(
                 "SELECT * FROM payments WHERE transbank_token = ?"
             ).bind(body.token).first()
 
-            if payment:
-                uid = payment.get("user_id")
-
-                await db.db.prepare(
-                    "UPDATE users SET is_premium = 1, plan_type = 'premium' WHERE id = ?"
-                ).bind(uid).run()
-
-                await db.db.prepare(
-                    "UPDATE payments SET status = 'completed' WHERE transbank_token = ?"
-                ).bind(body.token).run()
-
-                return {"status": "success", "response_code": data.get("response_code")}
-            else:
+            if not payment:
                 return {"status": "error", "detail": "Payment record not found"}
+
+            if payment.get("user_id") != user.user_id:
+                return {"status": "error", "detail": "Unauthorized: token belongs to another user"}
+
+            uid = payment.get("user_id")
+
+            await db.db.prepare(
+                "UPDATE users SET is_premium = 1, plan_type = 'premium' WHERE id = ?"
+            ).bind(uid).run()
+
+            await db.db.prepare(
+                "UPDATE payments SET status = 'completed' WHERE transbank_token = ?"
+            ).bind(body.token).run()
+
+            return {"status": "success", "response_code": data.get("response_code")}
         else:
             await db.db.prepare(
                 "UPDATE payments SET status = 'failed' WHERE transbank_token = ?"
@@ -187,7 +190,15 @@ async def confirm_payment(
 async def payment_webhook(
     request: Request,
 ):
-    """Handle Transbank webhook notification."""
+    """Handle Transbank webhook notification.
+
+    Security: Transbank REST API does not send HMAC signatures on webhooks.
+    Verification relies on:
+    1. Token must exist in our DB (prevents arbitrary token injection)
+    2. Payment must be in 'pending' status (prevents replay attacks)
+    3. We call Transbank's API to verify the transaction status (requires API key)
+    4. Only AUTHORIZED transactions upgrade the user
+    """
     env = get_env(request)
     db = get_db(request)
 
@@ -201,7 +212,6 @@ async def payment_webhook(
     if not token:
         return {"status": "error", "detail": "No token provided"}
 
-    # Verify token exists in our DB before calling Transbank (prevents abuse)
     payment = await db.db.prepare(
         "SELECT * FROM payments WHERE transbank_token = ?"
     ).bind(token).first()
@@ -210,7 +220,10 @@ async def payment_webhook(
         return {"status": "error", "detail": "Unknown token"}
 
     if payment.get("status") == "completed":
-        return {"status": "ok"}  # Already processed
+        return {"status": "ok"}
+
+    if payment.get("status") != "pending":
+        return {"status": "error", "detail": "Payment is no longer pending"}
 
     try:
         resp = await js.fetch(
@@ -234,6 +247,10 @@ async def payment_webhook(
             ).bind(uid).run()
             await db.db.prepare(
                 "UPDATE payments SET status = 'completed' WHERE transbank_token = ?"
+            ).bind(token).run()
+        else:
+            await db.db.prepare(
+                "UPDATE payments SET status = 'failed' WHERE transbank_token = ?"
             ).bind(token).run()
 
         return {"status": "ok"}

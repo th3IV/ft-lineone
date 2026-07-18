@@ -1,35 +1,38 @@
 import { useSelector, useDispatch } from "react-redux";
 import { useCallback, useState } from "react";
 import { createPayment, redirectToWebpay } from "../services/payments";
-
-const LIMITS = { vton: 10, llm: 10 };
+import { openUpgradeModal, closeUpgradeModal } from "../store/uiSlice";
 
 export function useFeatureGate() {
   const dispatch = useDispatch();
   const { user, dailyUsage } = useSelector((state) => state.user);
-  const [showUpgrade, setShowUpgrade] = useState(false);
+  const { upgradeModal } = useSelector((state) => state.ui);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeError, setUpgradeError] = useState(null);
 
   const isPremium = user?.is_premium || user?.plan_type === "premium";
 
+  const limit = dailyUsage?.limit ?? 5;
+  const isUnlimited = limit === -1 || isPremium;
+
   const vtonUsed = dailyUsage?.vton || 0;
   const llmUsed = dailyUsage?.llm || 0;
-  const vtonRemaining = isPremium ? Infinity : Math.max(0, LIMITS.vton - vtonUsed);
-  const llmRemaining = isPremium ? Infinity : Math.max(0, LIMITS.llm - llmUsed);
+  const vtonRemaining = isUnlimited ? Infinity : Math.max(0, limit - vtonUsed);
+  const llmRemaining = isUnlimited ? Infinity : Math.max(0, limit - llmUsed);
 
-  const canUseVton = isPremium || vtonUsed < LIMITS.vton;
-  const canUseLlm = isPremium || llmUsed < LIMITS.llm;
+  const canUseVton = isUnlimited || vtonRemaining > 0;
+  const canUseLlm = isUnlimited || llmRemaining > 0;
 
   const getUsageColor = (used) => {
-    if (used <= 6) return "green";
-    if (used === 7) return "yellow";
-    if (used === 8) return "orange";
+    if (isUnlimited) return "green";
+    if (used <= limit * 0.6) return "green";
+    if (used <= limit * 0.7) return "yellow";
+    if (used <= limit * 0.8) return "orange";
     return "red";
   };
 
-  const showUpgradeModal = useCallback(() => setShowUpgrade(true), []);
-  const hideUpgradeModal = useCallback(() => setShowUpgrade(false), []);
+  const showUpgradeModal = useCallback(() => dispatch(openUpgradeModal()), [dispatch]);
+  const hideUpgradeModal = useCallback(() => dispatch(closeUpgradeModal()), [dispatch]);
 
   const handleUpgrade = useCallback(async () => {
     setUpgradeLoading(true);
@@ -51,6 +54,7 @@ export function useFeatureGate() {
 
   return {
     isPremium,
+    isUnlimited,
     user,
     vtonUsed,
     llmUsed,
@@ -59,12 +63,13 @@ export function useFeatureGate() {
     canUseVton,
     canUseLlm,
     getUsageColor,
-    showUpgrade,
+    showUpgrade: upgradeModal.isOpen,
     showUpgradeModal,
     hideUpgradeModal,
     handleUpgrade,
     upgradeLoading,
     upgradeError,
-    limits: LIMITS,
+    limit,
+    limits: { vton: limit, llm: limit },
   };
 }

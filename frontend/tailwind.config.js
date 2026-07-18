@@ -96,6 +96,14 @@ module.exports = {
       transitionTimingFunction: {
         "out-expo": "cubic-bezier(0.16, 1, 0.3, 1)",
       },
+      spacing: {
+        "18": "4.5rem",
+        "88": "22rem",
+        "128": "32rem",
+      },
+      borderRadius: {
+        "4xl": "2rem",
+      },
     },
   },
   plugins: [],

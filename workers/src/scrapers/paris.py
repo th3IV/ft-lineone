@@ -3,9 +3,7 @@
 Paris.cl uses Constructor.io for search. We query the Constructor.io API
 directly using js.fetch (Cloudflare Workers Python compatible).
 
-The API key is extracted from the Constructor.io bundle URL:
-  URL: https://cnstrc.com/js/cust/cencosud_0BmS-e.js
-  Key: cencosud_0BmS-e
+The API key must be provided via the PARIS_CNSTRC_KEY wrangler var/secret.
 """
 
 import json
@@ -46,8 +44,6 @@ class ParisScraper:
 
     BASE_URL = "https://www.paris.cl"
     CNSTRC_SEARCH_URL = "https://ac.cnstrc.com/search"
-    # Key extracted from: https://cnstrc.com/js/cust/cencosud_0BmS-e.js
-    CNSTRC_KEY = "cencosud_0BmS-e"
 
     # Category keywords for mapping search queries -> frontend categories
     CATEGORY_KEYWORDS = {
@@ -68,6 +64,14 @@ class ParisScraper:
         "sudadera": "Polerones",
     }
 
+    def __init__(self, cnstrc_key: str = ""):
+        """Initialize scraper with Constructor.io API key.
+
+        Args:
+            cnstrc_key: Constructor.io API key. If empty, tries PARIS_CNSTRC_KEY from env.
+        """
+        self.cnstrc_key = cnstrc_key or ""
+
     def _infer_category(self, query: str) -> str:
         """Infer frontend category from search query keywords."""
         q = query.lower()
@@ -87,12 +91,15 @@ class ParisScraper:
 
     async def search_products(self, query: str, max_items: int = 30) -> list[ParisProduct]:
         """Search products via Constructor.io API."""
+        if not self.cnstrc_key:
+            raise Exception("PARIS_CNSTRC_KEY not configured. Set it as a wrangler var or pass to constructor.")
+
         products = []
 
         try:
             # Search via Constructor.io
             params = urlencode({
-                "key": self.CNSTRC_KEY,
+                "key": self.cnstrc_key,
                 "i": query,
                 "num_results_per_page": str(max_items),
                 "section": "Products",

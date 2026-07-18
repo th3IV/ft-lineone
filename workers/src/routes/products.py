@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, Query, Depends
 from typing import Optional
 
 from models.product import ProductResponse, ProductListResponse, ProductCreate
-from middleware.security import require_auth
+from middleware.security import require_auth, require_admin
 
 router = APIRouter()
 
@@ -192,7 +192,7 @@ async def get_product(request: Request, product_id: str):
 
 
 @router.post("", response_model=ProductResponse)
-async def create_product(product_data: ProductCreate, request: Request, user: dict = Depends(require_auth)):
+async def create_product(product_data: ProductCreate, request: Request, user: dict = Depends(require_admin)):
     """Create a new product (admin only)."""
     db = get_db(request)
 

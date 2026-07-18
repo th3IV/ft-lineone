@@ -2,6 +2,7 @@ import api from "./api";
 
 const POLL_INTERVAL = 3000; // Reduced from 5s to 3s
 const POLL_TIMEOUT = 300000;
+const MAX_IMAGE_SIZE_MB = 4;
 
 export const uploadImage = async (imageBase64) => {
   const response = await api.post("/vton/upload", { image: imageBase64 });
@@ -9,6 +10,14 @@ export const uploadImage = async (imageBase64) => {
 };
 
 export const prefetchImage = async (imageBase64) => {
+  // Validate size before sending (base64 ~ 4/3 of raw bytes)
+  const estimatedBytes = Math.round((imageBase64.length * 3) / 4);
+  const estimatedMB = estimatedBytes / (1024 * 1024);
+  if (estimatedMB > MAX_IMAGE_SIZE_MB) {
+    throw new Error(
+      `La imagen es demasiado grande (${estimatedMB.toFixed(1)}MB). Máximo: ${MAX_IMAGE_SIZE_MB}MB. Selecciona una imagen más pequeña.`
+    );
+  }
   const response = await api.post("/vton/prefetch", { image: imageBase64 });
   return response.data;
 };

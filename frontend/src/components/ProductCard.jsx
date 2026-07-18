@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "react-router-dom";
 import { Heart, Crown } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
@@ -21,6 +22,7 @@ function ProductCard({ product, onTryOn, index = 0 }) {
           <img
             src={product.image_url || "/placeholder.jpg"}
             alt={product.name}
+            loading="lazy"
             className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700 ease-out"
           />
         </Link>
@@ -82,4 +84,4 @@ function ProductCard({ product, onTryOn, index = 0 }) {
   );
 }
 
-export default ProductCard;
+export default memo(ProductCard);

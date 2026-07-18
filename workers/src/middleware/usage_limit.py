@@ -1,7 +1,18 @@
 """Usage limit middleware for Freemium plan enforcement."""
 
 from fastapi import Request, HTTPException
-from datetime import datetime
+from datetime import datetime, timezone
+
+from services.config import (
+    VTON_DAILY_LIMIT_FREE,
+    LLM_DAILY_LIMIT_FREE,
+)
+
+
+_LIMITS = {
+    "vton": VTON_DAILY_LIMIT_FREE,
+    "llm": LLM_DAILY_LIMIT_FREE,
+}
 
 
 async def require_usage(usage_type: str):
@@ -29,26 +40,33 @@ async def require_usage(usage_type: str):
 
 
 async def increment_and_check(request: Request, user: dict, usage_type: str):
-    """Increment usage counter. Raises 402 if limit exceeded after increment."""
+    """Atomic check-and-increment. Raises 402 if limit would be exceeded.
+
+    Uses try_increment_usage() which performs a conditional UPDATE in a single
+    statement to avoid TOCTOU race conditions.
+    """
     db = request.app.state.db
     user_id = user.user_id
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-
-    new_count = await db.increment_usage(user_id, usage_type, today)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     user_obj = await db.get_user_by_id(user_id)
     is_premium = getattr(user_obj, 'is_premium', False) or getattr(user_obj, 'plan_type', 'free') == 'premium'
 
-    if not is_premium and new_count > 10:
+    free_limit = _LIMITS.get(usage_type, VTON_DAILY_LIMIT_FREE)
+    effective_limit = -1 if is_premium else free_limit
+
+    result = await db.try_increment_usage(user_id, usage_type, today, effective_limit)
+
+    if not result["allowed"]:
         raise HTTPException(
             status_code=402,
             detail={
                 "error": "usage_limit_exceeded",
-                "message": f"Límite diario de {usage_type.upper()} alcanzado ({new_count}/10)",
-                "current": new_count,
-                "limit": 10,
+                "message": f"Límite diario de {usage_type.upper()} alcanzado ({free_limit}/{free_limit})",
+                "current": free_limit,
+                "limit": free_limit,
                 "upgrade_url": "/payment/upgrade",
             },
         )
 
-    return {"current": new_count, "limit": -1 if is_premium else 10}
+    return {"current": result["new_count"], "limit": effective_limit}

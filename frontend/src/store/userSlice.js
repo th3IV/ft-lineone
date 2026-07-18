@@ -87,21 +87,27 @@ export const deleteProfileImage = createAsyncThunk("user/deleteProfileImage", as
   }
 });
 
+const hasToken = !!localStorage.getItem("token");
+
 const userSlice = createSlice({
   name: "user",
   initialState: {
     user: null,
     token: localStorage.getItem("token"),
-    isAuthenticated: !!localStorage.getItem("token"),
+    isAuthenticated: hasToken,
+    profileStatus: hasToken ? "idle" : "unauthenticated",
     measurements: null,
     preferences: null,
-    dailyUsage: { vton: 0, llm: 0, limit: 10 },
+    dailyUsage: { vton: 0, llm: 0, limit: 5, plan_type: "free" },
     loading: false,
     error: null,
   },
   reducers: {
     clearError(state) {
       state.error = null;
+    },
+    setDailyUsage(state, action) {
+      state.dailyUsage = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -110,9 +116,10 @@ const userSlice = createSlice({
         state.user = null;
         state.token = null;
         state.isAuthenticated = false;
+        state.profileStatus = "unauthenticated";
         state.measurements = null;
         state.preferences = null;
-        state.dailyUsage = { vton: 0, llm: 0, limit: 10 };
+        state.dailyUsage = { vton: 0, llm: 0, limit: 5, plan_type: "free" };
       })
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
@@ -127,12 +134,17 @@ const userSlice = createSlice({
         };
         state.token = action.payload.access_token;
         state.isAuthenticated = true;
+        state.profileStatus = "succeeded";
         state.measurements = action.payload.user?.body_measurements || null;
         state.preferences = action.payload.user?.preferences || null;
+        if (action.payload.user?.daily_usage) {
+          state.dailyUsage = action.payload.user.daily_usage;
+        }
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.profileStatus = "failed";
       })
       .addCase(registerUser.pending, (state) => {
         state.loading = true;
@@ -144,6 +156,10 @@ const userSlice = createSlice({
           state.user = action.payload.user;
           state.token = action.payload.access_token;
           state.isAuthenticated = true;
+          state.profileStatus = "succeeded";
+          if (action.payload.user?.daily_usage) {
+            state.dailyUsage = action.payload.user.daily_usage;
+          }
         }
       })
       .addCase(registerUser.rejected, (state, action) => {
@@ -156,8 +172,20 @@ const userSlice = createSlice({
       .addCase(updatePreferences.fulfilled, (state, action) => {
         state.preferences = action.payload.preferences || {};
       })
+      .addCase(fetchProfile.pending, (state) => {
+        state.profileStatus = "loading";
+      })
       .addCase(fetchProfile.fulfilled, (state, action) => {
         const data = action.payload;
+        if (!data || !data.id) {
+          state.profileStatus = "unauthenticated";
+          state.isAuthenticated = false;
+          state.user = null;
+          state.token = null;
+          localStorage.removeItem("token");
+          localStorage.removeItem("refresh_token");
+          return;
+        }
         state.user = {
           id: data.id,
           email: data.email,
@@ -173,7 +201,16 @@ const userSlice = createSlice({
         };
         state.measurements = data.body_measurements || {};
         state.preferences = data.preferences || {};
-        state.dailyUsage = data.daily_usage || { vton: 0, llm: 0, limit: 10 };
+        state.dailyUsage = data.daily_usage || { vton: 0, llm: 0, limit: 5, plan_type: "free" };
+        state.profileStatus = "succeeded";
+      })
+      .addCase(fetchProfile.rejected, (state) => {
+        state.profileStatus = "failed";
+        state.isAuthenticated = false;
+        state.user = null;
+        state.token = null;
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
       })
       .addCase(updateProfile.fulfilled, (state, action) => {
         if (state.user) {
@@ -205,5 +242,5 @@ const userSlice = createSlice({
   },
 });
 
-export const { clearError } = userSlice.actions;
+export const { clearError, setDailyUsage } = userSlice.actions;
 export default userSlice.reducer;

@@ -56,20 +56,9 @@ export const getCurrentUser = async () => {
     const response = await api.get("/users/me");
     return response.data;
   } catch {
-    // Fallback: decode JWT payload locally
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      if (payload.exp && payload.exp * 1000 < Date.now()) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("refresh_token");
-        return null;
-      }
-      return payload;
-    } catch {
-      localStorage.removeItem("token");
-      localStorage.removeItem("refresh_token");
-      return null;
-    }
+    // No fallback — let the 401 interceptor handle refresh/retry.
+    // If /users/me fails, fetchProfile.rejected resets auth state.
+    return null;
   }
 };
 
@@ -94,7 +83,9 @@ export const refreshToken = async () => {
     });
     if (response.data.access_token) {
       localStorage.setItem("token", response.data.access_token);
-      localStorage.setItem("refresh_token", response.data.refresh_token);
+      if (response.data.refresh_token) {
+        localStorage.setItem("refresh_token", response.data.refresh_token);
+      }
     }
     processQueue(null, response.data.access_token);
     return response.data;

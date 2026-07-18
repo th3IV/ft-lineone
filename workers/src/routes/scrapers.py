@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
 from models.product import ProductCreate
-from middleware.security import require_auth
+from middleware.security import require_auth, require_admin
 
 router = APIRouter()
 
@@ -30,7 +30,7 @@ class ScraperIngestRequest(BaseModel):
 
 
 @router.post("/ingest")
-async def ingest_product(product_data: ScraperIngestRequest, request: Request, user: dict = Depends(require_auth)):
+async def ingest_product(product_data: ScraperIngestRequest, request: Request, user: dict = Depends(require_admin)):
     """Ingest a product from a scraper."""
     db = get_db(request)
 
@@ -70,7 +70,7 @@ async def ingest_product(product_data: ScraperIngestRequest, request: Request, u
 
 
 @router.post("/ingest/batch")
-async def ingest_batch(products: list[ScraperIngestRequest], request: Request, user: dict = Depends(require_auth)):
+async def ingest_batch(products: list[ScraperIngestRequest], request: Request, user: dict = Depends(require_admin)):
     """Ingest multiple products from scrapers."""
     db = get_db(request)
     results = []
@@ -102,7 +102,7 @@ async def health_check():
 
 
 @router.post("/run")
-async def run_scrapers(request: Request, user: dict = Depends(require_auth)):
+async def run_scrapers(request: Request, user: dict = Depends(require_admin)):
     """Manually trigger scrapers for testing. Returns detailed results."""
     from scrapers.scheduler import ScraperRunner
 
@@ -117,7 +117,7 @@ async def run_scrapers(request: Request, user: dict = Depends(require_auth)):
 
 
 @router.post("/trigger")
-async def trigger_scrapers(request: Request, user: dict = Depends(require_auth)):
+async def trigger_scrapers(request: Request, user: dict = Depends(require_admin)):
     """Trigger all scrapers. Requires authentication."""
     from scrapers.scheduler import ScraperRunner
 
@@ -132,7 +132,7 @@ async def trigger_scrapers(request: Request, user: dict = Depends(require_auth))
 
 
 @router.post("/reset/{store}")
-async def reset_store(store: str, request: Request, user: dict = Depends(require_auth)):
+async def reset_store(store: str, request: Request, user: dict = Depends(require_admin)):
     """EMERGENCY ONLY: Delete all products from a store and re-scrape.
 
     Requires authentication. This endpoint is for emergency use only when data
@@ -169,7 +169,7 @@ async def reset_store(store: str, request: Request, user: dict = Depends(require
 
 
 @router.post("/run/{store}")
-async def run_single_scraper(store: str, request: Request, user: dict = Depends(require_auth)):
+async def run_single_scraper(store: str, request: Request, user: dict = Depends(require_admin)):
     """Manually trigger a single store scraper for testing."""
     from scrapers.scheduler import ScraperRunner
     from scrapers.zara import ZaraScraper
@@ -200,7 +200,7 @@ async def run_single_scraper(store: str, request: Request, user: dict = Depends(
 
 
 @router.post("/enrich-missing")
-async def enrich_missing_sizes(request: Request, user: dict = Depends(require_auth)):
+async def enrich_missing_sizes(request: Request, user: dict = Depends(require_admin)):
     """Enrich products that have empty sizes by fetching from store APIs."""
     import json as _json
     import js
@@ -308,8 +308,8 @@ async def enrich_missing_sizes(request: Request, user: dict = Depends(require_au
 
 
 @router.get("/debug/{store}")
-async def debug_scraper(store: str):
-    """Debug endpoint: shows what a store actually returns."""
+async def debug_scraper(store: str, request: Request, user: dict = Depends(require_admin)):
+    """Debug endpoint: shows what a store actually returns. Requires auth."""
     import httpx
 
     debug_info = {"store": store, "tests": []}
@@ -387,8 +387,8 @@ async def debug_scraper(store: str):
 
 
 @router.get("/test-endpoints")
-async def test_endpoints():
-    """Test all store API endpoints and return diagnostic info."""
+async def test_endpoints(request: Request, user: dict = Depends(require_admin)):
+    """Test all store API endpoints and return diagnostic info. Requires auth."""
     import httpx
 
     results = {}

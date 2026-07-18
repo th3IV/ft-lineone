@@ -1,6 +1,7 @@
 """FT-LineOne API - Cloudflare Workers Python Entry Point."""
 
 import asyncio
+import hashlib
 import json
 import re
 import time
@@ -25,18 +26,34 @@ app = FastAPI(
 )
 
 
-# CORS origins — hardcoded because os.getenv doesn't work in Workers Python
-# (vars only arrive via self.env, which isn't available at import time)
+# CORS origins — production domains only
 _CORS_ORIGINS = [
     "https://thelineone.com",
     "https://www.thelineone.com",
-    "http://localhost:3000",
 ]
-_PAGES_PATTERN = re.compile(r"^https://[a-z0-9-]+\.ft-lineone\.pages\.dev$")
+_DEV_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+]
+_PAGES_PATTERN = re.compile(r"^https://([a-z0-9-]+\.)?ft-lineone\.pages\.dev$")
 
 
 def _is_allowed_origin(origin: str) -> bool:
-    return origin in _CORS_ORIGINS or bool(_PAGES_PATTERN.match(origin))
+    """Check if origin is in the allowed list."""
+    if not origin:
+        return False
+    if origin in _CORS_ORIGINS:
+        return True
+    if _PAGES_PATTERN.match(origin):
+        return True
+    # Allow dev origins only in non-production environments
+    is_dev = _ENV.get("ENVIRONMENT", "production") not in ("production", "prod")
+    if is_dev and origin in _DEV_ORIGINS:
+        return True
+    return False
+
+
+_ENV = {}  # Set once on first request; used by CORS functions
 
 
 def _cors_headers(origin):
@@ -110,8 +127,10 @@ async def health_check():
 
 
 @app.get("/test-packages")
-async def test_packages():
-    """Test which Python packages are available in Workers."""
+async def test_packages(request: Request):
+    """Test which Python packages are available in Workers. Requires admin."""
+    from middleware.security import require_admin as _require_admin
+    user = await _require_admin(request)
     results = {}
 
     # Test httpx
@@ -147,7 +166,9 @@ async def test_packages():
 
 @app.get("/test-ai")
 async def test_ai(request: Request):
-    """Test endpoint to verify Workers AI binding is working."""
+    """Test endpoint to verify Workers AI binding is working. Requires admin."""
+    from middleware.security import require_admin as _require_admin
+    user = await _require_admin(request)
     env = getattr(request.app.state, "env", None)
     if not env or not hasattr(env, "AI"):
         return {"error": "AI binding not found", "has_env": env is not None}
@@ -208,24 +229,66 @@ class Default(WorkerEntrypoint):
 
     async def on_fetch(self, request):
         """Handle incoming HTTP requests via ASGI bridge."""
+        global _ENV
+        if not _ENV and hasattr(self, 'env'):
+            _ENV = dict(self.env)
         origin = request.headers.get("origin", "")
+        request_id = hashlib.sha256(str(time.time()).encode()).hexdigest()[:16]
+
+        # CORS validation — reject non-whitelisted origins on non-OPTIONS
+        if origin and request.method != "OPTIONS" and not _is_allowed_origin(origin):
+            h = _cors_headers(origin)
+            h["Content-Type"] = "application/json"
+            h["X-Request-ID"] = request_id
+            return Response(
+                json.dumps({"detail": "Origin not allowed"}).encode("utf-8"),
+                status=403,
+                headers=h,
+            )
 
         if request.method == "OPTIONS":
             h = _cors_headers(origin)
             h["Content-Type"] = "text/plain"
+            h["X-Request-ID"] = request_id
             return Response(b"", status=204, headers=h)
 
         start = time.time()
-        app.state.db = DatabaseService(self.env)
-        app.state.env = self.env
+
+        try:
+            app.state.db = DatabaseService(self.env)
+            app.state.env = self.env
+        except Exception as e:
+            import traceback
+            print(json.dumps({
+                "ts": int(start * 1000),
+                "level": "error",
+                "event": "init_error",
+                "request_id": request_id,
+                "method": request.method,
+                "url": str(request.url),
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }))
+            h = _cors_headers(origin)
+            h["Content-Type"] = "application/json"
+            h["X-Request-ID"] = request_id
+            return Response(
+                json.dumps({"detail": "Service initialization error"}).encode("utf-8"),
+                status=500,
+                headers=h,
+            )
 
         try:
             response = await asgi.fetch(app, request, self.env)
             elapsed = round((time.time() - start) * 1000)
+            status = response.status_code if hasattr(response, "status_code") else 200
             print(json.dumps({
+                "ts": int(start * 1000),
+                "level": "info",
+                "request_id": request_id,
                 "method": request.method,
-                "url": request.url,
-                "status": response.status_code if hasattr(response, "status_code") else 200,
+                "url": str(request.url),
+                "status": status,
                 "ms": elapsed,
             }))
             return response
@@ -233,14 +296,19 @@ class Default(WorkerEntrypoint):
             elapsed = round((time.time() - start) * 1000)
             import traceback
             print(json.dumps({
+                "ts": int(start * 1000),
+                "level": "error",
+                "event": "unhandled_exception",
+                "request_id": request_id,
                 "method": request.method,
-                "url": request.url,
+                "url": str(request.url),
                 "error": str(e),
                 "traceback": traceback.format_exc(),
                 "ms": elapsed,
             }))
             h = _cors_headers(origin)
             h["Content-Type"] = "application/json"
+            h["X-Request-ID"] = request_id
             return Response(
                 json.dumps({"detail": "Internal server error"}).encode("utf-8"),
                 status=500,
@@ -249,13 +317,18 @@ class Default(WorkerEntrypoint):
         except BaseException as e:
             elapsed = round((time.time() - start) * 1000)
             print(json.dumps({
+                "ts": int(start * 1000),
+                "level": "error",
+                "event": "base_exception",
+                "request_id": request_id,
                 "method": request.method,
-                "url": request.url,
+                "url": str(request.url),
                 "error": f"BaseException: {e}",
                 "ms": elapsed,
             }))
             h = _cors_headers(origin)
             h["Content-Type"] = "application/json"
+            h["X-Request-ID"] = request_id
             return Response(
                 json.dumps({"detail": "Internal server error"}).encode("utf-8"),
                 status=500,

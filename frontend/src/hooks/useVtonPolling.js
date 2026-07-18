@@ -1,7 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useDispatch } from "react-redux";
 import { uploadImage, prefetchImage, fetchGarmentAsBase64, prefetchGarment, requestTryOn, pollResult, persistVtonResult } from "../services/vton";
+import { setDailyUsage } from "../store/userSlice";
 
 export function useVtonPolling() {
+  const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [resultImage, setResultImage] = useState(null);
@@ -116,6 +119,10 @@ export function useVtonPolling() {
     if (cancelledRef.current) return null;
 
     const vtonId = tryOnRes.id || tryOnRes.vton_id || tryOnRes.request_id;
+
+    if (tryOnRes.daily_usage) {
+      dispatch(setDailyUsage(tryOnRes.daily_usage));
+    }
 
     if (vtonId) {
       let finalResult;

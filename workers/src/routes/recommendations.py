@@ -1,12 +1,13 @@
 """Recommendation routes."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, Depends
 from typing import Optional
 from pydantic import BaseModel
 
 from models.product import ProductResponse
 from services.llm import LLMService
+from services.config import LLM_DAILY_LIMIT_FREE
 from middleware.security import require_auth, optional_auth
 
 router = APIRouter()
@@ -20,6 +21,7 @@ def get_db(request: Request):
 class ChatRequest(BaseModel):
     question: str
     product_id: Optional[str] = None
+    image: Optional[str] = None
 
 
 @router.get("")
@@ -32,28 +34,26 @@ async def get_recommendations(
     db = get_db(request)
     llm_service = LLMService(request.app.state.env)
 
-    # Check LLM usage limit
+    # Atomic check-and-increment LLM usage
     user_obj = await db.get_user_by_id(user.user_id)
     is_premium = getattr(user_obj, 'is_premium', False) or getattr(user_obj, 'plan_type', 'free') == 'premium'
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    effective_limit = -1 if is_premium else LLM_DAILY_LIMIT_FREE
+    usage_result = await db.try_increment_usage(user.user_id, "llm", today, effective_limit)
 
-    if not is_premium:
-        today = datetime.utcnow().strftime("%Y-%m-%d")
-        usage = await db.get_user_usage(user.user_id, today)
-        if usage.get("llm_count", 0) >= 10:
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "error": "usage_limit_exceeded",
-                    "message": "Límite diario de recomendaciones alcanzado (10/10)",
-                    "current": usage["llm_count"],
-                    "limit": 10,
-                    "upgrade_url": "/payment/upgrade",
-                },
-            )
-        await db.increment_usage(user.user_id, "llm", today)
+    if not usage_result["allowed"]:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "usage_limit_exceeded",
+                "message": f"Límite diario de recomendaciones alcanzado ({LLM_DAILY_LIMIT_FREE}/{LLM_DAILY_LIMIT_FREE})",
+                "current": LLM_DAILY_LIMIT_FREE,
+                "limit": LLM_DAILY_LIMIT_FREE,
+                "upgrade_url": "/payment/upgrade",
+            },
+        )
 
     # Read actual user preferences from DB
-    user_obj = await db.get_user_by_id(user.user_id)
     user_preferences = {
         "gender": None,
         "clothing_type": [],
@@ -143,25 +143,35 @@ async def style_chat(
     llm_service = LLMService(request.app.state.env)
 
     # Check LLM usage limit for authenticated users
+    new_llm = 0
+    daily_usage_response = None
     if user:
         user_obj = await db.get_user_by_id(user.user_id)
         is_premium = getattr(user_obj, 'is_premium', False) or getattr(user_obj, 'plan_type', 'free') == 'premium'
 
-        if not is_premium:
-            today = datetime.utcnow().strftime("%Y-%m-%d")
-            usage = await db.get_user_usage(user.user_id, today)
-            if usage.get("llm_count", 0) >= 10:
-                raise HTTPException(
-                    status_code=402,
-                    detail={
-                        "error": "usage_limit_exceeded",
-                        "message": "Límite diario de recomendaciones alcanzado (10/10)",
-                        "current": usage["llm_count"],
-                        "limit": 10,
-                        "upgrade_url": "/payment/upgrade",
-                    },
-                )
-            await db.increment_usage(user.user_id, "llm", today)
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        effective_limit = -1 if is_premium else LLM_DAILY_LIMIT_FREE
+        usage_result = await db.try_increment_usage(user.user_id, "llm", today, effective_limit)
+
+        if not usage_result["allowed"]:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "usage_limit_exceeded",
+                    "message": f"Límite diario de recomendaciones alcanzado ({LLM_DAILY_LIMIT_FREE}/{LLM_DAILY_LIMIT_FREE})",
+                    "current": LLM_DAILY_LIMIT_FREE,
+                    "limit": LLM_DAILY_LIMIT_FREE,
+                    "upgrade_url": "/payment/upgrade",
+                },
+            )
+
+        new_llm = usage_result["new_count"]
+        daily_usage_response = {
+            "vton": 0,
+            "llm": new_llm,
+            "limit": effective_limit,
+            "plan_type": getattr(user_obj, 'plan_type', 'free'),
+        }
     else:
         user_obj = None
 
@@ -243,6 +253,7 @@ async def style_chat(
         user_context=user_context,
         available_products=products_dict,
         user_id=user.user_id if user else None,
+        image_base64=body.image,
     )
 
     recommended_products = []
@@ -272,4 +283,4 @@ async def style_chat(
                 )
             )
 
-    return {"advice": advice, "products": recommended_products, "product_id": body.product_id}
+    return {"advice": advice, "products": recommended_products, "product_id": body.product_id, "daily_usage": daily_usage_response}

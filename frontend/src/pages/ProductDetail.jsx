@@ -17,7 +17,7 @@ function ProductDetail() {
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedImage, setSelectedImage] = useState(0);
 
-  const isFav = favorites.includes(id);
+  const isFav = favorites.some((fav) => String(fav) === String(id));
 
   useEffect(() => {
     dispatch(fetchProductById(id));

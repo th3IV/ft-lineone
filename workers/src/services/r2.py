@@ -70,16 +70,33 @@ async def save_vton_output_to_r2(env, user_id: str, vton_id: str, output_url: st
     """Download YouCam output and upload to R2. Returns R2 public URL.
 
     This ensures VTON result images persist even if freeimage.host URLs expire.
+    Returns R2 URL on success, original URL on failure (with detailed error logging).
     """
+    if not output_url:
+        print(json.dumps({
+            "event": "r2_save_skip",
+            "vton_id": vton_id,
+            "reason": "empty_output_url",
+        }))
+        return output_url
+
     try:
         image_bytes = await download_image_as_bytes(output_url)
         r2_url = await upload_vton_result(env, user_id, vton_id, image_bytes)
+        print(json.dumps({
+            "event": "r2_save_ok",
+            "vton_id": vton_id,
+            "original_len": len(image_bytes),
+            "r2_url": r2_url,
+        }))
         return r2_url
     except Exception as e:
         print(json.dumps({
-            "event": "r2_upload_failed",
+            "event": "r2_save_failed",
             "vton_id": vton_id,
+            "output_url": output_url[:100] if output_url else "none",
             "error": str(e),
+            "error_type": type(e).__name__,
         }))
         return output_url
 

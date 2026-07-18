@@ -15,10 +15,10 @@ function Navbar() {
   const menuRef = useRef(null);
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { user, isAuthenticated, loading, error } = useSelector(
+  const { user, isAuthenticated, loading, error, profileStatus } = useSelector(
     (state) => state.user
   );
-  const { isPremium } = useFeatureGate();
+  const { isPremium, isUnlimited, vtonRemaining, llmRemaining, limit } = useFeatureGate();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -100,9 +100,17 @@ function Navbar() {
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-editorial-black/5 transition-all duration-200"
                 >
-                  {isAuthenticated && user?.name ? (
+                  {profileStatus === "loading" ? (
+                    <span className="w-7 h-7 rounded-full flex items-center justify-center bg-editorial-black/10">
+                      <span className="w-3 h-3 rounded-full border-2 border-editorial-black/20 border-t-editorial-black/60 animate-spin" />
+                    </span>
+                  ) : isAuthenticated && user?.name ? (
                     <span className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold ${isPremium ? 'bg-editorial-gold text-white' : 'bg-editorial-black text-white'}`}>
                       {isPremium ? <Crown size={12} /> : user.name.charAt(0).toUpperCase()}
+                    </span>
+                  ) : isAuthenticated ? (
+                    <span className="w-7 h-7 rounded-full flex items-center justify-center bg-editorial-black/10">
+                      <span className="w-3 h-3 rounded-full border-2 border-editorial-black/20 border-t-editorial-black/60 animate-spin" />
                     </span>
                   ) : (
                     <User size={18} className="text-editorial-gray" />
@@ -121,18 +129,49 @@ function Navbar() {
                       {isAuthenticated ? (
                         <div className="p-5">
                           <div className="flex items-center gap-3 mb-4 pb-4 border-b border-editorial-black/5">
-                            <span className="w-10 h-10 rounded-full bg-editorial-black text-white flex items-center justify-center text-sm font-semibold">
-                              {user?.name?.charAt(0).toUpperCase() || "U"}
+                            <span className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${isPremium ? 'bg-editorial-gold text-white' : 'bg-editorial-black text-white'}`}>
+                              {isPremium ? <Crown size={16} /> : (user?.name?.charAt(0).toUpperCase() || "U")}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-editorial-black truncate">
-                                {user?.name || "Usuario"}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-semibold text-editorial-black truncate">
+                                  {user?.name || "Usuario"}
+                                </p>
+                                {isPremium && (
+                                  <span className="text-[9px] font-bold uppercase tracking-wider bg-editorial-gold text-white px-1.5 py-0.5 rounded-full">
+                                    Premium
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-editorial-gray truncate">
                                 {user?.email || ""}
                               </p>
                             </div>
                           </div>
+
+                          {!isUnlimited && (
+                            <div className="mb-4 space-y-1.5">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-editorial-gray">VTON hoy</span>
+                                <span className={`font-medium ${vtonRemaining <= 3 ? 'text-red-500' : 'text-editorial-black'}`}>
+                                  {vtonRemaining}/{limit} restantes
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-editorial-gray">Chat IA hoy</span>
+                                <span className={`font-medium ${llmRemaining <= 3 ? 'text-red-500' : 'text-editorial-black'}`}>
+                                  {llmRemaining}/{limit} restantes
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {isUnlimited && (
+                            <div className="mb-4 flex items-center gap-2 text-xs text-editorial-gold font-medium">
+                              <Crown size={12} />
+                              Uso ilimitado
+                            </div>
+                          )}
+
                           <Link
                             to="/profile"
                             onClick={() => setUserMenuOpen(false)}
