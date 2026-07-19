@@ -18,7 +18,7 @@
 | API | Cloudflare Workers (Python) + FastAPI + Pydantic |
 | Database | Cloudflare D1 (`ft-lineone-db`) |
 | Storage | Cloudflare R2 (`r2-thelineone01`) |
-| LLM | Cloudflare Workers AI — `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
+| LLM | Cloudflare Workers AI — `@cf/meta/llama-4-scout-17b-16e-instruct` |
 | VTON | YouCam API V3.0 (`yce-api-01.makeupar.com`) |
 | Payments | Transbank WebPay Plus REST API v1.2 |
 | Cron | `*/45 * * * *` (scrapers + VTON polling + cleanup) |

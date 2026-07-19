@@ -7,6 +7,7 @@ from services.config import (
     VTON_DAILY_LIMIT_FREE,
     LLM_DAILY_LIMIT_FREE,
 )
+from services.kv_premium import PremiumKVService
 
 
 _LIMITS = {
@@ -15,11 +16,29 @@ _LIMITS = {
 }
 
 
+async def _is_premium_cached(db, kv_service, user_id: str) -> bool:
+    """Check premium status using KV cache with D1 fallback."""
+    # Try KV first (fast)
+    if kv_service:
+        is_premium = await kv_service.is_premium(user_id)
+        if is_premium:
+            return True
+    
+    # Fallback to D1
+    user_obj = await db.get_user_by_id(user_id)
+    return getattr(user_obj, 'is_premium', False) or getattr(user_obj, 'plan_type', 'free') == 'premium'
+
+
 async def require_usage(usage_type: str):
     """FastAPI dependency factory: check user hasn't exceeded daily limit."""
     async def _check(request: Request, user: dict):
         db = request.app.state.db
+        kv_service = getattr(request.app.state, "kv_premium", None)
         user_id = user.user_id
+
+        is_premium = await _is_premium_cached(db, kv_service, user_id)
+        if is_premium:
+            return {"allowed": True, "current": 0, "limit": -1}
 
         result = await db.can_use_feature(user_id, usage_type)
 
@@ -46,11 +65,11 @@ async def increment_and_check(request: Request, user: dict, usage_type: str):
     statement to avoid TOCTOU race conditions.
     """
     db = request.app.state.db
+    kv_service = getattr(request.app.state, "kv_premium", None)
     user_id = user.user_id
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    user_obj = await db.get_user_by_id(user_id)
-    is_premium = getattr(user_obj, 'is_premium', False) or getattr(user_obj, 'plan_type', 'free') == 'premium'
+    is_premium = await _is_premium_cached(db, kv_service, user_id)
 
     free_limit = _LIMITS.get(usage_type, VTON_DAILY_LIMIT_FREE)
     effective_limit = -1 if is_premium else free_limit

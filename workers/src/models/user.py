@@ -1,13 +1,22 @@
+import re
 import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field, validator
+
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
 
 class UserBase(BaseModel):
-    email: EmailStr
+    email: str
     name: str = Field(..., min_length=1, max_length=100)
+
+    @validator("email")
+    def validate_email(cls, v: str) -> str:
+        if not _EMAIL_RE.match(v):
+            raise ValueError("Invalid email format")
+        return v
 
 
 class UserCreate(UserBase):
@@ -17,8 +26,14 @@ class UserCreate(UserBase):
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str
     password: str
+
+    @validator("email")
+    def validate_email(cls, v: str) -> str:
+        if not _EMAIL_RE.match(v):
+            raise ValueError("Invalid email format")
+        return v
 
 
 class UserResponse(UserBase):

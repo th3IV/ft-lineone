@@ -1,13 +1,12 @@
 """User profile routes."""
 
 import base64
-import hmac
 import re
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
 
-from middleware.security import require_auth, safe_error_message
+from middleware.security import require_auth, require_admin, safe_error_message
 from services.r2 import upload_profile_image
 
 router = APIRouter()
@@ -235,20 +234,17 @@ async def set_premium(
     user_id: str,
     body: PremiumUpdate,
     request: Request,
+    user: dict = Depends(require_admin),
 ):
-    """Toggle premium status for a user. Requires X-Admin-Key header."""
-    env = get_env(request)
-    admin_key = getattr(env, "ADMIN_KEY", None) if env else None
-    if not admin_key:
-        raise HTTPException(status_code=500, detail="ADMIN_KEY not configured")
-
-    header_key = request.headers.get("X-Admin-Key", "")
-    if not hmac.compare_digest(header_key, admin_key):
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
+    """Toggle premium status for a user. Requires admin JWT."""
     db = get_db(request)
     success = await db.set_premium_status(user_id, body.is_premium)
     if not success:
         raise HTTPException(status_code=404, detail="User not found or no changes")
+
+    # Update KV cache for premium status
+    kv_service = getattr(request.app.state, "kv_premium", None)
+    if kv_service:
+        await kv_service.set_premium(user_id, body.is_premium)
 
     return {"status": "updated", "is_premium": body.is_premium}

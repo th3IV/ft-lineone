@@ -1,0 +1,16 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout title="Virtual Try-On - FT. THE LINE ONE">
+  <div class="min-h-screen bg-editorial-cream">
+    <div id="virtual-tryon-root"></div>
+  </div>
+</Layout>
+
+<script>
+  import VirtualTryOn from '../components/VirtualTryOn';
+  import { hydrate } from 'react-dom/client';
+  
+  hydrate(document.getElementById('virtual-tryon-root'), <VirtualTryOn />);
+</script>

@@ -1,0 +1,184 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout title="Registro - FT. THE LINE ONE">
+  <div class="min-h-screen bg-editorial-cream flex items-center justify-center py-12 px-4">
+    <div class="w-full max-w-md">
+      <div class="bg-editorial-white rounded-2xl border border-editorial-cream-dark p-8">
+        <div class="text-center mb-8">
+          <h1 class="font-display text-3xl font-semibold text-editorial-black mb-2">
+            Crea tu cuenta
+          </h1>
+          <p class="text-editorial-gray">
+            Únete a FT. THE LINE ONE y prueba moda con IA
+          </p>
+        </div>
+
+        <form id="register-form" class="space-y-6">
+          <div>
+            <label for="name" class="block text-sm font-medium text-editorial-gray mb-2">
+              Nombre completo
+            </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              required
+              autocomplete="name"
+              class="w-full px-4 py-3 text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold focus:border-editorial-gold transition-colors"
+              placeholder="María González"
+            />
+          </div>
+
+          <div>
+            <label for="email" class="block text-sm font-medium text-editorial-gray mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              required
+              autocomplete="email"
+              class="w-full px-4 py-3 text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold focus:border-editorial-gold transition-colors"
+              placeholder="maria@email.com"
+            />
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm font-medium text-editorial-gray mb-2">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              autocomplete="new-password"
+              minlength="8"
+              class="w-full px-4 py-3 text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold focus:border-editorial-gold transition-colors"
+              placeholder="••••••••"
+            />
+            <p class="mt-1 text-xs text-editorial-gray-light">Mínimo 8 caracteres</p>
+          </div>
+
+          <div>
+            <label for="confirm_password" class="block text-sm font-medium text-editorial-gray mb-2">
+              Confirmar contraseña
+            </label>
+            <input
+              type="password"
+              id="confirm_password"
+              name="confirm_password"
+              required
+              autocomplete="new-password"
+              class="w-full px-4 py-3 text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold focus:border-editorial-gold transition-colors"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div>
+            <label for="age" class="block text-sm font-medium text-editorial-gray mb-2">
+              Edad (opcional)
+            </label>
+            <input
+              type="number"
+              id="age"
+              name="age"
+              min="13"
+              max="100"
+              class="w-full px-4 py-3 text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold focus:border-editorial-gold transition-colors"
+              placeholder="25"
+            />
+          </div>
+
+          <div class="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="terms"
+              name="terms"
+              required
+              class="mt-1 w-4 h-4 text-editorial-gold border-editorial-cream-dark rounded focus:ring-editorial-gold"
+            />
+            <label for="terms" class="text-sm text-editorial-gray mt-1">
+              Acepto los <a href="/terms" class="text-editorial-gold hover:text-editorial-gold-light">Términos y Condiciones</a> y la <a href="/privacy" class="text-editorial-gold hover:text-editorial-gold-light">Política de Privacidad</a>
+            </label>
+          </div>
+
+          <div class="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="marketing"
+              name="marketing"
+              class="mt-1 w-4 h-4 text-editorial-gold border-editorial-cream-dark rounded focus:ring-editorial-gold"
+            />
+            <label for="marketing" class="text-sm text-editorial-gray mt-1">
+              Quiero recibir novedades y ofertas exclusivas por email
+            </label>
+          </div>
+
+          <div class="hidden" id="turnstile-container"></div>
+
+          <button
+            type="submit"
+            class="w-full btn-primary py-3"
+            id="register-btn"
+          >
+            Crear cuenta
+          </button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <p class="text-editorial-gray">
+            ¿Ya tienes cuenta?{" "}
+            <a href="/login" class="text-editorial-gold hover:text-editorial-gold-light font-medium">
+              Inicia sesión
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  document.getElementById('register-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('register-btn');
+    const originalText = btn.textContent;
+    btn.textContent = 'Creando cuenta...';
+    btn.disabled = true;
+
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+
+    if (data.password !== data.confirm_password) {
+      alert('Las contraseñas no coinciden');
+      btn.textContent = originalText;
+      btn.disabled = false;
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const result = await response.json();
+      if (response.ok) {
+        localStorage.setItem('token', result.access_token);
+        localStorage.setItem('refresh_token', result.refresh_token);
+        window.location.href = '/virtual-try-on';
+      } else {
+        alert(result.detail || 'Error al registrarse');
+      }
+    } catch (error) {
+      alert('Error de conexión');
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  });
+</script>

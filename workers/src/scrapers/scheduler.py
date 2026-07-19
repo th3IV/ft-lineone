@@ -15,6 +15,8 @@ RATE_LIMITS = {
     "falabella": 1.5,
     "hm": 1.5,
     "fashionpark": 1.0,
+    "paris": 2.0,
+    "ripley": 3.0,
 }
 
 # Retry config: max attempts, base delay (exponential backoff)
@@ -66,7 +68,7 @@ STORE_CATEGORIES = {
             "poleron",
         ],
     },
-    "fashionpark": {
+"fashionpark": {
         "type": "search",  # Fashion Park uses Shopify search
         "queries": [
             "polera mujer",
@@ -77,7 +79,28 @@ STORE_CATEGORIES = {
             "chaqueta mujer",
         ],
     },
-
+    "paris": {
+        "type": "search",  # Paris uses Constructor.io API
+        "queries": [
+            "polera mujer",
+            "polera hombre",
+            "jean mujer",
+            "jean hombre",
+            "vestido mujer",
+            "chaqueta mujer",
+        ],
+    },
+    "ripley": {
+        "type": "search",  # Ripley uses HTML parsing
+        "queries": [
+            "polera mujer",
+            "polera hombre",
+            "jean mujer",
+            "jean hombre",
+            "vestido mujer",
+            "chaqueta mujer",
+        ],
+    },
 }
 
 
@@ -90,6 +113,8 @@ class ScraperRunner:
         from scrapers.falabella import FalabellaScraper
         from scrapers.hm import HMScraper
         from scrapers.fashionpark import FashionParkScraper
+        from scrapers.paris import ParisScraper
+        from scrapers.ripley import RipleyScraper
 
         self.env = env
         self.db = DatabaseService(env)
@@ -100,6 +125,8 @@ class ScraperRunner:
             "falabella": FalabellaScraper(),
             "hm": HMScraper(),
             "fashionpark": FashionParkScraper(),
+            "paris": ParisScraper(),
+            "ripley": RipleyScraper(),
         }
 
     async def run_all_scrapers(self, max_concurrent: int = 3) -> dict:
@@ -370,3 +397,16 @@ class ScraperRunner:
         """Close all scrapers."""
         for scraper in self.scrapers.values():
             await scraper.close()
+
+    async def run_single_store(self, store_name: str, max_products: int = 30) -> dict:
+        """Run a single store scraper - used by Durable Object queue consumer."""
+        if store_name not in self.scrapers:
+            return {"status": "error", "error": f"Unknown store: {store_name}"}
+        
+        # Create a new runner with custom max_products
+        runner = ScraperRunner(self.env, max_products=max_products)
+        try:
+            result = await runner._run_scraper(store_name, runner.scrapers[store_name])
+            return result
+        finally:
+            await runner.close()

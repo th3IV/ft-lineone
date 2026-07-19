@@ -1,0 +1,188 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout title="Catálogo - FT. THE LINE ONE">
+  <div class="min-h-screen bg-editorial-cream">
+    <!-- Header with Filters -->
+    <header class="bg-editorial-white border-b border-editorial-cream-dark sticky top-0 z-40">
+      <div class="container-main py-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <h1 class="font-display text-2xl font-semibold text-editorial-black">Catálogo</h1>
+          <div class="flex flex-wrap gap-2">
+            <a href="/virtual-try-on" class="btn-secondary text-sm px-4 py-2">
+              Probar VTON
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Filters Sidebar + Products Grid -->
+    <div class="container-main py-8">
+      <div class="flex flex-col lg:flex-row gap-8">
+        <!-- Filters Sidebar -->
+        <aside class="lg:w-64 flex-shrink-0">
+          <div class="bg-editorial-white rounded-2xl border border-editorial-cream-dark p-6 sticky top-24 h-fit">
+            <h3 className="font-display text-lg font-semibold text-editorial-black mb-6 pb-3 border-b border-editorial-cream-dark">
+              Filtros
+            </h3>
+            
+            <div className="space-y-6">
+              <!-- Search -->
+              <div>
+                <label className="block text-sm font-medium text-editorial-gray mb-2">
+                  Buscar
+                </label>
+                <input
+                  type="text"
+                  placeholder="Buscar productos..."
+                  className="w-full px-3 py-2 text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold focus:border-editorial-gold transition-colors"
+                />
+              </div>
+
+              <!-- Stores -->
+              <div>
+                <label className="block text-sm font-medium text-editorial-gray mb-2">
+                  Tiendas
+                </label>
+                <div className="space-y-2">
+                  {["Zara", "Paris", "Falabella", "H&M", "Maui", "FashionPark", "Ripley"].map((store) => (
+                    <label key={store} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 text-editorial-gold border-editorial-cream-dark rounded focus:ring-editorial-gold" />
+                      <span className="text-sm text-editorial-black">{store}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <!-- Categories -->
+              <div>
+                <label className="block text-sm font-medium text-editorial-gray mb-2">
+                  Categorías
+                </label>
+                <div className="space-y-2">
+                  {["Poleras", "Camisas", "Pantalones", "Jeans", "Shorts", "Chaquetas", "Vestidos", "Faldas", "Polerones"].map((cat) => (
+                    <label key={cat} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 text-editorial-gold border-editorial-cream-dark rounded focus:ring-editorial-gold" />
+                      <span className="text-sm text-editorial-black">{cat}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <!-- Price Range -->
+              <div>
+                <label className="block text-sm font-medium text-editorial-gray mb-2">
+                  Rango de Precio
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    placeholder="Mín"
+                    className="w-full px-3 py-2 text-sm text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold"
+                  />
+                  <span className="text-editorial-gray">-</span>
+                  <input
+                    type="number"
+                    placeholder="Máx"
+                    className="w-full px-3 py-2 text-sm text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold"
+                  />
+                </div>
+              </div>
+
+              <!-- Gender -->
+              <div>
+                <label className="block text-sm font-medium text-editorial-gray mb-2">
+                  Género
+                </label>
+                <div className="space-y-2">
+                  {["Mujer", "Hombre", "Unisex"].map((g) => (
+                    <label key={g} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 text-editorial-gold border-editorial-cream-dark rounded focus:ring-editorial-gold" />
+                      <span className="text-sm text-editorial-black">{g}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <!-- Colors -->
+              <div>
+                <label className="block text-sm font-medium text-editorial-gray mb-2">
+                  Colores
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["Negro", "Blanco", "Azul", "Rojo", "Verde", "Rosa", "Beige", "Gris", "Marrón"].map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className="px-3 py-1.5 text-xs bg-editorial-cream-dark text-editorial-gray rounded-full hover:bg-editorial-gold hover:text-editorial-black transition-colors"
+                    >
+                      {color}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <!-- Sizes -->
+              <div>
+                <label className="block text-sm font-medium text-editorial-gray mb-2">
+                  Tallas
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["XS", "S", "M", "L", "XL", "XXL"].map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      className="w-10 h-10 text-sm bg-editorial-cream-dark text-editorial-gray rounded hover:bg-editorial-gold hover:text-editorial-black transition-colors"
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button className="w-full mt-6 btn-secondary">
+                Limpiar Filtros
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Products Grid -->
+        <main className="flex-1">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-editorial-gray">Ordenar por:</span>
+              <select className="px-3 py-2 text-sm text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold">
+                <option value="newest">Más recientes</option>
+                <option value="price_asc">Precio: Menor a Mayor</option>
+                <option value="price_desc">Precio: Mayor a Menor</option>
+              </select>
+            </div>
+            <div className="text-sm text-editorial-gray">
+              <span id="products-count">0</span> productos encontrados
+            </div>
+          </div>
+
+          <div className="grid-auto-fit" id="products-grid">
+            {/* Products will be loaded here */}
+            <div className="col-span-full flex flex-col items-center justify-center py-16">
+              <div className="loader mb-4" />
+              <p className="text-editorial-gray">Cargando productos...</p>
+            </div>
+          </div>
+
+          <!-- Pagination -->
+          <div className="flex justify-center gap-2 mt-8" id="pagination">
+            <!-- Pagination will be loaded here -->
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  // Product loading logic will be added here
+</script>

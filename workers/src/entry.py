@@ -179,6 +179,7 @@ async def test_ai(request: Request):
 
     # Test 2: Try different models
     models_to_try = [
+        "@cf/meta/llama-4-scout-17b-16e-instruct",
         "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
         "@cf/meta/llama-3.1-70b-instruct",
         "@cf/meta/llama-3-8b-instruct",
@@ -257,6 +258,10 @@ class Default(WorkerEntrypoint):
         try:
             app.state.db = DatabaseService(self.env)
             app.state.env = self.env
+            # Add KV premium service
+            if hasattr(self.env, "PREMIUM_KV"):
+                from services.kv_premium import PremiumKVService
+                app.state.kv_premium = PremiumKVService(self.env.PREMIUM_KV)
         except Exception as e:
             import traceback
             print(json.dumps({
@@ -337,27 +342,26 @@ class Default(WorkerEntrypoint):
 
     async def scheduled(self, controller, env, ctx):
         """Handle cron triggers for scraper scheduling and VTON polling."""
-        from scrapers.scheduler import ScraperRunner
         from cron import process_pending_vton_tasks, cleanup_corrupted_data
 
         cron_expr = getattr(controller, "cron", "") or ""
-        max_products = 20
 
         print(json.dumps({"event": "cron_start", "cron": cron_expr}))
 
-        # Run scrapers (independent — failure doesn't block VTON)
-        # Timeout: 25s to ensure VTON polling and cleanup always run
+        # Enqueue scraper jobs (one per store) - non-blocking, fast
+        stores = [
+            "zara", "maui", "falabella", "hm", "fashionpark", "paris", "ripley"
+        ]
         try:
-            runner = ScraperRunner(env, max_products=max_products)
-            try:
-                results = await asyncio.wait_for(runner.run_all_scrapers(), timeout=25)
-                print(json.dumps({"event": "cron_scrapers_complete", "cron": cron_expr, "results": results}))
-            except asyncio.TimeoutError:
-                print(json.dumps({"event": "cron_scrapers_timeout", "cron": cron_expr}))
-            finally:
-                await runner.close()
+            queue = env.SCRAPER_QUEUE
+            for store in stores:
+                await queue.send({
+                    "store": store,
+                    "max_products": 20,
+                })
+            print(json.dumps({"event": "cron_scrapers_enqueued", "cron": cron_expr, "stores": stores}))
         except Exception as e:
-            print(json.dumps({"event": "cron_scrapers_error", "error": str(e)}))
+            print(json.dumps({"event": "cron_scrapers_enqueue_error", "error": str(e)}))
 
         # Process pending VTON tasks (always runs, even if scrapers failed)
         try:

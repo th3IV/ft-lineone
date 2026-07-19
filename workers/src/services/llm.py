@@ -13,6 +13,9 @@ import random
 import re
 from typing import Optional
 
+from services.catalog_rag import CatalogRAG
+from services.model_router import ModelRouter, TaskType
+
 
 # ── Category mapping for pre-filtering ──────────────────────────────
 _CATEGORY_KEYWORDS = {
@@ -81,11 +84,13 @@ _INJECTION_RE = re.compile("|".join(_INJECTION_PATTERNS), re.IGNORECASE)
 
 
 class LLMService:
-    """LLM service using Cloudflare Workers AI (@cf/meta/llama-3.3-70b-instruct)."""
+    """LLM service using Cloudflare Workers AI with Model Router."""
 
     def __init__(self, env):
         self.env = env
         self.ai = env.AI  # Workers AI binding
+        self.rag = CatalogRAG(env)
+        self.router = ModelRouter(env)
 
     def _extract_response_text(self, result) -> str:
         """Extract response text from AI result, handling multiple formats.
@@ -242,24 +247,57 @@ class LLMService:
         available_products: list[dict],
         query: Optional[str] = None,
         user_id: Optional[str] = None,
+        is_premium: bool = False,
     ) -> list[dict]:
-        """Get personalized product recommendations using LLM."""
+        """Get personalized product recommendations using LLM with RAG."""
         try:
             sanitized_query = self._sanitize_input(query) if query else None
+            
+            # Use RAG for semantic search instead of random sampling
+            rag_query = sanitized_query or " ".join(filter(None, [
+                user_preferences.get("clothing_type", ""),
+                user_preferences.get("styles", ""),
+                user_preferences.get("colors", ""),
+                user_preferences.get("occasions", ""),
+            ]))
+            
+            filters = {}
+            if user_preferences.get("gender"):
+                filters["gender"] = user_preferences["gender"]
+            if user_preferences.get("colors"):
+                filters["colors"] = user_preferences["colors"]
+            if user_preferences.get("min_price") is not None:
+                filters["min_price"] = user_preferences["min_price"]
+            if user_preferences.get("max_price") is not None:
+                filters["max_price"] = user_preferences["max_price"]
+            
+            # Semantic search via RAG
+            rag_results = await self.rag.search(
+                query=rag_query,
+                top_k=10,
+                filters=filters if filters else None,
+            )
+            
+            # If RAG returns results, use them; otherwise fall back to available_products
+            if rag_results:
+                available_products = rag_results
+            elif not available_products:
+                return []
+            
             prompt = self._build_recommendation_prompt(
                 user_preferences, available_products, sanitized_query
             )
 
-            result = await self.ai.run(
-                "@cf/meta/llama-4-scout-17b-16e-instruct",
-                {
-                    "messages": [
-                        {"role": "system", "content": RECOMMENDATION_SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "max_tokens": 1024,
-                    "temperature": 0.7,
-                },
+            # Use model router for recommendations
+            result = await self.router.run(
+                task_type=TaskType.RECOMMENDATIONS,
+                messages=[
+                    {"role": "system", "content": RECOMMENDATION_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                is_premium=is_premium,
+                max_tokens=1024,
+                temperature=0.7,
             )
 
             response_text = self._extract_response_text(result)
@@ -303,19 +341,18 @@ class LLMService:
                 "Menciona prendas de nuestro catalogo cuando sea relevante."
             )
 
-            result = await self.ai.run(
-                "@cf/meta/llama-4-scout-17b-16e-instruct",
-                {
-                    "messages": [
-                        {"role": "system", "content": CHAT_SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "max_tokens": 512,
-                    "temperature": 0.7,
-                },
-            )
-
-            response_text = self._extract_response_text(result)
+            # Use model router for task routing
+            messages = [
+                {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ]
+            
+            # Check if premium for reasoning model
+            from services.model_router import TaskType
+            is_premium = False  # Will be determined by caller
+            
+            response_text = await self._run_chat(messages, is_premium=False, task_type="style_advice")
+            
             if response_text:
                 advice = self._parse_advice_text(response_text)
                 if advice:
@@ -331,6 +368,66 @@ class LLMService:
                 "type": type(e).__name__,
             }))
             return "Servicio de recomendaciones no disponible temporalmente."
+
+    async def _run_chat(
+        self,
+        messages: list[dict],
+        is_premium: bool = False,
+        task_type: str = "chat_general",
+        stream: bool = False,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        **kwargs
+    ) -> Any:
+        """Run chat with model router for task-based routing."""
+        from services.model_router import ModelRouter, TaskType
+        
+        router = ModelRouter(self.env)
+        task_type_enum = TaskType(task_type)
+        
+        if stream:
+            # For streaming, collect all chunks
+            chunks = []
+            async for chunk in router.run_stream(
+                task_type=task_type_enum,
+                messages=messages,
+                is_premium=is_premium,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            ):
+                chunks.append(chunk)
+            return chunks
+        else:
+            return await router.run(
+                task_type=task_type_enum,
+                messages=messages,
+                is_premium=is_premium,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+
+    async def _run_chat_stream(
+        self,
+        messages: list[dict],
+        is_premium: bool = False,
+        task_type: str = "chat_general",
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+    ):
+        """Run chat with streaming response using model router."""
+        from services.model_router import ModelRouter, TaskType
+        
+        router = ModelRouter(self.env)
+        task_type_enum = TaskType(task_type)
+        
+        async for chunk in router.run_stream(
+            task_type=task_type_enum,
+            messages=messages,
+            is_premium=is_premium,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        ):
+            yield chunk
 
     async def get_style_advice_with_products(
         self,
@@ -348,20 +445,48 @@ class LLMService:
             if sanitized_question != user_question:
                 self._log_injection_attempt(user_id, user_question)
 
-            prompt_parts = [
-                f"Producto: {product_name} (categoría: {product_category})",
-                f"Pregunta del usuario: {sanitized_question}",
-            ]
-            if user_context:
-                prompt_parts.append(user_context)
-
-            if available_products:
-                filtered = self._prefilter_products(
+            # Use RAG to find relevant products
+            rag_products = []
+            if available_products and user_id:
+                # Build query from product + user question
+                query = f"{product_name} {product_category} {sanitized_question}"
+                
+                # Build user preferences for RAG filtering
+                user_prefs = {}
+                if user_context:
+                    import re
+                    for pref_type in ["styles", "colors", "occasions", "sizes", "gender"]:
+                        matches = re.findall(rf"{pref_type}=(\[.*?\])", user_context)
+                        if matches:
+                            try:
+                                import json as _json
+                                user_prefs[pref_type] = _json.loads(matches[0])
+                            except Exception:
+                                pass
+                
+                # Use RAG if we have vectorize service
+                try:
+                    from services.catalog_rag import CatalogRAG
+                    rag = CatalogRAG(self.env)
+                    rag_results = await rag.search(query, top_k=10, filters=user_prefs)
+                    rag_products = rag_results
+                except Exception:
+                    # Fallback to prefiltering
+                    rag_products = self._prefilter_products(
+                        available_products,
+                        category=product_category,
+                    )
+            else:
+                rag_products = self._prefilter_products(
                     available_products,
                     category=product_category,
-                )
-                sample_size = min(20, len(filtered))
-                sampled_products = random.sample(filtered, sample_size)
+                ) if available_products else []
+
+            # Build product list for LLM
+            products_text = ""
+            if rag_products:
+                sample_size = min(15, len(rag_products))
+                sampled_products = random.sample(rag_products, sample_size) if len(rag_products) > sample_size else rag_products
                 products_text = json.dumps(
                     [
                         {
@@ -377,6 +502,15 @@ class LLMService:
                     ensure_ascii=False,
                     indent=2,
                 )
+
+            prompt_parts = [
+                f"Producto: {product_name} (categoría: {product_category})",
+                f"Pregunta del usuario: {sanitized_question}",
+            ]
+            if user_context:
+                prompt_parts.append(user_context)
+
+            if rag_products:
                 prompt_parts.append(f"\nProductos disponibles (SOLO puedes recomendar de esta lista):\n{products_text}")
 
             prompt_parts.append(
@@ -389,50 +523,21 @@ class LLMService:
 
             import json as _json
 
-            model = "@cf/meta/llama-4-scout-17b-16e-instruct"
-            messages = [
-                {"role": "system", "content": CHAT_SYSTEM_PROMPT},
-                {"role": "user", "content": "\n".join(prompt_parts)},
-            ]
-
-            if image_base64:
-                clean_base64 = image_base64.split(",")[-1] if "," in image_base64 else image_base64
-                model = "@cf/meta/llama-4-scout-17b-16e-instruct"
-                messages = [
+            # Determine task type and model based on user tier and query complexity
+            is_premium = user_id is not None  # TODO: Check actual premium status from user object
+            task_type = TaskType.STYLE_ADVICE
+            
+            # Use model router for style advice
+            result = await self.router.run(
+                task_type=TaskType.STYLE_ADVICE,
+                messages=[
                     {"role": "system", "content": CHAT_SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "\n".join(prompt_parts)},
-                            {"type": "image_base64", "image_base64": clean_base64}
-                        ]
-                    }
-                ]
-
-            print(_json.dumps({
-                "event": "llm_request",
-                "method": "get_style_advice_with_products",
-                "model": model,
-                "prompt_length": len("\n".join(prompt_parts)),
-                "has_image": bool(image_base64)
-            }))
-
-            result = await self.ai.run(
-                model,
-                {
-                    "messages": messages,
-                    "max_tokens": 1024,
-                    "temperature": 0.7,
-                },
+                    {"role": "user", "content": "\n".join(prompt_parts)},
+                ],
+                is_premium=is_premium,
+                max_tokens=1024,
+                temperature=0.7,
             )
-
-            print(_json.dumps({
-                "event": "llm_response",
-                "method": "get_style_advice_with_products",
-                "result_type": type(result).__name__,
-                "result_keys": list(result.keys()) if isinstance(result, dict) else None,
-                "result_preview": str(result)[:200] if result else None,
-            }))
 
             response_text = self._extract_response_text(result)
             if response_text:

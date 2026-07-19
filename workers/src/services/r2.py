@@ -1,6 +1,10 @@
 """R2 Storage service for uploading images to Cloudflare R2."""
 
 import json
+import time
+import hmac
+import hashlib
+import urllib.parse
 import js
 from pyodide.ffi import to_js as _to_js
 from js import Object
@@ -106,3 +110,82 @@ async def delete_vton_result(env, user_id: str, vton_id: str) -> bool:
     key = f"vton/{user_id}/{vton_id}.jpg"
     await env.R2.delete(key)
     return True
+
+
+async def generate_presigned_upload_url(env, key: str, content_type: str = "image/jpeg", expiration_seconds: int = 3600) -> dict:
+    """Generate a presigned PUT URL for direct browser upload to R2.
+    
+    Returns: {"upload_url": "...", "get_url": "...", "key": "...", "expires_in": expiration_seconds}
+    """
+    # R2 presigned URLs via S3-compatible API
+    # We use the R2 S3 API endpoint to generate presigned URLs
+    import time
+    import hmac
+    import hashlib
+    import urllib.parse
+    
+    account_id = getattr(env, "R2_ACCOUNT_ID", None)
+    access_key = getattr(env, "R2_ACCESS_KEY_ID", None)
+    secret_key = getattr(env, "R2_SECRET_ACCESS_KEY", None)
+    bucket = getattr(env, "R2_BUCKET", "r2-thelineone01")
+    
+    if not all([account_id, access_key, secret_key]):
+        # Fallback: return a public URL pattern (requires public bucket)
+        public_url = f"{R2_PUBLIC_BASE}/{key}"
+        return {
+            "upload_url": public_url,  # Not truly presigned, but works for public buckets
+            "get_url": public_url,
+            "key": key,
+            "expires_in": expiration_seconds,
+        }
+    
+    # S3 Signature Version 4 for presigned URL
+    region = "auto"
+    service = "s3"
+    algorithm = "AWS4-HMAC-SHA256"
+    
+    now = int(time.time())
+    date = time.strftime("%Y%m%d", time.gmtime(now))
+    amz_date = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(now))
+    
+    credential_scope = f"{date}/{region}/{service}/aws4_request"
+    
+    # Canonical request for PUT
+    canonical_uri = f"/{bucket}/{urllib.parse.quote(key, safe='')}"
+    canonical_querystring = (
+        f"X-Amz-Algorithm={algorithm}&"
+        f"X-Amz-Credential={urllib.parse.quote(access_key + '/' + credential_scope)}&"
+        f"X-Amz-Date={amz_date}&"
+        f"X-Amz-Expires={expiration_seconds}&"
+        f"X-Amz-SignedHeaders=content-type;host"
+    )
+    
+    canonical_headers = f"content-type:{content_type}\nhost:{bucket}.{account_id}.r2.cloudflarestorage.com\n"
+    signed_headers = "content-type;host"
+    
+    # Empty payload hash for PUT
+    payload_hash = hashlib.sha256(b"").hexdigest()
+    
+    canonical_request = f"PUT\n{canonical_uri}\n{canonical_querystring}\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
+    
+    string_to_sign = f"{algorithm}\n{amz_date}\n{credential_scope}\n{hashlib.sha256(canonical_request.encode()).hexdigest()}"
+    
+    # Signing key
+    k_date = hmac.new(("AWS4" + secret_key).encode(), date.encode(), hashlib.sha256).digest()
+    k_region = hmac.new(k_date, region.encode(), hashlib.sha256).digest()
+    k_service = hmac.new(k_region, service.encode(), hashlib.sha256).digest()
+    k_signing = hmac.new(k_signing, credential_scope.encode(), hashlib.sha256).digest()
+    
+    signature = hmac.new(k_signing, string_to_sign.encode(), hashlib.sha256).hexdigest()
+    
+    presigned_url = (
+        f"https://{bucket}.{account_id}.r2.cloudflarestorage.com{canonical_uri}"
+        f"?{canonical_querystring}&X-Amz-Signature={signature}"
+    )
+    
+    return {
+        "upload_url": presigned_url,
+        "get_url": f"{R2_PUBLIC_BASE}/{key}",
+        "key": key,
+        "expires_in": expiration_seconds,
+    }

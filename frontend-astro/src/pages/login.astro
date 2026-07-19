@@ -1,0 +1,115 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout title="Iniciar Sesión - FT. THE LINE ONE">
+  <div class="min-h-screen bg-editorial-cream flex items-center justify-center py-12 px-4">
+    <div class="w-full max-w-md">
+      <div class="bg-editorial-white rounded-2xl border border-editorial-cream-dark p-8">
+        <div class="text-center mb-8">
+          <h1 class="font-display text-3xl font-semibold text-editorial-black mb-2">
+            Bienvenido de vuelta
+          </h1>
+          <p class="text-editorial-gray">
+            Inicia sesión para acceder a tu probador virtual
+          </p>
+        </div>
+
+        <form id="login-form" class="space-y-6">
+          <div>
+            <label for="email" class="block text-sm font-medium text-editorial-gray mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              required
+              autocomplete="email"
+              class="w-full px-4 py-3 text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold focus:border-editorial-gold transition-colors"
+              placeholder="tu@email.com"
+            />
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm font-medium text-editorial-gray mb-2">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              autocomplete="current-password"
+              class="w-full px-4 py-3 text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold focus:border-editorial-gold transition-colors"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div class="flex items-center justify-between">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="remember" name="remember" class="w-4 h-4 text-editorial-gold border-editorial-cream-dark rounded focus:ring-editorial-gold" />
+              <span class="text-sm text-editorial-gray">Recordarme</span>
+            </label>
+            <a href="/forgot-password" class="text-sm text-editorial-gold hover:text-editorial-gold-light">
+              ¿Olvidaste tu contraseña?
+            </a>
+          </div>
+
+          <div class="hidden" id="turnstile-container"></div>
+
+          <button
+            type="submit"
+            class="w-full btn-primary py-3"
+            id="login-btn"
+          >
+            Iniciar sesión
+          </button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <p class="text-editorial-gray">
+            ¿No tienes cuenta?{" "}
+            <a href="/register" class="text-editorial-gold hover:text-editorial-gold-light font-medium">
+              Crea una gratis
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('login-btn');
+    const originalText = btn.textContent;
+    btn.textContent = 'Iniciando sesión...';
+    btn.disabled = true;
+
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+
+    try {
+      const response = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const result = await response.json();
+      if (response.ok) {
+        localStorage.setItem('token', result.access_token);
+        localStorage.setItem('refresh_token', result.refresh_token);
+        window.location.href = '/virtual-try-on';
+      } else {
+        alert(result.detail || 'Credenciales incorrectas');
+      }
+    } catch (error) {
+      alert('Error de conexión');
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  });
+</script>

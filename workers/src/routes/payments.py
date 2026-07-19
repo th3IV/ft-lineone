@@ -171,6 +171,11 @@ async def confirm_payment(
                 "UPDATE users SET is_premium = 1, plan_type = 'premium' WHERE id = ?"
             ).bind(uid).run()
 
+            # Update KV cache for premium status
+            kv_service = getattr(request.app.state, "kv_premium", None)
+            if kv_service:
+                await kv_service.set_premium(uid, True)
+
             await db.db.prepare(
                 "UPDATE payments SET status = 'completed' WHERE transbank_token = ?"
             ).bind(body.token).run()
@@ -245,6 +250,10 @@ async def payment_webhook(
             await db.db.prepare(
                 "UPDATE users SET is_premium = 1, plan_type = 'premium' WHERE id = ?"
             ).bind(uid).run()
+            # Update KV cache for premium status
+            kv_service = getattr(request.app.state, "kv_premium", None)
+            if kv_service:
+                await kv_service.set_premium(uid, True)
             await db.db.prepare(
                 "UPDATE payments SET status = 'completed' WHERE transbank_token = ?"
             ).bind(token).run()

@@ -404,32 +404,32 @@ class DatabaseService:
 
     async def create_product(self, product_data: dict) -> ProductModel:
         """Create or update a product (UPSERT).
-
+    
         On conflict (external_id, store): updates all fields and sets last_seen.
         On new insert: sets last_seen = created_at.
         """
         product_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
-
+    
         await self.db.prepare(
             """INSERT INTO products
                (id, external_id, name, store, price, currency, category, description,
                 original_url, image_url, image_urls, sizes, colors, availability,
                 created_at, last_seen)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(external_id, store) DO UPDATE SET
-                name = excluded.name,
-                price = excluded.price,
-                currency = excluded.currency,
-                category = excluded.category,
-                description = excluded.description,
-                original_url = excluded.original_url,
-                image_url = excluded.image_url,
-                image_urls = excluded.image_urls,
-                sizes = excluded.sizes,
-                colors = excluded.colors,
-                availability = excluded.availability,
-                last_seen = excluded.last_seen"""
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(external_id, store) DO UPDATE SET
+               name = excluded.name,
+               price = excluded.price,
+               currency = excluded.currency,
+               category = excluded.category,
+               description = excluded.description,
+               original_url = excluded.original_url,
+               image_url = excluded.image_url,
+               image_urls = excluded.image_urls,
+               sizes = excluded.sizes,
+               colors = excluded.colors,
+               availability = excluded.availability,
+               last_seen = excluded.last_seen"""
         ).bind(
             product_id,
             product_data["external_id"],
@@ -448,8 +448,8 @@ class DatabaseService:
             now,
             now,
         ).run()
-
-        return ProductModel({
+    
+        product = ProductModel({
             "id": product_id,
             "external_id": product_data["external_id"],
             "name": product_data["name"],
@@ -466,17 +466,32 @@ class DatabaseService:
             "availability": product_data.get("availability", True),
             "created_at": now,
         })
-
+    
+        # Async: Index product in Vectorize for RAG
+        try:
+            from services.catalog_rag import CatalogRAG
+            rag = CatalogRAG(self.env)
+            await rag.index_product(product)
+        except Exception as e:
+            import json as _json
+            print(_json.dumps({
+                "event": "vectorize_index_error",
+                "product_id": product_id,
+                "error": str(e),
+            }))
+            
+        return product
+            
     async def delete_products_by_store(self, store: str) -> int:
         """Delete all products from a specific store. Returns number of deleted products."""
         result = await self.db.prepare(
             "DELETE FROM products WHERE store = ?"
         ).bind(store).run()
         return result.changes if hasattr(result, 'changes') else 0
-
+            
     async def delete_stale_products(self, store: str, before_time: str, stale_hours: int = 48) -> int:
         """Delete products from a store whose last_seen is older than the stale threshold.
-
+    
         Uses a multi-run threshold (default 48h) so products aren't deleted just
         because a single scrape run didn't cover them (e.g. max_products caps).
         Only call this after a successful scrape with adequate coverage.
@@ -486,7 +501,7 @@ class DatabaseService:
             "DELETE FROM products WHERE store = ? AND last_seen < ?"
         ).bind(store, cutoff_iso).run()
         return result.changes if hasattr(result, 'changes') else 0
-
+    
     async def update_product_sizes(self, product_id: str, sizes: list[str], colors: list[str] = None) -> bool:
         """Update sizes and optionally colors for an existing product."""
         sets = []
@@ -504,7 +519,7 @@ class DatabaseService:
             f"UPDATE products SET {', '.join(sets)} WHERE id = ?"
         ).bind(*params).run()
         return True
-
+    
     async def get_products_without_sizes(self, store: str, limit: int = 100) -> list[ProductModel]:
         """Get products from a store that have empty sizes."""
         d1_result = await self.db.prepare(
@@ -512,12 +527,12 @@ class DatabaseService:
         ).bind(store, limit).all()
         rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
         return [ProductModel(row) for row in rows]
-
+    
     async def create_vton_result(self, data: dict) -> VtonResultModel:
         """Create a VTON result record."""
         vton_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
-
+    
         await self.db.prepare(
             """INSERT INTO vton_results
                (id, user_id, product_id, status, input_image_url, output_image_url, garment_image_url, error_message, youcam_task_id, created_at)
@@ -534,9 +549,9 @@ class DatabaseService:
             data.get("youcam_task_id"),
             now,
         ).run()
-
+    
         return VtonResultModel({**data, "id": vton_id, "created_at": now})
-
+    
     async def get_vton_result(self, vton_id: str) -> Optional[VtonResultModel]:
         """Get VTON result by ID."""
         result = await self.db.prepare(
@@ -545,7 +560,7 @@ class DatabaseService:
         if result:
             return VtonResultModel(result)
         return None
-
+    
     async def get_vton_history(self, user_id: str, limit: int = 20) -> list[VtonResultModel]:
         """Get VTON history for a user."""
         d1_result = await self.db.prepare(
@@ -553,7 +568,7 @@ class DatabaseService:
         ).bind(user_id, limit).all()
         rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
         return [VtonResultModel(row) for row in rows]
-
+    
     async def update_vton_result(self, vton_id: str, data: dict) -> Optional[VtonResultModel]:
         """Update a VTON result record."""
         sets = []
@@ -569,7 +584,7 @@ class DatabaseService:
             f"UPDATE vton_results SET {', '.join(sets)} WHERE id = ?"
         ).bind(*params).run()
         return await self.get_vton_result(vton_id)
-
+    
     async def get_pending_vton_tasks(self, limit: int = 10) -> list[VtonResultModel]:
         """Get VTON results with status 'processing' that have a YouCam task ID."""
         d1_result = await self.db.prepare(
@@ -577,9 +592,9 @@ class DatabaseService:
         ).bind(limit).all()
         rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
         return [VtonResultModel(row) for row in rows]
-
+    
     # ── Favorites ──────────────────────────────────────────────
-
+    
     async def add_favorite(self, user_id: str, product_id: str) -> None:
         """Add a product to user's favorites. Ignores duplicate."""
         import sqlite3
@@ -589,27 +604,27 @@ class DatabaseService:
             ).bind(str(uuid.uuid4()), user_id, product_id).run()
         except Exception:
             pass
-
+    
     async def remove_favorite(self, user_id: str, product_id: str) -> None:
         """Remove a product from user's favorites."""
         await self.db.prepare(
             "DELETE FROM favorites WHERE user_id = ? AND product_id = ?"
         ).bind(user_id, product_id).run()
-
+    
     async def is_favorite(self, user_id: str, product_id: str) -> bool:
         """Check if a product is in user's favorites."""
         result = await self.db.prepare(
             "SELECT 1 FROM favorites WHERE user_id = ? AND product_id = ? LIMIT 1"
         ).bind(user_id, product_id).first()
         return result is not None
-
+    
     async def get_favorites(self, user_id: str, page: int = 1, limit: int = 20):
         """Get user's favorite products with pagination."""
         count_result = await self.db.prepare(
             "SELECT COUNT(*) as total FROM favorites WHERE user_id = ?"
         ).bind(user_id).first()
         total = count_result["total"] if count_result else 0
-
+    
         offset = (page - 1) * limit
         d1_result = await self.db.prepare(
             """SELECT p.* FROM products p
@@ -617,11 +632,11 @@ class DatabaseService:
                WHERE f.user_id = ?
                ORDER BY f.created_at DESC LIMIT ? OFFSET ?"""
         ).bind(user_id, limit, offset).all()
-
+    
         rows = d1_result.get("results", []) if isinstance(d1_result, dict) else d1_result
         products = [ProductModel(row) for row in rows]
         return products, total
-
+    
     async def get_vton_by_task_id(self, youcam_task_id: str) -> Optional[VtonResultModel]:
         """Get VTON result by YouCam task ID (used by webhook)."""
         result = await self.db.prepare(
@@ -630,17 +645,17 @@ class DatabaseService:
         if result:
             return VtonResultModel(result)
         return None
-
+    
     async def delete_vton_result(self, vton_id: str, user_id: str) -> bool:
         """Delete a VTON result record (with ownership check)."""
         await self.db.prepare(
             "DELETE FROM vton_results WHERE id = ? AND user_id = ?"
         ).bind(vton_id, user_id).run()
         return True
-
+    
     async def refund_vton_usage(self, vton_id: str, error_message: str = "Failed") -> bool:
         """Atomically mark a VTON as failed + refund usage if not already refunded.
-
+    
         Uses WHERE status != 'failed' to prevent double-refund on concurrent calls.
         Returns True if the refund was applied (first failure), False if already refunded.
         """

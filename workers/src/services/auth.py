@@ -2,7 +2,7 @@
 
 Security best practices (per OWASP 2025):
 - PBKDF2-SHA256 for password hashing (stdlib, no C extensions needed)
-- HMAC-SHA256 for JWT signing (stdlib)
+- EdDSA (Ed25519) for JWT signing (asymmetric, no shared secret)
 - Timing-safe comparison via hmac.compare_digest
 - Secrets never hardcoded, accessed via Workers env binding
 """
@@ -20,6 +20,17 @@ from typing import Optional
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+# Try to import cryptography for EdDSA
+try:
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives import serialization
+    CRYPTOGRAPHY_AVAILABLE = True
+except ImportError:
+    CRYPTOGRAPHY_AVAILABLE = False
+    # Fallback to HS256 if cryptography not available
+    import hmac
+    import hashlib
+
 
 class TokenData(BaseModel):
     user_id: str
@@ -27,34 +38,60 @@ class TokenData(BaseModel):
     jti: Optional[str] = None
 
 
-# Module-level cache for JWT secret (safe in Workers — each request gets a fresh process)
-_jwt_secret_cache: Optional[str] = None
+# Module-level cache for Ed25519 keys (safe in Workers — each request gets a fresh process)
+_private_key_cache: Optional[ed25519.Ed25519PrivateKey] = None
+_public_key_cache: Optional[ed25519.Ed25519PublicKey] = None
 
 
-def get_jwt_secret(env=None) -> str:
-    """Get JWT secret from Workers env binding or environment variable.
-
+def get_ed25519_keys(env=None):
+    """Get or generate Ed25519 key pair for JWT signing.
+    
     In Cloudflare Workers, secrets set via `wrangler secret put` are ONLY
     accessible via the env binding object, NOT via os.getenv().
     """
-    global _jwt_secret_cache
-    if _jwt_secret_cache:
-        return _jwt_secret_cache
-
-    secret = None
+    global _private_key_cache, _public_key_cache
+    
+    if _private_key_cache and _public_key_cache:
+        return _private_key_cache, _public_key_cache
+    
+    private_key = None
+    public_key = None
+    
     # Try Workers env binding first (production)
     if env:
-        secret = getattr(env, "JWT_SECRET", None)
+        private_key_b64 = getattr(env, "JWT_PRIVATE_KEY", None)
+        public_key_b64 = getattr(env, "JWT_PUBLIC_KEY", None)
+        if private_key_b64 and public_key_b64:
+            private_key = ed25519.Ed25519PrivateKey.from_private_bytes(base64.b64decode(private_key_b64))
+            public_key = ed25519.Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key_b64))
+    
     # Fallback to os.getenv (local dev with .dev.vars)
-    if not secret:
-        secret = os.getenv("JWT_SECRET")
-    if not secret:
-        raise HTTPException(
-            status_code=500,
-            detail="JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET",
-        )
-    _jwt_secret_cache = secret
-    return secret
+    if not private_key:
+        private_key_b64 = os.getenv("JWT_PRIVATE_KEY")
+        public_key_b64 = os.getenv("JWT_PUBLIC_KEY")
+        if private_key_b64 and public_key_b64:
+            private_key = ed25519.Ed25519PrivateKey.from_private_bytes(base64.b64decode(private_key_b64))
+            public_key = ed25519.Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key_b64))
+    
+    # Generate new keys if none configured (dev only)
+    if not private_key:
+        if not CRYPTOGRAPHY_AVAILABLE:
+            raise HTTPException(
+                status_code=500,
+                detail="cryptography package required for EdDSA. Install with: pip install cryptography"
+            )
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        # Log warning - keys not persisted!
+        import json as _json
+        print(_json.dumps({
+            "event": "ed25519_keys_generated",
+            "warning": "Keys generated at runtime - not persisted! Configure JWT_PRIVATE_KEY and JWT_PUBLIC_KEY secrets for production."
+        }))
+    
+    _private_key_cache = private_key
+    _public_key_cache = public_key
+    return private_key, public_key
 
 
 def _b64url_encode(data: bytes) -> str:
@@ -66,20 +103,42 @@ def _b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s)
 
 
-def _sign(payload: bytes, secret: str) -> str:
+def _sign_eddsa(payload: bytes, private_key: ed25519.Ed25519PrivateKey) -> str:
+    """Sign payload with Ed25519 private key."""
+    signature = private_key.sign(payload)
+    return _b64url_encode(signature)
+
+
+def _verify_eddsa(payload: bytes, signature_b64: str, public_key: ed25519.Ed25519PublicKey) -> bool:
+    """Verify Ed25519 signature."""
+    try:
+        signature = _b64url_decode(signature_b64)
+        public_key.verify(signature, payload)
+        return True
+    except Exception:
+        return False
+
+
+# Fallback HS256 functions (when cryptography not available)
+def _sign_hs256(payload: bytes, secret: str) -> str:
     return _b64url_encode(
         hmac.new(secret.encode(), payload, hashlib.sha256).digest()
     )
 
 
+def _verify_hs256(payload: bytes, signature_b64: str, secret: str) -> bool:
+    expected_sig = _sign_hs256(payload, secret)
+    return hmac.compare_digest(signature_b64, expected_sig)
+
+
 def create_access_token(
     user_id: str, email: str, expires_delta: Optional[timedelta] = None, env=None
 ) -> str:
-    """Create a JWT access token."""
+    """Create a JWT access token using EdDSA (Ed25519) or HS256 fallback."""
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=24))
     jti = secrets.token_hex(16)
 
-    header = {"alg": "HS256", "typ": "JWT"}
+    header = {"alg": "EdDSA" if CRYPTOGRAPHY_AVAILABLE else "HS256", "typ": "JWT"}
     payload = {
         "sub": user_id,
         "email": email,
@@ -91,19 +150,33 @@ def create_access_token(
 
     header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
     payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
-    signature = _sign(
-        f"{header_b64}.{payload_b64}".encode(), get_jwt_secret(env)
-    )
+    
+    if CRYPTOGRAPHY_AVAILABLE:
+        private_key, _ = get_ed25519_keys(env)
+        signature = _sign_eddsa(
+            f"{header_b64}.{payload_b64}".encode(), private_key
+        )
+    else:
+        # Fallback to HS256
+        secret = env.JWT_SECRET if env and hasattr(env, "JWT_SECRET") else os.getenv("JWT_SECRET")
+        if not secret:
+            raise HTTPException(
+                status_code=500,
+                detail="JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET"
+            )
+        signature = _sign_hs256(
+            f"{header_b64}.{payload_b64}".encode(), secret
+        )
 
     return f"{header_b64}.{payload_b64}.{signature}"
 
 
 def create_refresh_token(user_id: str, email: str, env=None) -> str:
-    """Create a JWT refresh token."""
+    """Create a JWT refresh token using EdDSA or HS256 fallback."""
     expire = datetime.now(timezone.utc) + timedelta(days=30)
     jti = secrets.token_hex(16)
 
-    header = {"alg": "HS256", "typ": "JWT"}
+    header = {"alg": "EdDSA" if CRYPTOGRAPHY_AVAILABLE else "HS256", "typ": "JWT"}
     payload = {
         "sub": user_id,
         "email": email,
@@ -115,21 +188,42 @@ def create_refresh_token(user_id: str, email: str, env=None) -> str:
 
     header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
     payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
-    signature = _sign(
-        f"{header_b64}.{payload_b64}".encode(), get_jwt_secret(env)
-    )
+    
+    if CRYPTOGRAPHY_AVAILABLE:
+        private_key, _ = get_ed25519_keys(env)
+        signature = _sign_eddsa(
+            f"{header_b64}.{payload_b64}".encode(), private_key
+        )
+    else:
+        secret = env.JWT_SECRET if env and hasattr(env, "JWT_SECRET") else os.getenv("JWT_SECRET")
+        if not secret:
+            raise HTTPException(
+                status_code=500,
+                detail="JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET"
+            )
+        signature = _sign_hs256(
+            f"{header_b64}.{payload_b64}".encode(), secret
+        )
 
     return f"{header_b64}.{payload_b64}.{signature}"
 
 
 def verify_token(token: str, expected_type: str = None, env=None) -> Optional[TokenData]:
-    """Verify and decode a JWT token. Optionally check token type.
-
+    """Verify and decode a JWT token. Supports both EdDSA and HS256.
+    
     Security: validates alg header to prevent algorithm confusion attacks (OWASP API2:2023).
     Config errors (missing JWT_SECRET) propagate as HTTPException 500.
     """
-    # Get secret OUTSIDE try/except — propagate config errors immediately
-    secret = get_jwt_secret(env)
+    # Get secret/keys OUTSIDE try/except — propagate config errors immediately
+    if CRYPTOGRAPHY_AVAILABLE:
+        _, public_key = get_ed25519_keys(env)
+    else:
+        secret = env.JWT_SECRET if env and hasattr(env, "JWT_SECRET") else os.getenv("JWT_SECRET")
+        if not secret:
+            raise HTTPException(
+                status_code=500,
+                detail="JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET"
+            )
 
     try:
         parts = token.split(".")
@@ -138,16 +232,10 @@ def verify_token(token: str, expected_type: str = None, env=None) -> Optional[To
 
         header_b64, payload_b64, signature = parts
 
-        # Validate JWT header — reject non-HS256 algorithms
+        # Validate JWT header — reject non-EdDSA/HS256 algorithms
         header = json.loads(_b64url_decode(header_b64))
-        if header.get("alg") != "HS256":
-            return None
-
-        expected_sig = _sign(
-            f"{header_b64}.{payload_b64}".encode(), secret
-        )
-
-        if not hmac.compare_digest(signature, expected_sig):
+        expected_alg = "EdDSA" if CRYPTOGRAPHY_AVAILABLE else "HS256"
+        if header.get("alg") != expected_alg:
             return None
 
         payload = json.loads(_b64url_decode(payload_b64))
@@ -158,6 +246,17 @@ def verify_token(token: str, expected_type: str = None, env=None) -> Optional[To
 
         if expected_type and payload.get("type") != expected_type:
             return None
+
+        # Verify signature
+        signing_input = f"{header_b64}.{payload_b64}".encode()
+        
+        if CRYPTOGRAPHY_AVAILABLE:
+            if not _verify_eddsa(signing_input, signature, public_key):
+                return None
+        else:
+            expected_sig = _sign_hs256(signing_input, secret)
+            if not hmac.compare_digest(signature, expected_sig):
+                return None
 
         user_id = payload.get("sub")
         email = payload.get("email")

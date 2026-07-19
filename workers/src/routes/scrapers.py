@@ -103,32 +103,46 @@ async def health_check():
 
 @router.post("/run")
 async def run_scrapers(request: Request, user: dict = Depends(require_admin)):
-    """Manually trigger scrapers for testing. Returns detailed results."""
-    from scrapers.scheduler import ScraperRunner
-
-    runner = ScraperRunner(request.app.state.env, max_products=20)
+    """Manually trigger scrapers for testing. Enqueues jobs to the scraper queue."""
+    env = request.app.state.env
+    
+    stores = ["zara", "maui", "falabella", "hm", "fashionpark", "paris", "ripley"]
+    enqueued = []
+    
     try:
-        results = await runner.run_all_scrapers()
-        return {"status": "completed", "results": results}
+        queue = env.SCRAPER_QUEUE
+        for store in stores:
+            await queue.send({
+                "store": store,
+                "max_products": 20,
+            })
+            enqueued.append(store)
+        
+        return {"status": "enqueued", "stores": enqueued}
     except Exception as e:
-        return {"status": "error", "error": "Scraper execution failed"}
-    finally:
-        await runner.close()
+        return {"status": "error", "error": str(e)}
 
 
 @router.post("/trigger")
 async def trigger_scrapers(request: Request, user: dict = Depends(require_admin)):
-    """Trigger all scrapers. Requires authentication."""
-    from scrapers.scheduler import ScraperRunner
-
-    runner = ScraperRunner(request.app.state.env, max_products=10)
+    """Trigger all scrapers. Requires authentication. Enqueues jobs to the scraper queue."""
+    env = request.app.state.env
+    
+    stores = ["zara", "maui", "falabella", "hm", "fashionpark", "paris", "ripley"]
+    enqueued = []
+    
     try:
-        results = await runner.run_all_scrapers()
-        return {"status": "completed", "results": results}
+        queue = env.SCRAPER_QUEUE
+        for store in stores:
+            await queue.send({
+                "store": store,
+                "max_products": 10,
+            })
+            enqueued.append(store)
+        
+        return {"status": "enqueued", "stores": enqueued}
     except Exception as e:
         return {"status": "error", "error": str(e)}
-    finally:
-        await runner.close()
 
 
 @router.post("/reset/{store}")
@@ -140,53 +154,43 @@ async def reset_store(store: str, request: Request, user: dict = Depends(require
     products are updated, new ones are added, and stale cleanup is handled
     by the normal cron with proper grace periods.
     """
-    from scrapers.scheduler import ScraperRunner
-
-    runner = ScraperRunner(request.app.state.env, max_products=20)
+    env = request.app.state.env
+    
+    valid_stores = ["zara", "maui", "falabella", "hm", "fashionpark", "paris", "ripley"]
+    if store not in valid_stores:
+        return {"status": "error", "error": f"Unknown store: {store}"}
+    
     try:
-        if store not in runner.scrapers:
-            return {"status": "error", "error": f"Unknown store: {store}"}
-
-        result = await runner._run_scraper(store, runner.scrapers[store])
-        return {
-            "status": "completed",
+        queue = env.SCRAPER_QUEUE
+        await queue.send({
             "store": store,
-            "scrape_result": result,
-            "note": "No products deleted — safe upsert only. Stale cleanup runs via cron.",
+            "max_products": 20,
+        })
+        return {
+            "status": "enqueued",
+            "store": store,
+            "note": "No products deleted — safe upsert only. Stale cleanup runs via cron."
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}
-    finally:
-        await runner.close()
 
 
 @router.post("/run/{store}")
 async def run_single_scraper(store: str, request: Request, user: dict = Depends(require_admin)):
-    """Manually trigger a single store scraper for testing."""
-    from scrapers.scheduler import ScraperRunner
-    from scrapers.zara import ZaraScraper
-    from scrapers.maui import MauiScraper
-    from scrapers.falabella import FalabellaScraper
-    from scrapers.fashionpark import FashionParkScraper
-    from scrapers.hm import HMScraper
-
-    scraper_map = {
-        "zara": ZaraScraper,
-        "maui": MauiScraper,
-        "falabella": FalabellaScraper,
-        "fashionpark": FashionParkScraper,
-        "hm": HMScraper,
-    }
-
-    if store not in scraper_map:
-        raise HTTPException(status_code=400, detail=f"Unknown store: {store}. Valid: {list(scraper_map.keys())}")
-
-    runner = ScraperRunner(request.app.state.env, max_products=5)
+    """Manually trigger a single store scraper for testing. Enqueues to queue."""
+    env = request.app.state.env
+    
+    valid_stores = ["zara", "maui", "falabella", "hm", "fashionpark", "paris", "ripley"]
+    if store not in valid_stores:
+        raise HTTPException(status_code=400, detail=f"Unknown store: {store}. Valid: {valid_stores}")
+    
     try:
-        scraper = scraper_map[store]()
-        result = await runner._run_scraper(store, scraper)
-        await scraper.close()
-        return {"store": store, "result": result}
+        queue = env.SCRAPER_QUEUE
+        await queue.send({
+            "store": store,
+            "max_products": 5,
+        })
+        return {"status": "enqueued", "store": store}
     except Exception as e:
         return {"store": store, "error": str(e), "type": type(e).__name__}
 
@@ -359,9 +363,8 @@ async def debug_scraper(store: str, request: Request, user: dict = Depends(requi
         })
         try:
             r1 = await client.get("https://mauiandsons.cl/hombre/vestuario/poleras.html")
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(r1.text, "html.parser") if r1.status_code == 200 else None
-            products = soup.select(".product-item, .product-item-info, [data-product-id]") if soup else []
+            import re as _re
+            products = _re.findall(r'class="[^"]*product-item[^"]*"', r1.text) if r1.status_code == 200 else []
 
             debug_info["tests"].append({
                 "test": "maui_poleras",

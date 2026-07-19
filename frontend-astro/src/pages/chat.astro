@@ -1,0 +1,295 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout title="Asesor IA - FT. THE LINE ONE">
+  <div class="min-h-screen bg-editorial-cream">
+    <header class="bg-editorial-white border-b border-editorial-cream-dark sticky top-0 z-40">
+      <div class="container-main py-4">
+        <div class="flex items-center justify-between">
+          <h1 class="font-display text-2xl font-semibold text-editorial-black">Asesor IA</h1>
+          <a href="/virtual-try-on" class="btn-secondary text-sm px-4 py-2">Probar VTON</a>
+        </div>
+      </div>
+    </header>
+
+    <div class="container-main py-8">
+      <div class="max-w-3xl mx-auto">
+        <!-- Chat Header -->
+        <div class="bg-editorial-white rounded-2xl border border-editorial-cream-dark p-6 mb-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 rounded-full bg-editorial-gold/10 flex items-center justify-center">
+              <svg class="w-6 h-6 text-editorial-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="font-display text-xl font-semibold text-editorial-black">Asesor de Imagen IA</h2>
+              <p class="text-sm text-editorial-gray">Tu estilista personal disponible 24/7</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3 text-sm text-editorial-gray">
+            <span id="usage-indicator" class="px-3 py-1 bg-editorial-cream-dark rounded-full">
+              Mensajes: 0/5 hoy
+            </span>
+            <span class="text-editorial-gold">Powered by Llama 4 Scout</span>
+          </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="bg-editorial-white rounded-2xl border border-editorial-cream-dark overflow-hidden h-[600px] flex flex-col" id="chat-container">
+          <div class="flex-1 overflow-y-auto p-6 space-y-6" id="messages-area">
+            <!-- Welcome message -->
+            <div class="flex gap-3">
+              <div class="w-10 h-10 rounded-full bg-editorial-gold/10 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-editorial-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <div class="flex-1 max-w-[80%]">
+                <div class="bg-editorial-cream rounded-2xl rounded-bl-md px-4 py-3 text-editorial-black">
+                  <p class="font-display font-medium text-editorial-gold mb-1">Asesor de Imagen</p>
+                  <p>¡Hola! Soy tu asesor de imagen personal. Puedo ayudarte a:</p>
+                  <ul class="mt-2 space-y-1 text-sm list-disc list-inside text-editorial-gray">
+                    <li>Encontrar prendas que favorezcan tu tipo de cuerpo</li>
+                    <li>Combinar colores según tu tono de piel</li>
+                    <li>Crear outfits para ocasiones específicas</li>
+                    <li>Recomendarte prendas de nuestro catálogo</li>
+                  </ul>
+                  <p class="mt-2 text-sm text-editorial-gray-light">¿En qué te ayudo hoy?</p>
+                </div>
+                <p class="text-xs text-editorial-gray-light mt-1 ml-12">Ahora mismo</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input -->
+        <div class="border-t border-editorial-cream-dark p-4">
+          <div class="flex gap-3">
+            <button id="btn-attach" class="p-3 bg-editorial-cream-dark text-editorial-gray rounded-xl hover:bg-editorial-cream hover:text-editorial-gold transition-colors" aria-label="Adjuntar imagen">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.2A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.2A2 2 0 0118.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h.09M12 6l3 3m0 0l3-3m-3 3V15" />
+              </svg>
+            </button>
+            <form id="chat-form" class="flex-1 flex gap-3">
+              <input
+                type="text"
+                id="chat-input"
+                placeholder="Escribe tu pregunta sobre moda..."
+                class="flex-1 px-4 py-3 text-editorial-black bg-editorial-white border border-editorial-cream-dark focus:outline-none focus:ring-2 focus:ring-editorial-gold focus:border-editorial-gold transition-colors rounded-xl"
+                placeholder="¿Qué me pongo para una cena elegante? / ¿Qué colores me favorecen? / Recomiéndame una chaqueta..."
+                autocomplete="off"
+              />
+              <button
+                type="submit"
+                id="btn-send"
+                class="p-3 bg-editorial-black text-editorial-white rounded-xl hover:bg-editorial-gold hover:text-editorial-black transition-colors flex-shrink-0"
+                aria-label="Enviar mensaje"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </form>
+          </div>
+          <div class="flex items-center gap-4 mt-3 text-xs text-editorial-gray">
+            <span id="char-count">0/500</span>
+            <span id="msg-count">Mensajes hoy: 0/5</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product Recommendations Sidebar (Mobile) -->
+      <div class="lg:hidden mt-6">
+        <h3 class="font-display text-lg font-semibold text-editorial-black mb-4">Productos recomendados</h3>
+        <div class="grid grid-cols-2 gap-3" id="recommendations-mobile">
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  let messageCount = 0;
+  let isStreaming = false;
+  let eventSource = null;
+
+  const chatInput = document.getElementById('chat-input');
+  const chatForm = document.getElementById('chat-form');
+  const messagesArea = document.getElementById('messages-area');
+  const sendBtn = document.getElementById('btn-send');
+  const charCount = document.getElementById('char-count');
+  const msgCount = document.getElementById('msg-count');
+  const usageIndicator = document.getElementById('usage-indicator');
+
+  // Character count
+  chatInput.addEventListener('input', () => {
+    charCount.textContent = `${chatInput.value.length}/500`;
+  });
+
+  // Send message
+  chatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const message = chatInput.value.trim();
+    if (!message || isStreaming) return;
+
+    if (message.length > 500) {
+      alert('El mensaje es muy largo (máx. 500 caracteres)');
+      return;
+    }
+
+    // Add user message
+    addMessage('user', message);
+    chatInput.value = '';
+    charCount.textContent = '0/500';
+    sendBtn.disabled = true;
+    isStreaming = true;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/v1/recommendations/chat/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ question: message })
+      });
+
+      if (response.status === 402) {
+        // Usage limit exceeded
+        addMessage('assistant', 'Has alcanzado tu límite diario de mensajes (5/día). <a href="/profile" class="text-editorial-gold underline">Hazte Premium</a> para mensajes ilimitados.');
+        isStreaming = false;
+        } else if (!response.ok) {
+          const error = await response.json();
+          addMessage('assistant', `Error: ${error.detail || 'Error del servidor'}`);
+          isStreaming = false;
+          sendBtn.disabled = false;
+          return;
+        }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantMessageEl = addMessage('assistant', '', true);
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              isStreaming = false;
+              sendBtn.disabled = false;
+              break;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                assistantMessageEl.querySelector('.message-content').textContent += parsed.content;
+                messagesArea.scrollTop = messagesArea.scrollHeight;
+              }
+              if (parsed.products && parsed.products.length > 0) {
+                renderRecommendations(parsed.products);
+              }
+              if (parsed.usage) {
+                updateUsage(parsed.usage);
+              }
+            } catch (e) {
+              console.log('Parse error:', e);
+            }
+          }
+        }
+      }
+
+      if (isStreaming) {
+        isStreaming = false;
+        sendBtn.disabled = false;
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
+      addMessage('assistant', 'Error de conexión. Inténtalo de nuevo.');
+      isStreaming = false;
+      sendBtn.disabled = false;
+    }
+  });
+
+  function addMessage(role, content, isStreaming = false) {
+    const messageCount = messagesArea.children.length;
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `flex gap-3 ${role === 'user' ? 'flex-row-reverse' : ''}`;
+    messageDiv.innerHTML = `
+      <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${role === 'user' ? 'bg-editorial-gold/10' : 'bg-editorial-cream'}">
+        ${role === 'user' ? `
+          <svg class="w-5 h-5 text-editorial-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h18a7 7 0 00-7-7z" />
+          </svg>
+        ` : `
+          <svg class="w-5 h-5 text-editorial-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        `}
+      </div>
+      <div class="flex-1 max-w-[85%] ${!isStreaming ? '' : ''}">
+        <div class="${role === 'user' ? 'bg-editorial-black text-editorial-white' : 'bg-editorial-cream'} rounded-2xl rounded-${role === 'user' ? 'br' : 'bl'}-md px-4 py-3">
+          ${role === 'assistant' ? '<p class="font-display font-medium text-editorial-gold mb-1">Asesor de Imagen</p>' : ''}
+          <div class="message-content ${isStreaming ? 'whitespace-pre-wrap' : ''}">${content}</div>
+          <p class="text-xs text-editorial-gray-light mt-1 ${role === 'user' ? 'text-right' : ''}">Ahora mismo</p>
+        </div>
+        ${role === 'user' ? '' : '<div class="w-10"></div>'}
+      </div>
+    `;
+    messagesArea.appendChild(messageDiv);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+    
+    if (isStreaming) {
+      return messageDiv;
+    }
+    return null;
+  }
+
+  function renderRecommendations(products) {
+    // Desktop sidebar
+    const sidebar = document.getElementById('recommendations-sidebar');
+    if (sidebar) {
+      sidebar.innerHTML = products.map(p => `
+        <a href="/product/${p.id}" class="block p-3 bg-editorial-white border border-editorial-cream-dark rounded-xl hover:border-editorial-gold/30 transition-colors">
+          <img src="${p.image_url || '/placeholder-product.jpg'}" alt="${p.name}" class="w-full h-24 object-cover rounded-lg mb-2" />
+          <p class="font-display text-sm font-semibold text-editorial-black line-clamp-1">${p.name}</p>
+          <p class="text-xs text-editorial-gray">${p.store}</p>
+          <p class="font-display font-semibold text-editorial-black">${p.price.toLocaleString()} CLP</p>
+        </a>
+      `).join('');
+    }
+
+    // Mobile
+    const mobile = document.getElementById('recommendations-mobile');
+    if (mobile) {
+      mobile.innerHTML = products.map(p => `
+        <a href="/product/${p.id}" class="block p-3 bg-editorial-white border border-editorial-cream-dark rounded-xl hover:border-editorial-gold/30 transition-colors">
+          <img src="${p.image_url || '/placeholder-product.jpg'}" alt="${p.name}" class="w-full h-32 object-cover rounded-lg mb-2" />
+          <p class="font-display text-sm font-semibold text-editorial-black line-clamp-1">${p.name}</p>
+          <p class="text-xs text-editorial-gray">${p.store}</p>
+          <p class="font-display font-semibold text-editorial-black">${p.price.toLocaleString()} CLP</p>
+        </a>
+      `).join('');
+    }
+  }
+
+  function updateUsage(usage) {
+    if (usageIndicator) {
+      usageIndicator.textContent = `Mensajes: ${usage.llm}/${usage.limit}`;
+    }
+    if (msgCount) {
+      msgCount.textContent = `Mensajes hoy: ${usage.llm}/${usage.limit}`;
+    }
+  }
+</script>

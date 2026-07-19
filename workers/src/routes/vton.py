@@ -19,6 +19,8 @@ from models.vton_result import VtonStatus
 from services.auth import verify_token
 from services.config import VTON_DAILY_LIMIT_FREE, MAX_USER_IMAGE_BYTES, ALLOWED_IMAGE_MAGIC
 from services.youcam import YouCamService
+from services.moondream import MoondreamService
+from services.r2 import save_vton_output_to_r2, generate_presigned_upload_url
 from middleware.security import require_auth, require_admin, optional_auth, safe_error_message
 
 router = APIRouter()
@@ -257,7 +259,243 @@ async def generate_try_on(
         raise HTTPException(status_code=500, detail=f"VTON request failed: {safe_error_message(e, request)}")
 
 
-@router.post("/prefetch")
+# =============================================================================
+# ASYNC VTON ENDPOINTS (New Pattern: Start -> Poll -> Result)
+# =============================================================================
+
+@router.post("/start")
+async def start_vton(
+    request_body: dict,
+    request: Request,
+    user=Depends(require_auth),
+):
+    """
+    Start an async VTON job. Returns job_id immediately for polling.
+    
+    Accepts:
+      - product_id (required)
+      - image (required): base64 user photo (with or without data:image prefix)
+      - garment_url (optional): override garment image URL
+    
+    Returns:
+      - job_id: use GET /vton/status/{job_id} to poll
+      - status: "pending"
+      - daily_usage: current usage counts
+    """
+    product_id = request_body.get("product_id")
+    image = request_body.get("image")
+
+    if not product_id or not image:
+        raise HTTPException(status_code=400, detail="product_id and image are required")
+
+    user_id = user.user_id
+    db = get_db(request)
+    env = get_env(request)
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    user_obj = await db.get_user_by_id(user_id)
+    is_premium = getattr(user_obj, 'is_premium', False) or getattr(user_obj, 'plan_type', 'free') == 'premium'
+
+    try:
+        product = await db.get_product(product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        garment_url = request_body.get("garment_url") or _extract_garment_url(product)
+        if not garment_url:
+            raise HTTPException(status_code=400, detail="Product has no images")
+
+        garment_category = _extract_garment_category(product)
+
+        raw_b64 = image
+        if raw_b64.startswith("data:image"):
+            raw_b64 = raw_b64.split(",", 1)[1]
+        _validate_user_image(raw_b64)
+
+        # Upload user photo to R2
+        import time as _time
+        from services.image_upload import upload_user_photo, upload_garment_image
+        
+        t0 = _time.time()
+        user_photo_url = await upload_user_photo(raw_b64, env=env)
+        print(json.dumps({"event": "vton_start_user_upload", "latency_ms": int((_time.time() - t0) * 1000)}))
+
+        # Upload garment image to R2
+        t0 = _time.time()
+        garment_public_url = await upload_garment_image(garment_url, env=env)
+        print(json.dumps({"event": "vton_start_garment_upload", "latency_ms": int((_time.time() - t0) * 1000)}))
+
+        # Moondream pre-validation: quick check for human body
+        moondream = MoondreamService(env=env)
+        validation = await moondream.detect_human_body(user_photo_url)
+        if not validation.get("has_body", True):  # Fail-open
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_image",
+                    "message": "No se detectó un cuerpo humano en la foto. Asegúrate de que se vea tu torso completo.",
+                    "details": validation.get("details", ""),
+                },
+            )
+
+        # Create VTON job record
+        vton_result = await db.create_vton_result({
+            "user_id": user_id,
+            "product_id": product_id,
+            "status": "pending",
+            "input_image_url": user_photo_url,
+            "garment_image_url": garment_url[:500] if garment_url else None,
+        })
+        vton_id = vton_result.id
+
+        # Check usage limit (atomic)
+        effective_limit = -1 if is_premium else VTON_DAILY_LIMIT_FREE
+        usage_result = await db.try_increment_usage(user_id, "vton", today, effective_limit)
+        new_vton = usage_result["new_count"]
+
+        if not usage_result["allowed"]:
+            await db.delete_vton_result(vton_id, user_id)
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "usage_limit_exceeded",
+                    "message": f"Límite diario de VTON alcanzado ({VTON_DAILY_LIMIT_FREE}/{VTON_DAILY_LIMIT_FREE})",
+                    "current": VTON_DAILY_LIMIT_FREE,
+                    "limit": VTON_DAILY_LIMIT_FREE,
+                    "upgrade_url": "/payment/upgrade",
+                },
+            )
+
+        usage = await db.get_user_usage_readonly(user_id, today) if not is_premium else {"vton_count": 0, "llm_count": 0}
+
+        return {
+            "job_id": vton_id,
+            "status": "pending",
+            "daily_usage": {
+                "vton": new_vton,
+                "llm": usage.get("llm_count", 0),
+                "limit": effective_limit,
+                "plan_type": getattr(user_obj, 'plan_type', 'free'),
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback, json as _json
+        traceback.print_exc()
+        print(_json.dumps({"event": "vton_start_error", "error": str(e), "error_type": type(e).__name__, "product_id": product_id, "user_id": user_id}))
+        raise HTTPException(status_code=500, detail=f"VTON request failed: {safe_error_message(e, request)}")
+
+
+@router.get("/status/{job_id}")
+async def get_vton_status(
+    job_id: str,
+    request: Request,
+    user=Depends(require_auth),
+):
+    """
+    Poll VTON job status. Returns status and result when ready.
+    
+    Returns:
+      - status: "pending" | "processing" | "completed" | "failed"
+      - output_image_url: result image (when completed)
+      - error: error message (when failed)
+    """
+    user_id = user.user_id
+    db = get_db(request)
+    env = get_env(request)
+
+    try:
+        vton_result = await db.get_vton_result(job_id)
+        if not vton_result:
+            raise HTTPException(status_code=404, detail="VTON job not found")
+        if vton_result.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        # If still processing, poll YouCam directly
+        if vton_result.status == "processing" and vton_result.youcam_task_id:
+            youcam = YouCamService(env=env)
+            result = await youcam.poll_task(vton_result.youcam_task_id)
+
+            if result["status"] == "completed":
+                output_url = result.get("output_url", "")
+
+                # Save output to R2 for persistent storage
+                from services.r2 import save_vton_output_to_r2
+                r2_url = await save_vton_output_to_r2(env, user_id, job_id, output_url)
+
+                await db.update_vton_result(job_id, {
+                    "status": "completed",
+                    "output_image_url": r2_url,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                })
+                vton_result.status = "completed"
+                vton_result.output_image_url = r2_url
+
+            elif result["status"] == "failed":
+                await db.refund_vton_usage(job_id, result.get("error", "YouCam task failed"))
+                vton_result.status = "failed"
+                vton_result.error_message = result.get("error")
+
+        return {
+            "status": vton_result.status,
+            "output_image_url": vton_result.output_image_url,
+            "error": vton_result.error_message,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback, json
+        traceback.print_exc()
+        print(json.dumps({"event": "vton_status_error", "job_id": job_id, "error": str(e)}))
+        raise HTTPException(status_code=500, detail="Failed to get VTON status")
+
+
+@router.post("/upload-url")
+async def get_upload_url(
+    request_body: dict,
+    request: Request,
+    user=Depends(require_auth),
+):
+    """
+    Generate a presigned PUT URL for direct browser upload to R2.
+    
+    Accepts:
+      - content_type (optional): MIME type (default: image/jpeg)
+      - folder (optional): "vton" or "avatar" (default: vton)
+    
+    Returns:
+      - upload_url: presigned PUT URL
+      - get_url: public GET URL for the uploaded file
+      - key: R2 object key
+      - expires_in: seconds until URL expires
+    """
+    user_id = user.user_id
+    env = get_env(request)
+    
+    content_type = request_body.get("content_type", "image/jpeg")
+    folder = request_body.get("folder", "vton")
+    
+    import uuid
+    key = f"{folder}/{user_id}/{uuid.uuid4().hex}.jpg"
+    
+    try:
+        result = await generate_presigned_upload_url(env, key, content_type, expiration_seconds=3600)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate upload URL: {safe_error_message(e, request)}")
+
+
+@router.get("/result/{vton_id}")
+async def get_result(
+    vton_id: str,
+    request: Request,
+    user=Depends(require_auth),
+):
+    """Get VTON result (legacy endpoint, redirects to /status)."""
+    return await get_vton_status(vton_id, request, user)
 async def prefetch_image(
     request_body: dict,
     request: Request,

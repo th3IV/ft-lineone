@@ -19,11 +19,49 @@
     {
       "binding": "R2",
       "bucket_name": "r2-thelineone01"
+    },
+    {
+      "binding": "R2_CATALOG",
+      "bucket_name": "catalogo"
+    },
+    {
+      "binding": "R2_VTON_TEMP",
+      "bucket_name": "vton-temp"
     }
   ],
   "ai": {
     "binding": "AI"
   },
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "ft-lineone-catalog"
+    }
+  ],
+  "queues": [
+    {
+      "binding": "SCRAPER_QUEUE",
+      "queue_name": "scraper-jobs",
+      "max_batch_size": 1,
+      "max_batch_timeout": 30,
+      "max_retries": 3,
+      "dead_letter_queue": "scraper-dlq"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SCRAPER_WORKER",
+        "class_name": "ScraperWorker"
+      }
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "PREMIUM_KV",
+      "id": "ft-lineone-premium"
+    }
+  ],
   "vars": {
     "ENVIRONMENT": "production",
     "JWT_ALGORITHM": "HS256",
@@ -32,9 +70,7 @@
     "TRANSBANK_COMMERCE_CODE": "597055555532",
     "TRANSBANK_BASE_URL": "https://webpay3gint.transbank.cl",
     "TRANSBANK_RETURN_URL": "https://thelineone.com/payment/success",
-    "ADMIN_EMAILS": "godismelife09@gmail.com",
-    "PARIS_CNSTRC_KEY": "cencosud_0BmS-e",
-    "FREEIMAGE_KEY": "6d207e02198a847aa98d0a2a901485a5"
+    "ADMIN_EMAILS": "godismelife09@gmail.com"
   },
   "triggers": {
     "crons": ["*/45 * * * *"]
