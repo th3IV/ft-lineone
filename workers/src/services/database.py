@@ -6,19 +6,30 @@ from typing import Optional
 import uuid
 
 
-def _to_py(value):
-    """Convert a pyodide JsProxy to a native Python object.
+def _to_py(value, _depth=0):
+    """Convert pyodide JsProxy values to native Python objects, recursively.
 
     D1 bindings (with disable_python_external_sdk) return JsProxy objects
-    that don't support dict-style subscripting. .to_py() converts them.
-    Native Python objects (tests, mocks) pass through unchanged.
+    that don't support dict-style subscripting, and nested values (e.g. NULL
+    columns) may remain as JsProxy even after a shallow .to_py(). Native
+    Python objects (tests, mocks) pass through unchanged.
     """
-    if value is None:
+    if value is None or _depth > 20:
+        return value
+    # JS null/undefined cross pyodide as JsNull/JsUndefined singletons — NOT
+    # Python None. D1 .first() with no rows returns null; normalize to None.
+    if type(value).__name__ in ("JsNull", "JsUndefined"):
         return None
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {k: _to_py(v, _depth + 1) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_py(v, _depth + 1) for v in value]
     to_py = getattr(value, "to_py", None)
-    if callable(to_py) and not isinstance(value, (dict, list, str, int, float, bool)):
+    if callable(to_py):
         try:
-            return to_py()
+            return _to_py(to_py(), _depth + 1)
         except Exception:
             return value
     return value
@@ -27,11 +38,32 @@ def _to_py(value):
 class _D1PreparedStatement:
     """Wrapper around a D1 prepared statement that converts results to Python."""
 
-    def __init__(self, stmt):
+    def __init__(self, stmt, query=None, raw_db=None):
         self._stmt = stmt
+        self._query = query
+        self._raw_db = raw_db
 
     def bind(self, *args):
+        # Python None crosses pyodide as JS `undefined`, which D1 rejects
+        # (only JS `null` is supported). Inline a SQL NULL literal for None
+        # values and re-prepare with the remaining args.
+        if self._query is not None and self._raw_db is not None and any(a is None for a in args):
+            parts = self._query.split("?")
+            if len(parts) == len(args) + 1:
+                rebuilt = parts[0]
+                real_args = []
+                for i, a in enumerate(args):
+                    if a is None:
+                        rebuilt += "NULL" + parts[i + 1]
+                    else:
+                        rebuilt += "?" + parts[i + 1]
+                        real_args.append(a)
+                stmt = self._raw_db.prepare(rebuilt)
+                self._stmt = stmt.bind(*real_args) if real_args else stmt
+                self._query = None  # consumed — don't reprocess on re-bind
+                return self
         self._stmt = self._stmt.bind(*args)
+        self._query = None
         return self
 
     async def first(self):
@@ -51,7 +83,7 @@ class _D1Database:
         self._db = db
 
     def prepare(self, query):
-        return _D1PreparedStatement(self._db.prepare(query))
+        return _D1PreparedStatement(self._db.prepare(query), query=query, raw_db=self._db)
 
 
 def _meta_changes(run_result) -> int:
@@ -87,7 +119,8 @@ class UserModel:
             if isinstance(row.get("preferences"), str)
             else (row.get("preferences") or {})
         )
-        self.profile_image = row.get("profile_image")
+        _pi = _to_py(row.get("profile_image"))
+        self.profile_image = _pi if isinstance(_pi, str) else None
         self.is_premium = bool(row.get("is_premium", 0))
         self.plan_type = row.get("plan_type", "free")
         self.age = row.get("age")
