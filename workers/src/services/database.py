@@ -6,6 +6,69 @@ from typing import Optional
 import uuid
 
 
+def _to_py(value):
+    """Convert a pyodide JsProxy to a native Python object.
+
+    D1 bindings (with disable_python_external_sdk) return JsProxy objects
+    that don't support dict-style subscripting. .to_py() converts them.
+    Native Python objects (tests, mocks) pass through unchanged.
+    """
+    if value is None:
+        return None
+    to_py = getattr(value, "to_py", None)
+    if callable(to_py) and not isinstance(value, (dict, list, str, int, float, bool)):
+        try:
+            return to_py()
+        except Exception:
+            return value
+    return value
+
+
+class _D1PreparedStatement:
+    """Wrapper around a D1 prepared statement that converts results to Python."""
+
+    def __init__(self, stmt):
+        self._stmt = stmt
+
+    def bind(self, *args):
+        self._stmt = self._stmt.bind(*args)
+        return self
+
+    async def first(self):
+        return _to_py(await self._stmt.first())
+
+    async def all(self):
+        return _to_py(await self._stmt.all())
+
+    async def run(self):
+        return _to_py(await self._stmt.run())
+
+
+class _D1Database:
+    """Wrapper around the D1 binding that returns native Python results."""
+
+    def __init__(self, db):
+        self._db = db
+
+    def prepare(self, query):
+        return _D1PreparedStatement(self._db.prepare(query))
+
+
+def _meta_changes(run_result) -> int:
+    """Extract meta.changes from a D1 .run() result (dict or JsProxy)."""
+    if not run_result:
+        return 0
+    meta = run_result.get("meta") if isinstance(run_result, dict) else getattr(run_result, "meta", None)
+    if not meta:
+        return 0
+    if isinstance(meta, dict):
+        return meta.get("changes", 0) or 0
+    meta = _to_py(meta)
+    if isinstance(meta, dict):
+        return meta.get("changes", 0) or 0
+    return getattr(meta, "changes", 0) or 0
+
+
 class UserModel:
     """User data model (D1 row)."""
 
@@ -87,7 +150,7 @@ class DatabaseService:
     def __init__(self, env):
         """Initialize with Cloudflare Workers env."""
         self.env = env
-        self.db = env.DB  # D1 binding from wrangler
+        self.db = _D1Database(env.DB)  # D1 binding from wrangler (JsProxy-safe)
 
     async def get_user_by_email(self, email: str) -> Optional[UserModel]:
         """Get user by email."""
@@ -229,7 +292,7 @@ class DatabaseService:
             f"UPDATE user_usage SET {column} = {column} + 1 WHERE user_id = ? AND date = ? AND {column} < ?"
         ).bind(user_id, date, limit).run()
 
-        if cursor and getattr(cursor, 'meta', {}).get('changes', 0) > 0:
+        if _meta_changes(cursor) > 0:
             result = await self.db.prepare(
                 f"SELECT {column} FROM user_usage WHERE user_id = ? AND date = ?"
             ).bind(user_id, date).first()
@@ -670,7 +733,7 @@ class DatabaseService:
         cursor = await self.db.prepare(
             "UPDATE vton_results SET status = 'failed', error_message = ?, completed_at = ?, usage_refunded = 1 WHERE id = ? AND status != 'failed'"
         ).bind(error_message, now, vton_id).run()
-        changes = getattr(cursor, 'meta', {}).get('changes', 0) if cursor else 0
+        changes = _meta_changes(cursor)
         if changes > 0:
             vr = await self.db.prepare("SELECT user_id FROM vton_results WHERE id = ?").bind(vton_id).first()
             if vr:

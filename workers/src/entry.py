@@ -101,7 +101,7 @@ async def root():
 class Default(WorkerEntrypoint):
     """Cloudflare Workers Python entry point."""
 
-    async def fetch(self, request):
+    async def on_fetch(self, request):
         """Handle incoming HTTP requests via ASGI bridge."""
         origin = request.headers.get("origin", "")
         request_id = hashlib.sha256(str(time.time()).encode()).hexdigest()[:16]
@@ -193,7 +193,8 @@ class Default(WorkerEntrypoint):
             try:
                 body_bytes = await response.arrayBuffer()
                 if body_bytes is not None:
-                    body = bytes(body_bytes)
+                    # JsProxy(ArrayBuffer) -> memoryview -> bytes
+                    body = bytes(body_bytes.to_py())
             except Exception:
                 pass
 

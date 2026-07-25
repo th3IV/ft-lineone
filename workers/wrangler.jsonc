@@ -62,12 +62,9 @@
       }
     ]
   },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["ScraperWorkerEntrypoint"]
-    }
-  ],
+  "exports": {
+    "ScraperWorkerEntrypoint": { "type": "durable-object", "storage": "sqlite" }
+  },
   "kv_namespaces": [
     {
       "binding": "PREMIUM_KV",
