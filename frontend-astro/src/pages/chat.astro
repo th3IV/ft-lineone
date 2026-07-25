@@ -1,5 +1,5 @@
 ---
-import Layout from "../../layouts/Layout.astro";
+import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout title="Asesor IA - FT. THE LINE ONE">
@@ -149,7 +149,8 @@ import Layout from "../../layouts/Layout.astro";
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/v1/recommendations/chat/stream', {
+      const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://api.thelineone.com/api/v1';
+      const response = await fetch(`${API_BASE}/recommendations/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

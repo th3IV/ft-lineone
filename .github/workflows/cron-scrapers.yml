@@ -15,11 +15,12 @@ jobs:
   run-scrapers:
     runs-on: ubuntu-latest
     steps:
-      - name: Run scrapers via API
+      - name: Trigger scrapers via API
         run: |
-          STORES="${{ github.event.inputs.stores }}"
-          curl -s -X POST \
+          # API_KEY must be a long-lived JWT for an admin user.
+          # --fail-with-body makes the job fail loudly on 4xx/5xx (e.g. expired token).
+          curl -sS --fail-with-body -X POST \
             "${{ secrets.API_URL }}/api/v1/scrapers/run" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.API_KEY }}" \
-            -d "{\"stores\": \"${STORES}\"}" | jq .
+            -d '{}'

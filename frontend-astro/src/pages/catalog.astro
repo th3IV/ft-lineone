@@ -1,5 +1,5 @@
 ---
-import Layout from "../../layouts/Layout.astro";
+import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout title="Catálogo - FT. THE LINE ONE">
@@ -167,7 +167,7 @@ import Layout from "../../layouts/Layout.astro";
       const params = new URLSearchParams();
       params.append('page', page.toString());
       params.append('limit', limit.toString());
-      if (filters.search) params.append('query', filters.search);
+      if (filters.search) params.append('q', filters.search);
       if (filters.stores.length === 1) params.append('store', filters.stores[0]);
       if (filters.categories.length === 1) params.append('category', filters.categories[0]);
       if (filters.minPrice) params.append('min_price', filters.minPrice);

@@ -338,23 +338,12 @@ async def start_vton(
                 },
             )
 
-        # Create VTON job record
-        vton_result = await db.create_vton_result({
-            "user_id": user_id,
-            "product_id": product_id,
-            "status": "pending",
-            "input_image_url": user_photo_url,
-            "garment_image_url": garment_url[:500] if garment_url else None,
-        })
-        vton_id = vton_result.id
-
-        # Check usage limit (atomic)
+        # Check usage limit BEFORE creating the YouCam task (avoid charging for rejected jobs)
         effective_limit = -1 if is_premium else VTON_DAILY_LIMIT_FREE
         usage_result = await db.try_increment_usage(user_id, "vton", today, effective_limit)
         new_vton = usage_result["new_count"]
 
         if not usage_result["allowed"]:
-            await db.delete_vton_result(vton_id, user_id)
             raise HTTPException(
                 status_code=402,
                 detail={
@@ -366,11 +355,39 @@ async def start_vton(
                 },
             )
 
+        # Create VTON job record
+        vton_result = await db.create_vton_result({
+            "user_id": user_id,
+            "product_id": product_id,
+            "status": "pending",
+            "input_image_url": user_photo_url,
+            "garment_image_url": garment_url[:500] if garment_url else None,
+        })
+        vton_id = vton_result.id
+
+        # Start the actual YouCam task — without this the job stays 'pending' forever
+        try:
+            youcam = YouCamService(env=env)
+            task_id = await youcam.create_task(
+                src_url=user_photo_url,
+                ref_url=garment_public_url,
+                garment_category=garment_category,
+            )
+            await db.update_vton_result(vton_id, {
+                "youcam_task_id": task_id,
+                "status": "processing",
+            })
+            print(json.dumps({"event": "vton_start_task_created", "vton_id": vton_id, "task_id": task_id[:20]}))
+        except Exception as task_error:
+            # Refund usage + mark failed so user isn't charged for a broken start
+            await db.refund_vton_usage(vton_id, f"Task creation failed: {str(task_error)[:200]}")
+            raise
+
         usage = await db.get_user_usage_readonly(user_id, today) if not is_premium else {"vton_count": 0, "llm_count": 0}
 
         return {
             "job_id": vton_id,
-            "status": "pending",
+            "status": "processing",
             "daily_usage": {
                 "vton": new_vton,
                 "llm": usage.get("llm_count", 0),

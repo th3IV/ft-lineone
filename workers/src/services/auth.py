@@ -58,7 +58,8 @@ def get_ed25519_keys(env=None):
     if env and CRYPTOGRAPHY_AVAILABLE:
         private_key_b64 = getattr(env, "JWT_PRIVATE_KEY", None)
         public_key_b64 = getattr(env, "JWT_PUBLIC_KEY", None)
-        if private_key_b64 and public_key_b64:
+        # Guard against non-string values (misconfig, mock objects)
+        if isinstance(private_key_b64, str) and isinstance(public_key_b64, str) and private_key_b64 and public_key_b64:
             private_key = ed25519.Ed25519PrivateKey.from_private_bytes(base64.b64decode(private_key_b64))
             public_key = ed25519.Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key_b64))
     
@@ -117,6 +118,21 @@ def _verify_eddsa(payload: bytes, signature_b64: str, public_key) -> bool:
 
 
 # Fallback HS256 functions (when cryptography not available)
+def get_jwt_secret(env=None) -> str:
+    """Resolve the HS256 JWT secret from Workers env or process env.
+
+    Raises HTTPException 500 when no secret is configured — config errors must
+    fail loudly, never silently sign/verify with an empty secret.
+    """
+    secret = env.JWT_SECRET if env and hasattr(env, "JWT_SECRET") else os.getenv("JWT_SECRET")
+    if not secret:
+        raise HTTPException(
+            status_code=500,
+            detail="JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET"
+        )
+    return secret
+
+
 def _sign_hs256(payload: bytes, secret: str) -> str:
     return _b64url_encode(
         hmac.new(secret.encode(), payload, hashlib.sha256).digest()
@@ -155,12 +171,7 @@ def create_access_token(
         )
     else:
         # Fallback to HS256
-        secret = env.JWT_SECRET if env and hasattr(env, "JWT_SECRET") else os.getenv("JWT_SECRET")
-        if not secret:
-            raise HTTPException(
-                status_code=500,
-                detail="JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET"
-            )
+        secret = get_jwt_secret(env)
         signature = _sign_hs256(
             f"{header_b64}.{payload_b64}".encode(), secret
         )
@@ -192,12 +203,7 @@ def create_refresh_token(user_id: str, email: str, env=None) -> str:
             f"{header_b64}.{payload_b64}".encode(), private_key
         )
     else:
-        secret = env.JWT_SECRET if env and hasattr(env, "JWT_SECRET") else os.getenv("JWT_SECRET")
-        if not secret:
-            raise HTTPException(
-                status_code=500,
-                detail="JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET"
-            )
+        secret = get_jwt_secret(env)
         signature = _sign_hs256(
             f"{header_b64}.{payload_b64}".encode(), secret
         )
@@ -207,7 +213,7 @@ def create_refresh_token(user_id: str, email: str, env=None) -> str:
 
 def verify_token(token: str, expected_type: str = None, env=None) -> Optional[TokenData]:
     """Verify and decode a JWT token. Supports both EdDSA and HS256.
-    
+
     Security: validates alg header to prevent algorithm confusion attacks (OWASP API2:2023).
     Config errors (missing JWT_SECRET) propagate as HTTPException 500.
     """
@@ -215,12 +221,7 @@ def verify_token(token: str, expected_type: str = None, env=None) -> Optional[To
     if CRYPTOGRAPHY_AVAILABLE:
         _, public_key = get_ed25519_keys(env)
     else:
-        secret = env.JWT_SECRET if env and hasattr(env, "JWT_SECRET") else os.getenv("JWT_SECRET")
-        if not secret:
-            raise HTTPException(
-                status_code=500,
-                detail="JWT_SECRET not configured. Run: wrangler secret put JWT_SECRET"
-            )
+        secret = get_jwt_secret(env)
 
     try:
         parts = token.split(".")

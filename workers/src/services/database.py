@@ -404,13 +404,20 @@ class DatabaseService:
 
     async def create_product(self, product_data: dict) -> ProductModel:
         """Create or update a product (UPSERT).
-    
+
         On conflict (external_id, store): updates all fields and sets last_seen.
         On new insert: sets last_seen = created_at.
         """
-        product_id = str(uuid.uuid4())
+        # Preserve the real row ID on conflict — a fresh UUID here would
+        # desynchronize D1 from the Vectorize index.
+        existing = await self.db.prepare(
+            "SELECT id, created_at FROM products WHERE external_id = ? AND store = ? LIMIT 1"
+        ).bind(product_data["external_id"], product_data["store"]).first()
+
+        product_id = existing["id"] if existing else str(uuid.uuid4())
+        created_at = existing["created_at"] if existing else None
         now = datetime.now(timezone.utc).isoformat()
-    
+
         await self.db.prepare(
             """INSERT INTO products
                (id, external_id, name, store, price, currency, category, description,
@@ -464,7 +471,7 @@ class DatabaseService:
             "sizes": product_data.get("sizes", []),
             "colors": product_data.get("colors", []),
             "availability": product_data.get("availability", True),
-            "created_at": now,
+            "created_at": created_at or now,
         })
     
         # Async: Index product in Vectorize for RAG

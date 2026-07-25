@@ -5,7 +5,13 @@ import json
 import re
 import time
 
+import js
+from js import Headers
+
 from workers import WorkerEntrypoint, Response
+
+# Register Durable Object class (required for wrangler durable_objects binding)
+from durable_objects.scraper_worker import ScraperWorkerEntrypoint  # noqa: F401
 
 from fastapi import FastAPI, Request
 
@@ -163,6 +169,26 @@ class Default(WorkerEntrypoint):
             except Exception:
                 pass
 
+            # Streaming responses (SSE): pass body through untouched.
+            # Buffering a ReadableStream with arrayBuffer() kills the stream.
+            resp_content_type = resp_headers.get("content-type", "").lower()
+            if "text/event-stream" in resp_content_type:
+                stream_headers = Headers.new(response.headers)
+                for k, v in _cors_headers(origin, self.env).items():
+                    stream_headers.set(k, v)
+                stream_headers.set("X-Request-ID", request_id)
+                print(json.dumps({
+                    "ts": int(start * 1000),
+                    "level": "info",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "url": str(request.url),
+                    "status": resp_status,
+                    "stream": True,
+                    "ms": elapsed,
+                }))
+                return Response(response.body, status=resp_status, headers=stream_headers)
+
             body = b""
             try:
                 body_bytes = await response.arrayBuffer()
@@ -215,7 +241,8 @@ class Default(WorkerEntrypoint):
         """Handle queue messages for scraper jobs."""
         from scrapers.scheduler import ScraperRunner
 
-        print(json.dumps({"event": "queue_batch_received", "count": len(batch)}))
+        message_count = len(batch.messages)
+        print(json.dumps({"event": "queue_batch_received", "count": message_count}))
 
         runner = ScraperRunner(self.env)
         try:
@@ -223,12 +250,24 @@ class Default(WorkerEntrypoint):
                 body = message.body
                 store = body.get("store", "unknown")
                 max_products = body.get("max_products", 20)
+                attempts = getattr(message, "attempts", 1) or 1
                 try:
                     result = await runner.run_single_store(store, max_products)
-                    message.ack()
-                    print(json.dumps({"event": "queue_store_done", "store": store, "result": result}))
+                    if result.get("status") == "completed":
+                        message.ack()
+                        print(json.dumps({"event": "queue_store_done", "store": store, "result": result}))
+                    else:
+                        # Logical failure inside scraper — retry instead of acking.
+                        delay = min(30 * (2 ** max(0, attempts - 1)), 43200)
+                        message.retry(delaySeconds=delay)
+                        print(json.dumps({
+                            "event": "queue_store_failed",
+                            "store": store,
+                            "error": result.get("error", "unknown"),
+                            "retry_in": delay,
+                        }))
                 except Exception as e:
-                    delay = min(30 * (2 ** (message.attempts - 1)), 43200)
+                    delay = min(30 * (2 ** max(0, attempts - 1)), 43200)
                     message.retry(delaySeconds=delay)
                     print(json.dumps({"event": "queue_store_error", "store": store, "error": str(e), "retry_in": delay}))
         finally:

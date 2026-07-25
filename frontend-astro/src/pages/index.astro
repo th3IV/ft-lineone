@@ -1,5 +1,5 @@
 ---
-import Layout from "../../layouts/Layout.astro";
+import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout title="FT. THE LINE ONE - Fashion Tech Platform">
@@ -11,129 +11,79 @@ import Layout from "../../layouts/Layout.astro";
         <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-editorial-gold/10 rounded-full blur-3xl" />
         <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-editorial-gold-light/20 rounded-full blur-3xl" />
       </div>
-      
+
       <div class="relative z-10 container-main py-20">
         <div class="max-w-4xl mx-auto text-center">
-          <motion.p
-            class="editorial-label mb-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
+          <p class="editorial-label mb-6 animate-fade-up" style="animation-delay: 0ms">
             Fashion Tech Innovation
-          </motion.p>
-          
-          <motion.h1
-            class="section-title mb-8 max-w-3xl mx-auto"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-          >
+          </p>
+
+          <h1 class="section-title mb-8 max-w-3xl mx-auto animate-fade-up" style="animation-delay: 150ms">
             Prueba cualquier prenda <br /> con <span class="text-editorial-gold">Inteligencia Artificial</span>
-          </motion.h1>
-          
-          <motion.p
-            class="text-responsive-lg text-editorial-gray mb-12 max-w-2xl mx-auto"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-          >
-            Sube tu foto, elige cualquier prenda de nuestro catálogo y mídate virtualmente en segundos. 
+          </h1>
+
+          <p class="text-responsive-lg text-editorial-gray mb-12 max-w-2xl mx-auto animate-fade-up" style="animation-delay: 300ms">
+            Sube tu foto, elige cualquier prenda de nuestro catálogo y mídate virtualmente en segundos.
             Sin probadores, sin esperativas, solo tu estilo.
-          </motion.p>
-          
-          <motion.div
-            class="flex flex-col sm:flex-row gap-4 justify-center items-center"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.6 }}
-          >
+          </p>
+
+          <div class="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-up" style="animation-delay: 450ms">
             <a href="/virtual-try-on" class="btn-primary text-lg px-8 py-4">
               Probar VTON Gratis
             </a>
             <a href="/catalog" class="btn-secondary text-lg px-8 py-4">
               Ver Catálogo
             </a>
-          </motion.div>
+          </div>
         </div>
       </div>
-      
+
       <!-- Scroll indicator -->
-      <motion.div
-        class="absolute bottom-10 left-1/2 -translate-x-1/2"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.5, duration: 1 }}
-      >
+      <div class="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fade-up" style="animation-delay: 900ms">
         <svg class="w-6 h-6 text-editorial-gray animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
         </svg>
-      </motion.div>
+      </div>
     </section>
 
     <!-- Features Section -->
     <section class="py-24 bg-editorial-white">
       <div class="container-main">
-        <motion.div
-          class="text-center mb-16"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
+        <div class="text-center mb-16">
           <p class="editorial-label mb-3">Por qué elegirnos</p>
           <h2 class="section-title">Tecnología al servicio de tu estilo</h2>
-        </motion.div>
+        </div>
 
         <div class="grid md:grid-cols-3 gap-8">
-          {[
-            {
-              icon: (
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              ),
-              title: "Catálogo Unificado",
-              desc: "Accede a miles de prendas de Zara, Paris, Falabella, H&M, Maui, FashionPark y Ripley en un solo lugar."
-            },
-            {
-              icon: (
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-1M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              ),
-              title: "Asesor IA Personal",
-              desc: "Chatea con nuestro asesor de imagen inteligente. Recomendaciones personalizadas según tu cuerpo, colores y estilo."
-            },
-            {
-              icon: (
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              ),
-              title: "Pagos Seguros",
-              desc: "Suscripción Premium por CLP 4.990/mes con Transbank WebPay. Cancela cuando quieras, sin compromiso."
-            }
-          ].map((feature, i) => (
-            <motion.div
-              key={feature.title}
-              className="group p-8 bg-editorial-cream rounded-2xl border border-editorial-black/5 hover:border-editorial-gold/30 transition-all duration-300"
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: i * 0.1 }}
-            >
-              <div className="w-16 h-16 bg-editorial-gold/10 rounded-xl flex items-center justify-center text-editorial-gold mb-6 group-hover:scale-110 transition-transform duration-300">
-                {feature.icon}
-              </div>
-              <h3 className="font-display text-xl font-semibold text-editorial-black mb-3">
-                {feature.title}
-              </h3>
-              <p className="text-editorial-gray leading-relaxed">
-                {feature.desc}
-              </p>
-            </motion.div>
-          ))}
+          <div class="group p-8 bg-editorial-cream rounded-2xl border border-editorial-black/5 hover:border-editorial-gold/30 transition-all duration-300">
+            <div class="w-16 h-16 bg-editorial-gold/10 rounded-xl flex items-center justify-center text-editorial-gold mb-6 group-hover:scale-110 transition-transform duration-300">
+              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 class="font-display text-xl font-semibold text-editorial-black mb-3">Catálogo Unificado</h3>
+            <p class="text-editorial-gray leading-relaxed">Accede a miles de prendas de Zara, Paris, Falabella, H&amp;M, Maui, FashionPark y Ripley en un solo lugar.</p>
+          </div>
+
+          <div class="group p-8 bg-editorial-cream rounded-2xl border border-editorial-black/5 hover:border-editorial-gold/30 transition-all duration-300">
+            <div class="w-16 h-16 bg-editorial-gold/10 rounded-xl flex items-center justify-center text-editorial-gold mb-6 group-hover:scale-110 transition-transform duration-300">
+              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-1M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 class="font-display text-xl font-semibold text-editorial-black mb-3">Asesor IA Personal</h3>
+            <p class="text-editorial-gray leading-relaxed">Chatea con nuestro asesor de imagen inteligente. Recomendaciones personalizadas según tu cuerpo, colores y estilo.</p>
+          </div>
+
+          <div class="group p-8 bg-editorial-cream rounded-2xl border border-editorial-black/5 hover:border-editorial-gold/30 transition-all duration-300">
+            <div class="w-16 h-16 bg-editorial-gold/10 rounded-xl flex items-center justify-center text-editorial-gold mb-6 group-hover:scale-110 transition-transform duration-300">
+              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 class="font-display text-xl semibold text-editorial-black mb-3 font-semibold">Pagos Seguros</h3>
+            <p class="text-editorial-gray leading-relaxed">Suscripción Premium por CLP 4.990/mes con Transbank WebPay. Cancela cuando quieras, sin compromiso.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -141,43 +91,33 @@ import Layout from "../../layouts/Layout.astro";
     <!-- CTA Section -->
     <section class="py-24 bg-editorial-black">
       <div class="container-main text-center">
-        <motion.h2
-          className="text-4xl md:text-5xl font-display font-semibold text-editorial-white mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
+        <h2 class="text-4xl md:text-5xl font-display font-semibold text-editorial-white mb-6">
           ¿Listo para transformar tu experiencia de compra?
-        </motion.h2>
-        <motion.p
-          className="text-editorial-gray-light text-lg mb-10 max-w-2xl mx-auto"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.2 }}
-        >
-          Únete a miles de usuarios que ya prueban su estilo con IA. 
+        </h2>
+        <p class="text-editorial-gray-light text-lg mb-10 max-w-2xl mx-auto">
+          Únete a miles de usuarios que ya prueban su estilo con IA.
           Empieza gratis hoy.
-        </motion.p>
-        <motion.div
-          className="flex flex-col sm:flex-row gap-4 justify-center"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.4 }}
-        >
-          <a href="/virtual-try-on" className="btn-primary text-lg px-8 py-4">
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a href="/virtual-try-on" class="btn-primary text-lg px-8 py-4">
             Empezar Ahora - Gratis
           </a>
-          <a href="/catalog" className="btn-secondary text-lg px-8 py-4 border-editorial-white text-editorial-white hover:bg-editorial-white hover:text-editorial-black">
+          <a href="/catalog" class="btn-secondary text-lg px-8 py-4 border-editorial-white text-editorial-white hover:bg-editorial-white hover:text-editorial-black">
             Ver Catálogo
           </a>
-        </motion.div>
+        </div>
       </div>
     </section>
   </div>
 </Layout>
 
-<script>
-  import { motion } from "framer-motion";
-</script>
+<style>
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-up {
+    opacity: 0;
+    animation: fade-up 0.7s ease-out forwards;
+  }
+</style>

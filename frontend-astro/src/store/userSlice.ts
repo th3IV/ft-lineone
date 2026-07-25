@@ -1,4 +1,11 @@
-import { configureStore, createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice } from "@reduxjs/toolkit";
+import type { PayloadAction } from "@reduxjs/toolkit";
+
+const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
+
+function lsGet(key: string): string | null {
+  return isBrowser ? localStorage.getItem(key) : null;
+}
 
 interface UserState {
   user: {
@@ -12,6 +19,12 @@ interface UserState {
     profile_image?: string;
     age?: number;
     created_at: string;
+    daily_usage?: {
+      vton: number;
+      llm: number;
+      limit: number;
+      plan_type: string;
+    };
   } | null;
   token: string | null;
   refresh_token: string | null;
@@ -21,9 +34,9 @@ interface UserState {
 
 const initialState: UserState = {
   user: null,
-  token: localStorage.getItem("token"),
-  refresh_token: localStorage.getItem("refresh_token"),
-  isAuthenticated: !!localStorage.getItem("token"),
+  token: lsGet("token"),
+  refresh_token: lsGet("refresh_token"),
+  isAuthenticated: !!lsGet("token"),
   profileStatus: "idle",
 };
 

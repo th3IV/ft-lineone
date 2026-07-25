@@ -1,5 +1,5 @@
 ---
-import Layout from "../../layouts/Layout.astro";
+import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout title="Mi Perfil - FT. THE LINE ONE">
@@ -297,6 +297,8 @@ import Layout from "../../layouts/Layout.astro";
 </Layout>
 
 <script>
+  const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://api.thelineone.com/api/v1';
+
   // Tab switching
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -331,7 +333,7 @@ import Layout from "../../layouts/Layout.astro";
         return;
       }
 
-      const response = await fetch('/api/v1/users/me', {
+      const response = await fetch(`${API_BASE}/users/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -389,25 +391,26 @@ import Layout from "../../layouts/Layout.astro";
             }
           });
         }
-      }
 
-      // Load usage
-      const today = new Date().toISOString().split('T')[0];
-      const usageResponse = await fetch(`/api/v1/users/me/usage?date=${today}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (usageResponse.ok) {
-        const usage = await usageResponse.json();
-        document.getElementById('usage-vton').textContent = `${usage.vton_count || 0}/5`;
-        document.getElementById('usage-llm').textContent = `${usage.llm_count || 0}/5`;
+        // Load usage (only when profile loaded successfully)
+        const today = new Date().toISOString().split('T')[0];
+        const usageResponse = await fetch(`${API_BASE}/users/me/usage?date=${today}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (usageResponse.ok) {
+          const usage = await usageResponse.json();
+          const limitLabel = usage.limit === -1 ? '∞' : usage.limit;
+          document.getElementById('usage-vton').textContent = `${usage.vton || 0}/${limitLabel}`;
+          document.getElementById('usage-llm').textContent = `${usage.llm || 0}/${limitLabel}`;
+        }
+      } else if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/login';
       }
-    } else if (response.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('refresh_token');
-      window.location.href = '/login';
+    } catch (error) {
+      console.error('Error loading profile:', error);
     }
-  } catch (error) {
-    console.error('Error loading profile:', error);
   }
 
   loadProfile();
@@ -447,7 +450,7 @@ import Layout from "../../layouts/Layout.astro";
     };
 
     try {
-      const response = await fetch('/api/v1/users/profile', {
+      const response = await fetch(`${API_BASE}/users/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -478,7 +481,7 @@ import Layout from "../../layouts/Layout.astro";
     };
 
     try {
-      const response = await fetch('/api/v1/users/measurements', {
+      const response = await fetch(`${API_BASE}/users/measurements`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -504,7 +507,7 @@ import Layout from "../../layouts/Layout.astro";
     const occasions = Array.from(document.querySelectorAll('.occasion-tag.bg-editorial-gold')).map(t => t.textContent.trim());
 
     try {
-      const response = await fetch('/api/v1/users/preferences', {
+      const response = await fetch(`${API_BASE}/users/preferences`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -525,7 +528,7 @@ import Layout from "../../layouts/Layout.astro";
   // Upgrade button
   document.getElementById('btn-upgrade')?.addEventListener('click', async () => {
     try {
-      const response = await fetch('/api/v1/payments/create', {
+      const response = await fetch(`${API_BASE}/payments/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

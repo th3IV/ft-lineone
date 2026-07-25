@@ -29,7 +29,7 @@ export function useFeatureGate(): UseFeatureGateReturn {
   const canUseVton = isPremium || vtonUsed < 5;
 
   const showUpgradeModalFn = useCallback(() => {
-    dispatch(openUpgradeModal(null));
+    dispatch(openUpgradeModal());
   }, [dispatch]);
 
   const hideUpgradeModalFn = useCallback(() => {
@@ -41,8 +41,8 @@ export function useFeatureGate(): UseFeatureGateReturn {
     setUpgradeLoading(true);
     setUpgradeError(null);
     try {
-      // TODO: integrate with Transbank payment flow
-      window.location.href = "/pricing";
+      // Redirect to profile subscription tab (payment flow lives there)
+      window.location.href = "/profile#subscription";
     } catch (err: any) {
       setUpgradeError(err.message || "Error al procesar el pago");
     } finally {

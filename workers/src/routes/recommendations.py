@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from models.product import ProductResponse
 from services.llm import LLMService
 from services.config import LLM_DAILY_LIMIT_FREE
+from services.catalog_rag import CatalogRAG
 from middleware.security import require_auth, optional_auth
 from services.llm import CHAT_SYSTEM_PROMPT
 
@@ -262,7 +263,8 @@ async def style_chat(
             rag_filters["max_price"] = user_obj.preferences["max_price"]
 
     # Semantic search via RAG
-    rag_results = await db.get_rag_products(query=body.question, top_k=10, filters=rag_filters)
+    _rag = CatalogRAG(request.app.state.env)
+    rag_results = await _rag.search(query=body.question, top_k=10, filters=rag_filters or None)
 
     # Build product list for LLM
     rag_products = []
@@ -522,7 +524,8 @@ async def style_chat_stream(
             rag_filters["max_price"] = user_obj.preferences["max_price"]
 
     # Semantic search via RAG
-    rag_results = await db.get_rag_products(query=body.question, top_k=10, filters=rag_filters)
+    _rag = CatalogRAG(request.app.state.env)
+    rag_results = await _rag.search(query=body.question, top_k=10, filters=rag_filters or None)
 
     # Build product list for LLM
     rag_products = []

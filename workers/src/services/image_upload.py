@@ -179,7 +179,9 @@ async def upload_user_photo(base64_data: str, filename: str = "photo.jpg", api_k
     if env and hasattr(env, "R2"):
         try:
             import base64 as _b64
-            key = f"vton/uploads/{filename}"
+            import uuid as _uuid
+            # Unique key per upload — a fixed filename overwrites other users' photos
+            key = f"vton/uploads/{_uuid.uuid4().hex}-{filename}"
             image_bytes = _b64.b64decode(base64_data)
             content_type = "image/jpeg"
             if filename.endswith(".png"):
@@ -246,7 +248,8 @@ async def upload_garment_image(image_url: str, api_key: str = "", env=None) -> s
             # Try R2 first if available
             if env and hasattr(env, "R2"):
                 try:
-                    key = f"vton/garments/garment_{int(time.time())}.jpg"
+                    import uuid as _uuid
+                    key = f"vton/garments/garment_{int(time.time())}_{_uuid.uuid4().hex[:12]}.jpg"
                     await env.R2.put(key, py_bytes, to_js({"httpMetadata": {"contentType": "image/jpeg"}}))
                     r2_url = f"https://pub-ae92531aa2144de7aad7a3510e7b31ff.r2.dev/{key}"
                     print(json.dumps({"event": "garment_upload_r2_ok", "key": key}))

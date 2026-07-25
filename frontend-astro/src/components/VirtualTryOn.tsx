@@ -9,9 +9,12 @@ import { UpgradeModal } from "./UpgradeModal";
 import { useVtonPolling } from "@/hooks/useVtonPolling";
 import { useFeatureGate } from "@/hooks/useFeatureGate";
 import { useSelector, useDispatch } from "react-redux";
-import { RootState, AppDispatch } from "@/store";
+import type { RootState, AppDispatch } from "@/store";
 import { setUnauthorizedCallback } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 import { addToast } from "@/store/uiSlice";
+import { setUser } from "@/store/userSlice";
+import { fetchProducts } from "@/store/productSlice";
 
 interface VirtualTryOnProps {
   productId?: string;
@@ -37,6 +40,24 @@ export const VirtualTryOn = ({ productId, initialProduct }: VirtualTryOnProps) =
       dispatch({ type: "user/logout" });
     });
   }, [dispatch]);
+
+  // Load user profile (daily_usage, premium) — login page only stores tokens
+  useEffect(() => {
+    let cancelled = false;
+    if (isAuthenticated && !user) {
+      getCurrentUser()
+        .then((u) => { if (!cancelled) dispatch(setUser(u)); })
+        .catch(() => { /* token may be expired — interceptor handles 401 */ });
+    }
+    return () => { cancelled = true; };
+  }, [isAuthenticated, user, dispatch]);
+
+  // Load catalog products for the selector
+  useEffect(() => {
+    if (products.length === 0) {
+      dispatch(fetchProducts({ page: 1, limit: 100, filters: {} }));
+    }
+  }, [products.length, dispatch]);
 
   useEffect(() => {
     const saved = localStorage.getItem("tryOnHistory");
@@ -123,7 +144,7 @@ export const VirtualTryOn = ({ productId, initialProduct }: VirtualTryOnProps) =
     } catch (err: any) {
       setError(err.response?.data?.detail || "Error al generar la prueba virtual");
     }
-  }, [userImage, selectedProductId, isAuthenticated, isPremium, user, products, generate]);
+  };
 
   const loadFromHistory = (entry: typeof history[0]) => {
     setSelectedProductId(entry.productId);
@@ -187,13 +208,13 @@ export const VirtualTryOn = ({ productId, initialProduct }: VirtualTryOnProps) =
         </select>
       </motion.div>
 
-      {error && (
+      {(error || vtonError) && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm"
         >
-          {error}
+          {error || vtonError}
         </motion.div>
       )}
 

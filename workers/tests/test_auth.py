@@ -17,6 +17,12 @@ from services.auth import (
     _b64url_encode,
     _b64url_decode,
 )
+import services.auth as _auth_module
+
+# These tests cover the HS256 fallback semantics (production mode per wrangler
+# vars). Pin the crypto path so results don't depend on whether the local
+# interpreter happens to have `cryptography` installed.
+_auth_module.CRYPTOGRAPHY_AVAILABLE = False
 
 
 def _mock_env():

@@ -80,7 +80,7 @@ export const Modal = ({
           </div>
         </motion.div>
       </motion.div>
-    </>
+    </AnimatePresence>
   );
 };
 
@@ -167,7 +167,7 @@ export const ConfirmDialog = ({
           </div>
         </motion.div>
       </motion.div>
-    </>
+    </AnimatePresence>
   );
 };
 

@@ -1,0 +1,111 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout title="Confirmando pago - FT. THE LINE ONE">
+  <div class="min-h-screen bg-editorial-cream flex items-center justify-center py-12 px-4">
+    <div class="w-full max-w-md">
+      <div class="bg-editorial-white rounded-2xl border border-editorial-cream-dark p-8 text-center">
+        <div id="status-pending">
+          <div class="loader mx-auto mb-4"></div>
+          <h1 class="font-display text-2xl font-semibold text-editorial-black mb-2">
+            Confirmando tu pago
+          </h1>
+          <p class="text-editorial-gray text-sm">
+            Estamos verificando la transacción con Transbank...
+          </p>
+        </div>
+
+        <div id="status-success" class="hidden">
+          <div class="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 class="font-display text-2xl font-semibold text-editorial-black mb-2">
+            ¡Bienvenido a Premium!
+          </h1>
+          <p class="text-editorial-gray text-sm mb-6">
+            Tu suscripción está activa. Ya tienes VTON e IA ilimitados.
+          </p>
+          <a href="/virtual-try-on" class="btn-primary w-full inline-block py-3">
+            Empezar a usar Premium
+          </a>
+        </div>
+
+        <div id="status-error" class="hidden">
+          <div class="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h1 class="font-display text-2xl font-semibold text-editorial-black mb-2">
+            No pudimos confirmar el pago
+          </h1>
+          <p class="text-editorial-gray text-sm mb-2" id="error-detail">
+            La transacción fue rechazada o cancelada.
+          </p>
+          <p class="text-editorial-gray-light text-xs mb-6">
+            Si el dinero fue descontado, contáctanos y lo revisamos de inmediato.
+          </p>
+          <a href="/profile" class="btn-secondary w-full inline-block py-3">
+            Volver a mi perfil
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://api.thelineone.com/api/v1';
+
+  function show(id: string) {
+    ['status-pending', 'status-success', 'status-error'].forEach((s) => {
+      document.getElementById(s)?.classList.toggle('hidden', s !== id);
+    });
+  }
+
+  async function confirmPayment() {
+    const params = new URLSearchParams(window.location.search);
+    // Transbank returns token_ws on success, TBK_TOKEN on aborted payment
+    const token = params.get('token_ws') || params.get('TBK_TOKEN') || params.get('token');
+
+    if (!token) {
+      const detail = document.getElementById('error-detail');
+      if (detail) detail.textContent = 'No se recibió un token de pago. La transacción pudo haber sido cancelada.';
+      show('status-error');
+      return;
+    }
+
+    const authToken = localStorage.getItem('token');
+    if (!authToken) {
+      window.location.href = '/login';
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/payments/confirm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ token }),
+      });
+      const result = await response.json();
+
+      if (response.ok && result.status === 'success') {
+        show('status-success');
+      } else {
+        const detail = document.getElementById('error-detail');
+        if (detail && result.detail) detail.textContent = String(result.detail).slice(0, 200);
+        show('status-error');
+      }
+    } catch {
+      show('status-error');
+    }
+  }
+
+  confirmPayment();
+</script>

@@ -62,9 +62,12 @@
       }
     ]
   },
-  "migrations": {
-    "new_sqlite_classes": ["ScraperWorkerEntrypoint"]
-  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ScraperWorkerEntrypoint"]
+    }
+  ],
   "kv_namespaces": [
     {
       "binding": "PREMIUM_KV",
