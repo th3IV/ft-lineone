@@ -1,15 +1,17 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, X, RotateCcw, Download, Heart, Share2 } from "lucide-react";
-import { Button } from "./Button";
-import { Modal } from "./Modal";
-import { Toast } from "./Modal";
+import { Button } from "./ui/Button";
+import { Modal } from "./ui/Modal";
+import { Toast } from "./ui/Modal";
+import { VirtualMirror } from "./VirtualMirror";
+import { UpgradeModal } from "./UpgradeModal";
 import { useVtonPolling } from "@/hooks/useVtonPolling";
 import { useFeatureGate } from "@/hooks/useFeatureGate";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "@/store";
 import { setUnauthorizedCallback } from "@/lib/api";
-import { addToast } from "@/store/slices/uiSlice";
+import { addToast } from "@/store/uiSlice";
 
 interface VirtualTryOnProps {
   productId?: string;
@@ -19,7 +21,7 @@ interface VirtualTryOnProps {
 export const VirtualTryOn = ({ productId, initialProduct }: VirtualTryOnProps) => {
   const dispatch = useDispatch<AppDispatch>();
   const { user, isAuthenticated } = useSelector((state: RootState) => state.user);
-  const { products } = useSelector((state: RootState) => state.products);
+  const { items: products } = useSelector((state: RootState) => state.products);
   const { isPremium, showUpgrade, showUpgradeModal, hideUpgradeModal, handleUpgrade, upgradeLoading, upgradeError } = useFeatureGate();
   
   const [selectedProductId, setSelectedProductId] = useState(productId || "");
@@ -237,7 +239,7 @@ export const VirtualTryOn = ({ productId, initialProduct }: VirtualTryOnProps) =
       )}
 
       <UpgradeModal
-        isOpen={showUpgradeModal}
+        isOpen={showUpgrade}
         onClose={hideUpgradeModal}
         onUpgrade={handleUpgrade}
         loading={upgradeLoading}

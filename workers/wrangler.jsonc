@@ -2,7 +2,7 @@
   "name": "ft-lineone-api",
   "main": "src/entry.py",
   "compatibility_date": "2026-07-01",
-  "compatibility_flags": ["python_workers", "disable_python_no_global_handlers"],
+  "compatibility_flags": ["python_workers", "disable_python_no_global_handlers", "disable_python_external_sdk"],
   "account_id": "b17c769bfd01fc782de6bf33b946ee82",
   "observability": {
     "enabled": true,
@@ -38,28 +38,37 @@
       "index_name": "ft-lineone-catalog"
     }
   ],
-  "queues": [
-    {
-      "binding": "SCRAPER_QUEUE",
-      "queue_name": "scraper-jobs",
-      "max_batch_size": 1,
-      "max_batch_timeout": 30,
-      "max_retries": 3,
-      "dead_letter_queue": "scraper-dlq"
-    }
-  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "SCRAPER_QUEUE",
+        "queue": "scraper-jobs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "scraper-jobs",
+        "max_retries": 3,
+        "max_batch_size": 10,
+        "max_batch_timeout": 60
+      }
+    ]
+  },
   "durable_objects": {
     "bindings": [
       {
         "name": "SCRAPER_WORKER",
-        "class_name": "ScraperWorker"
+        "class_name": "ScraperWorkerEntrypoint"
       }
     ]
+  },
+  "migrations": {
+    "new_sqlite_classes": ["ScraperWorkerEntrypoint"]
   },
   "kv_namespaces": [
     {
       "binding": "PREMIUM_KV",
-      "id": "ft-lineone-premium"
+      "id": "03679d1b73e54ccd848781246c6b7b2d"
     }
   ],
   "vars": {
@@ -71,8 +80,5 @@
     "TRANSBANK_BASE_URL": "https://webpay3gint.transbank.cl",
     "TRANSBANK_RETURN_URL": "https://thelineone.com/payment/success",
     "ADMIN_EMAILS": "godismelife09@gmail.com"
-  },
-  "triggers": {
-    "crons": ["*/45 * * * *"]
   }
 }

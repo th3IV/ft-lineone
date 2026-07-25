@@ -11,7 +11,7 @@ import ast
 import json
 import random
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from services.catalog_rag import CatalogRAG
 from services.model_router import ModelRouter, TaskType

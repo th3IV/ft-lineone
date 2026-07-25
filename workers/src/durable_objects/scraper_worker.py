@@ -4,6 +4,7 @@ import json
 import asyncio
 from datetime import datetime, timezone
 
+from workers import DurableObject, Response
 from services.database import DatabaseService
 from services.config import MIN_PRODUCTS_SCRAPED_BEFORE_CLEANUP, MIN_SCRAPE_COVERAGE_RATIO, STALE_PRODUCT_THRESHOLD_HOURS
 from scrapers.scheduler import ScraperRunner
@@ -141,11 +142,12 @@ class ScraperWorker:
             return {"store": store, "status": "failed", "error": str(e)}
 
 
-class ScraperWorkerEntrypoint:
+class ScraperWorkerEntrypoint(DurableObject):
     """Cloudflare Workers Python entry point for the ScraperWorker DO."""
 
-    def __init__(self, env, state):
-        self.worker = ScraperWorker(env, state)
+    def __init__(self, ctx, env):
+        super().__init__(ctx, env)
+        self.worker = ScraperWorker(env, ctx)
 
     async def fetch(self, request):
         return await self.worker.fetch(request)

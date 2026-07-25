@@ -399,14 +399,12 @@ class ScraperRunner:
             await scraper.close()
 
     async def run_single_store(self, store_name: str, max_products: int = 30) -> dict:
-        """Run a single store scraper - used by Durable Object queue consumer."""
+        """Run a single store scraper."""
         if store_name not in self.scrapers:
             return {"status": "error", "error": f"Unknown store: {store_name}"}
-        
-        # Create a new runner with custom max_products
-        runner = ScraperRunner(self.env, max_products=max_products)
+        original = self.max_products
+        self.max_products = max_products
         try:
-            result = await runner._run_scraper(store_name, runner.scrapers[store_name])
-            return result
+            return await self._run_scraper(store_name, self.scrapers[store_name])
         finally:
-            await runner.close()
+            self.max_products = original

@@ -11,7 +11,6 @@ Key: Do NOT fetch the HTML pages (Akamai bot detection). Only use ?ajax=true.
 
 import json
 import traceback
-import httpx
 from typing import Optional
 from dataclasses import dataclass, field
 
@@ -91,21 +90,27 @@ class ZaraScraper:
     PRODUCTS_URL = "https://www.zara.com/cl/es/category/{cat_id}/products?ajax=true"
 
     def __init__(self):
-        self.client = httpx.AsyncClient(
-            timeout=30.0,
-            follow_redirects=True,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "es-CL,es;q=0.9,en;q=0.8",
-            },
-        )
+        self._client = None
+
+    async def _get_client(self):
+        if self._client is None:
+            import httpx
+            self._client = httpx.AsyncClient(
+                timeout=30.0,
+                follow_redirects=True,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": "es-CL,es;q=0.9,en;q=0.8",
+                },
+            )
+        return self._client
 
     async def get_products_for_category(self, cat_id: int) -> list[dict]:
         """Fetch products for a specific internal category ID via ?ajax=true."""
         url = self.PRODUCTS_URL.format(cat_id=cat_id)
         try:
-            resp = await self.client.get(url)
+            resp = await (await self._get_client()).get(url)
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("productGroups", [])
@@ -291,4 +296,4 @@ class ZaraScraper:
 
     async def close(self):
         """Close the HTTP client."""
-        await self.client.aclose()
+        await (await self._get_client()).aclose()

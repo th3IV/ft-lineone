@@ -488,14 +488,7 @@ async def get_upload_url(
         raise HTTPException(status_code=500, detail=f"Failed to generate upload URL: {safe_error_message(e, request)}")
 
 
-@router.get("/result/{vton_id}")
-async def get_result(
-    vton_id: str,
-    request: Request,
-    user=Depends(require_auth),
-):
-    """Get VTON result (legacy endpoint, redirects to /status)."""
-    return await get_vton_status(vton_id, request, user)
+@router.post("/prefetch")
 async def prefetch_image(
     request_body: dict,
     request: Request,
@@ -597,9 +590,9 @@ async def debug_garment(
             garment_category="auto",
         )
 
-        # Poll immediately to check if task was rejected
-        import asyncio
-        await asyncio.sleep(2)
+        # Poll immediately to check if task was rejected (using sync sleep via workers module)
+        import time as _poll_time
+        _poll_time.sleep(2)
         result = await youcam.poll_task(task_id)
 
         return {

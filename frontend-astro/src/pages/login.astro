@@ -92,7 +92,8 @@ import Layout from "../../layouts/Layout.astro";
     const data = Object.fromEntries(formData);
 
     try {
-      const response = await fetch('/api/v1/auth/login', {
+      const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://api.thelineone.com/api/v1';
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

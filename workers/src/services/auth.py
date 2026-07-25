@@ -27,9 +27,6 @@ try:
     CRYPTOGRAPHY_AVAILABLE = True
 except ImportError:
     CRYPTOGRAPHY_AVAILABLE = False
-    # Fallback to HS256 if cryptography not available
-    import hmac
-    import hashlib
 
 
 class TokenData(BaseModel):
@@ -39,8 +36,8 @@ class TokenData(BaseModel):
 
 
 # Module-level cache for Ed25519 keys (safe in Workers — each request gets a fresh process)
-_private_key_cache: Optional[ed25519.Ed25519PrivateKey] = None
-_public_key_cache: Optional[ed25519.Ed25519PublicKey] = None
+_private_key_cache = None
+_public_key_cache = None
 
 
 def get_ed25519_keys(env=None):
@@ -58,7 +55,7 @@ def get_ed25519_keys(env=None):
     public_key = None
     
     # Try Workers env binding first (production)
-    if env:
+    if env and CRYPTOGRAPHY_AVAILABLE:
         private_key_b64 = getattr(env, "JWT_PRIVATE_KEY", None)
         public_key_b64 = getattr(env, "JWT_PUBLIC_KEY", None)
         if private_key_b64 and public_key_b64:
@@ -66,7 +63,7 @@ def get_ed25519_keys(env=None):
             public_key = ed25519.Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key_b64))
     
     # Fallback to os.getenv (local dev with .dev.vars)
-    if not private_key:
+    if not private_key and CRYPTOGRAPHY_AVAILABLE:
         private_key_b64 = os.getenv("JWT_PRIVATE_KEY")
         public_key_b64 = os.getenv("JWT_PUBLIC_KEY")
         if private_key_b64 and public_key_b64:
@@ -103,13 +100,13 @@ def _b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s)
 
 
-def _sign_eddsa(payload: bytes, private_key: ed25519.Ed25519PrivateKey) -> str:
+def _sign_eddsa(payload: bytes, private_key) -> str:
     """Sign payload with Ed25519 private key."""
     signature = private_key.sign(payload)
     return _b64url_encode(signature)
 
 
-def _verify_eddsa(payload: bytes, signature_b64: str, public_key: ed25519.Ed25519PublicKey) -> bool:
+def _verify_eddsa(payload: bytes, signature_b64: str, public_key) -> bool:
     """Verify Ed25519 signature."""
     try:
         signature = _b64url_decode(signature_b64)

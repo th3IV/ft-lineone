@@ -174,7 +174,7 @@ async def generate_presigned_upload_url(env, key: str, content_type: str = "imag
     k_date = hmac.new(("AWS4" + secret_key).encode(), date.encode(), hashlib.sha256).digest()
     k_region = hmac.new(k_date, region.encode(), hashlib.sha256).digest()
     k_service = hmac.new(k_region, service.encode(), hashlib.sha256).digest()
-    k_signing = hmac.new(k_signing, credential_scope.encode(), hashlib.sha256).digest()
+    k_signing = hmac.new(k_service, credential_scope.encode(), hashlib.sha256).digest()
     
     signature = hmac.new(k_signing, string_to_sign.encode(), hashlib.sha256).hexdigest()
     

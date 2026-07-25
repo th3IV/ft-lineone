@@ -1,5 +1,7 @@
 """Recommendation routes."""
 
+import json
+import random
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, Depends
 from typing import Optional
@@ -9,6 +11,7 @@ from models.product import ProductResponse
 from services.llm import LLMService
 from services.config import LLM_DAILY_LIMIT_FREE
 from middleware.security import require_auth, optional_auth
+from services.llm import CHAT_SYSTEM_PROMPT
 
 router = APIRouter()
 
@@ -187,6 +190,7 @@ async def style_chat(
     # Build user context from preferences if authenticated
     user_context = ""
     if user and user_obj:
+        parts = []
         if user_obj.preferences:
             styles = user_obj.preferences.get("styles", [])
             colors = user_obj.preferences.get("colors", [])
@@ -241,149 +245,6 @@ async def style_chat(
         }
         for p in products
     ]
-
-    product_name = "unknown product"
-    product_category = "unknown"
-
-    if body.product_id:
-        product = await db.get_product(body.product_id)
-        if product:
-            product_name = product.name
-            product_category = product.category
-
-    # Build user context from preferences if authenticated
-    user_context = ""
-    if user and user_obj:
-        if user_obj.preferences:
-            styles = user_obj.preferences.get("styles", [])
-            colors = user_obj.preferences.get("colors", [])
-            occasions = user_obj.preferences.get("occasions", [])
-            sizes = user_obj.preferences.get("sizes", {})
-            if styles:
-                parts.append(f"estilos={styles}")
-            if colors:
-                parts.append(f"colores favoritos={colors}")
-            if occasions:
-                parts.append(f"ocasiones={occasions}")
-            if sizes:
-                parts.append(f"tallas preferidas={sizes}")
-        if user_obj.body_measurements:
-            m = user_obj.body_measurements
-            gender = m.get("gender", "")
-            height = m.get("height", "")
-            weight = m.get("weight", "")
-            chest = m.get("chest", "")
-            waist = m.get("waist", "")
-            hips = m.get("hips", "")
-            body_shape = m.get("bodyShape", "")
-            if gender:
-                parts.append(f"genero={gender}")
-            if height:
-                parts.append(f"altura={height}cm")
-            if weight:
-                parts.append(f"peso={weight}kg")
-            if chest:
-                parts.append(f"busto={chest}cm")
-            if waist:
-                parts.append(f"cintura={waist}cm")
-            if hips:
-                parts.append(f"caderas={hips}cm")
-            if body_shape:
-                parts.append(f"forma del cuerpo={body_shape}")
-        if user_obj.age:
-            parts.append(f"edad={user_obj.age}")
-        if parts:
-            user_context = f"\nDatos completos del usuario: {', '.join(parts)}"
-
-    products, _ = await db.get_products({}, page=1, limit=50)
-
-    products_dict = [
-        {
-            "id": p.id,
-            "name": p.name,
-            "store": p.store,
-            "price": p.price,
-            "category": p.category,
-            "colors": p.colors or [],
-        }
-        for p in products
-    ]
-
-    product_name = "unknown product"
-    product_category = "unknown"
-
-    if body.product_id:
-        product = await db.get_product(body.product_id)
-        if product:
-            product_name = product.name
-            product_category = product.category
-
-    # Build user context from preferences if authenticated
-    user_context = ""
-    if user and user_obj:
-        if user_obj.preferences:
-            styles = user_obj.preferences.get("styles", [])
-            colors = user_obj.preferences.get("colors", [])
-            occasions = user_obj.preferences.get("occasions", [])
-            sizes = user_obj.preferences.get("sizes", {})
-            if styles:
-                parts.append(f"estilos={styles}")
-            if colors:
-                parts.append(f"colores favoritos={colors}")
-            if occasions:
-                parts.append(f"ocasiones={occasions}")
-            if sizes:
-                parts.append(f"tallas preferidas={sizes}")
-        if user_obj.body_measurements:
-            m = user_obj.body_measurements
-            gender = m.get("gender", "")
-            height = m.get("height", "")
-            weight = m.get("weight", "")
-            chest = m.get("chest", "")
-            waist = m.get("waist", "")
-            hips = m.get("hips", "")
-            body_shape = m.get("bodyShape", "")
-            if gender:
-                parts.append(f"genero={gender}")
-            if height:
-                parts.append(f"altura={height}cm")
-            if weight:
-                parts.append(f"peso={weight}kg")
-            if chest:
-                parts.append(f"busto={chest}cm")
-            if waist:
-                parts.append(f"cintura={waist}cm")
-            if hips:
-                parts.append(f"caderas={hips}cm")
-            if body_shape:
-                parts.append(f"forma del cuerpo={body_shape}")
-        if user_obj.age:
-            parts.append(f"edad={user_obj.age}")
-        if parts:
-            user_context = f"\nDatos completos del usuario: {', '.join(parts)}"
-
-    products, _ = await db.get_products({}, page=1, limit=50)
-
-    products_dict = [
-        {
-            "id": p.id,
-            "name": p.name,
-            "store": p.store,
-            "price": p.price,
-            "category": p.category,
-            "colors": p.colors or [],
-        }
-        for p in products
-    ]
-
-    product_name = "unknown product"
-    product_category = "unknown"
-
-    if body.product_id:
-        product = await db.get_product(body.product_id)
-        if product:
-            product_name = product.name
-            product_category = product.category
 
     # Build RAG query
     query = f"{product_name} {product_category} {body.question}"
@@ -459,8 +320,6 @@ async def style_chat(
         "Responde SOLO texto natural, sin JSON ni formato especial."
     )
 
-    import json as _json
-
     model = "@cf/meta/llama-4-scout-17b-16e-instruct"
     messages = [
         {"role": "system", "content": CHAT_SYSTEM_PROMPT},
@@ -481,7 +340,7 @@ async def style_chat(
             }
         ]
 
-    print(_json.dumps({
+    print(json.dumps({
         "event": "llm_request",
         "method": "style_chat",
         "model": model,
@@ -489,7 +348,7 @@ async def style_chat(
         "has_image": bool(body.image)
     }))
 
-    result = await llm_service.get_style_advice_with_products(
+    advice, product_recs = await llm_service.get_style_advice_with_products(
         product_name=product_name,
         product_category=product_category,
         user_question=body.question,
@@ -498,6 +357,8 @@ async def style_chat(
         user_id=user.user_id if user else None,
         image_base64=body.image,
     )
+
+    product_lookup = {p.id: p for p in products}
 
     recommended_products = []
     seen_ids = set()
@@ -589,6 +450,7 @@ async def style_chat_stream(
     # Build user context from preferences if authenticated
     user_context = ""
     if user and user_obj:
+        parts = []
         if user_obj.preferences:
             styles = user_obj.preferences.get("styles", [])
             colors = user_obj.preferences.get("colors", [])
@@ -643,14 +505,6 @@ async def style_chat_stream(
         }
         for p in products
     ]
-
-    product_name = "unknown product"
-    product_category = "unknown"
-    if body.product_id:
-        product = await db.get_product(body.product_id)
-        if product:
-            product_name = product.name
-            product_category = product.category
 
     # Build RAG query
     query = f"{product_name} {product_category} {body.question}"
@@ -726,8 +580,6 @@ async def style_chat_stream(
         "Responde SOLO texto natural, sin JSON ni formato especial."
     )
 
-    import json as _json
-
     model = "@cf/meta/llama-4-scout-17b-16e-instruct"
     messages = [
         {"role": "system", "content": CHAT_SYSTEM_PROMPT},
@@ -748,7 +600,7 @@ async def style_chat_stream(
             }
         ]
 
-    print(_json.dumps({
+    print(json.dumps({
         "event": "llm_request",
         "method": "style_chat_stream",
         "model": model,
@@ -774,18 +626,18 @@ async def style_chat_stream(
             ):
                 # Parse chunk for content
                 if isinstance(chunk, dict) and "content" in chunk:
-                    yield f"data: {json.dumps({'content': chunk['content'])}\n\n"
+                    payload = json.dumps({"content": chunk["content"]})
+                    yield f"data: {payload}\n\n"
                 elif isinstance(chunk, str):
-                    yield f"data: {json.dumps({'content': chunk})}\n\n"
+                    payload = json.dumps({"content": chunk})
+                    yield f"data: {payload}\n\n"
         except Exception as e:
             import traceback
             traceback.print_exc()
-            yield f"data: {json.dumps({'content': f'Error: {str(e)}'})}\n\n"
+            error_payload = json.dumps({"content": str(e)})
+            yield f"data: {error_payload}\n\n"
 
         yield "data: [DONE]\n\n"
 
     from fastapi.responses import StreamingResponse
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
-@router.post("/chat")

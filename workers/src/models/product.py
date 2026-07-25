@@ -33,7 +33,7 @@ class ProductResponse(ProductBase):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class ProductListResponse(BaseModel):
