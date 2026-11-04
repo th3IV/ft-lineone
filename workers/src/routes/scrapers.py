@@ -101,12 +101,38 @@ async def health_check():
     return {"status": "healthy", "service": "scrapers"}
 
 
+@router.get("/status")
+async def get_scrapers_status(request: Request, stale_threshold_hours: int = 5):
+    """Get the latest scraping status, runs, and catalog freshness per store."""
+    db = get_db(request)
+    try:
+        status_data = await db.get_scrape_status(stale_threshold_hours=stale_threshold_hours)
+        return status_data
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "stores": {},
+        }
+
+
+@router.get("/runs")
+async def get_recent_runs(request: Request, limit: int = 20):
+    """Get recent scraper run records."""
+    db = get_db(request)
+    try:
+        runs = await db.get_recent_scrape_runs(limit=limit)
+        return {"runs": runs, "count": len(runs)}
+    except Exception as e:
+        return {"runs": [], "error": str(e)}
+
+
 @router.post("/run")
 async def run_scrapers(request: Request, user: dict = Depends(require_admin)):
     """Manually trigger scrapers for testing. Enqueues jobs to the scraper queue."""
     env = request.app.state.env
     
-    stores = ["zara", "maui", "falabella", "hm", "fashionpark", "paris", "ripley"]
+    stores = ["zara", "maui", "falabella", "hm", "fashionpark"]
     enqueued = []
     
     try:
@@ -128,7 +154,7 @@ async def trigger_scrapers(request: Request, user: dict = Depends(require_admin)
     """Trigger all scrapers. Requires authentication. Enqueues jobs to the scraper queue."""
     env = request.app.state.env
     
-    stores = ["zara", "maui", "falabella", "hm", "fashionpark", "paris", "ripley"]
+    stores = ["zara", "maui", "falabella", "hm", "fashionpark"]
     enqueued = []
     
     try:

@@ -103,11 +103,12 @@ class FalabellaScraper:
             resp = await client.get(url)
             if resp.status_code != 200:
                 print(f"[falabella] Search '{query}' returned status {resp.status_code}")
-                return []
+                raise Exception(f"Falabella search HTTP {resp.status_code}")
             products = self._parse_ssr_data(resp.text, max_items, inferred_category, inferred_gender)
             print(f"[falabella] Search '{query}' parsed {len(products)} products")
         except Exception as e:
             print(f"[falabella] Error searching '{query}': {type(e).__name__}: {e}")
+            raise
 
         return products[:max_items]
 
@@ -182,13 +183,13 @@ class FalabellaScraper:
                     price_list = p.get("price", [])
                     if isinstance(price_list, list) and price_list:
                         price_str = price_list[0]
-                        # Remove dots used as thousand separators
-                        price_str = price_str.replace(".", "")
-                        try:
-                            price = float(price_str)
-                            break
-                        except ValueError:
-                            continue
+                        digits_only = re.sub(r"[^\d]", "", str(price_str))
+                        if digits_only:
+                            try:
+                                price = float(digits_only)
+                                break
+                            except ValueError:
+                                continue
 
         # Extract images
         images = []

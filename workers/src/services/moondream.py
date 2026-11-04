@@ -46,12 +46,13 @@ class MoondreamService:
         """
         try:
             # Use Moondream's VQA capability to check for human body
+            # Convert Python dict to JS object via to_js for proper binding
             result = await self.ai.run(
                 MOONDREAM_MODEL,
-                {
+                to_js({
                     "image": image_url,
                     "question": "Is there a person with a visible human body in this image? Answer yes or no.",
-                },
+                }),
             )
             
             response_text = str(result.get("answer", "")).lower().strip()
@@ -81,10 +82,10 @@ class MoondreamService:
         try:
             result = await self.ai.run(
                 MOONDREAM_MODEL,
-                {
+                to_js({
                     "image": image_url,
                     "question": "What type of clothing is this? Answer with one word: shirt, pants, dress, jacket, skirt, shorts, or other.",
-                },
+                }),
             )
             return str(result.get("answer", "other")).lower().strip()
         except Exception:

@@ -62,7 +62,7 @@ export const updateMeasurements = createAsyncThunk("user/updateMeasurements", as
 
 export const updatePreferences = createAsyncThunk("user/updatePreferences", async (preferences, { rejectWithValue }) => {
   try {
-    const response = await api.put("/users/preferences", preferences);
+    const response = await api.put("/users/preferences", { preferences });
     return response.data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.detail || "Failed to update preferences");

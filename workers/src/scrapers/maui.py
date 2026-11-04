@@ -168,6 +168,7 @@ class MauiScraper:
                     "body_preview": resp.text[:500],
                     "variables": variables,
                 }))
+                raise Exception(f"Maui GraphQL returned HTTP {resp.status_code}")
         except Exception as e:
             print(json.dumps({
                 "event": "maui_graphql_exception",
@@ -175,8 +176,7 @@ class MauiScraper:
                 "traceback": traceback.format_exc(),
                 "variables": variables,
             }))
-
-        return None
+            raise
 
     async def search_products(self, query: str, max_items: int = 30) -> list[MauiProduct]:
         """Search products via Magento 2 GraphQL."""

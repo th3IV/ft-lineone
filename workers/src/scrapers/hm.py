@@ -108,17 +108,18 @@ class HMScraper:
             resp = await client.get(url)
             if resp.status_code not in (200, 206):
                 print(json.dumps({"event": "hm_search_error", "query": query, "status": resp.status_code}))
-                return []
+                raise Exception(f"H&M search HTTP {resp.status_code}")
             data = resp.json()
             if not isinstance(data, list):
                 print(json.dumps({"event": "hm_search_error", "query": query, "error": "non-list response", "type": str(type(data))}))
-                return []
+                raise Exception(f"H&M returned non-list JSON for query '{query}'")
             for item in data[:max_items]:
                 product = self._parse_product(item, query)
                 if product and product.name:
                     products.append(product)
         except Exception as e:
             print(json.dumps({"event": "hm_search_error", "query": query, "error": str(e)}))
+            raise
 
         return products[:max_items]
 

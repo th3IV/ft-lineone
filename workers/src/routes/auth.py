@@ -74,6 +74,7 @@ async def register(user_data: UserCreate, request: Request):
     access_token = create_access_token(user.id, user.email, env=env)
     refresh_token = create_refresh_token(user.id, user.email, env=env)
 
+    prefs = user.preferences or {}
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -85,6 +86,8 @@ async def register(user_data: UserCreate, request: Request):
             profile_image=user.profile_image,
             is_premium=user.is_premium,
             plan_type=getattr(user, 'plan_type', 'free'),
+            preferences=prefs,
+            quiz_completed=prefs.get("quiz_completed", False),
             daily_usage={"vton": 0, "llm": 0, "limit": VTON_DAILY_LIMIT_FREE, "plan_type": "free"},
         ),
     )
@@ -117,6 +120,7 @@ async def login(credentials: UserLogin, request: Request):
     is_premium = user.is_premium or getattr(user, 'plan_type', 'free') == 'premium'
     usage = await db.get_user_usage_readonly(user.id, today)
 
+    prefs = user.preferences or {}
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -126,10 +130,11 @@ async def login(credentials: UserLogin, request: Request):
             name=user.name,
             created_at=user.created_at,
             body_measurements=user.body_measurements,
-            preferences=user.preferences or {},
+            preferences=prefs,
             profile_image=user.profile_image,
             is_premium=user.is_premium,
             plan_type=getattr(user, 'plan_type', 'free'),
+            quiz_completed=prefs.get("quiz_completed", False),
             daily_usage={
                 "vton": usage["vton_count"],
                 "llm": usage["llm_count"],
@@ -229,6 +234,7 @@ async def refresh_token(body: dict, request: Request):
     is_premium = user.is_premium or getattr(user, 'plan_type', 'free') == 'premium'
     usage = await db.get_user_usage_readonly(user.id, today)
 
+    prefs = user.preferences or {}
     return TokenResponse(
         access_token=new_access_token,
         refresh_token=new_refresh_token,
@@ -238,10 +244,11 @@ async def refresh_token(body: dict, request: Request):
             name=user.name,
             created_at=user.created_at,
             body_measurements=user.body_measurements,
-            preferences=user.preferences or {},
+            preferences=prefs,
             profile_image=user.profile_image,
             is_premium=user.is_premium,
             plan_type=getattr(user, 'plan_type', 'free'),
+            quiz_completed=prefs.get("quiz_completed", False),
             daily_usage={
                 "vton": usage["vton_count"],
                 "llm": usage["llm_count"],

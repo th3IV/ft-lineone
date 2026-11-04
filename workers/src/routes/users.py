@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from typing import Optional
 
 from middleware.security import require_auth, require_admin, safe_error_message
-from services.r2 import upload_profile_image
+from services.r2 import upload_profile_image, delete_profile_image as delete_profile_image_r2
+from services.config import MAX_USER_IMAGE_BYTES, ALLOWED_IMAGE_MAGIC
 
 router = APIRouter()
 
@@ -154,14 +155,28 @@ async def update_measurements(
 
 @router.put("/preferences")
 async def update_preferences(
-    body: PreferencesUpdate,
     request: Request,
     user: dict = Depends(require_auth),
 ):
-    """Update user style preferences."""
+    """Update user style preferences. Accepts {"preferences": {...}} or flat dict."""
     db = get_db(request)
-    await db.update_user(user.user_id, {"preferences": body.preferences})
-    return {"status": "updated", "preferences": body.preferences}
+    prefs = {}
+    try:
+        raw = await request.json()
+        if isinstance(raw, dict):
+            if "preferences" in raw and isinstance(raw["preferences"], dict):
+                prefs = raw["preferences"]
+            else:
+                prefs = raw
+    except Exception:
+        pass
+
+    existing_user = await db.get_user_by_id(user.user_id)
+    existing_prefs = (existing_user.preferences if existing_user else {}) or {}
+    merged_prefs = {**existing_prefs, **prefs}
+
+    await db.update_user(user.user_id, {"preferences": merged_prefs})
+    return {"status": "updated", "preferences": merged_prefs}
 
 
 @router.post("/profile-image")
@@ -177,12 +192,8 @@ async def upload_profile_image_route(
 
     # Extract data URI prefix and bytes
     data = body.image_base64
-    content_type = "image/jpeg"
     if "," in data:
-        header, b64data = data.split(",", 1)
-        mime_match = re.match(r"data:([a-zA-Z0-9/+-]+);base64", header)
-        if mime_match:
-            content_type = mime_match.group(1)
+        _, b64data = data.split(",", 1)
     else:
         b64data = data
 
@@ -191,8 +202,29 @@ async def upload_profile_image_route(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid base64 image data")
 
-    if len(image_bytes) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Image too large (max 5MB)")
+    if len(image_bytes) > MAX_USER_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Image too large: maximum {MAX_USER_IMAGE_BYTES // (1024*1024)}MB",
+        )
+
+    # Validate magic bytes against allowed image formats
+    header = image_bytes[:8]
+    if not any(header.startswith(magic) for magic in ALLOWED_IMAGE_MAGIC):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid image format: only JPEG, PNG, and WebP are allowed",
+        )
+
+    # Detect content-type from magic bytes
+    if header.startswith(b'\xff\xd8\xff'):
+        content_type = "image/jpeg"
+    elif header.startswith(b'\x89PNG'):
+        content_type = "image/png"
+    elif header.startswith(b'RIFF'):
+        content_type = "image/webp"
+    else:
+        content_type = "image/jpeg"
 
     try:
         public_url = await upload_profile_image(env, user.user_id, image_bytes, content_type)
@@ -219,7 +251,14 @@ async def delete_profile_image(
     request: Request,
     user: dict = Depends(require_auth),
 ):
-    """Delete user profile image."""
+    """Delete user profile image from R2 and clear from DB."""
+    env = get_env(request)
+    if env and getattr(env, "R2", None):
+        try:
+            await delete_profile_image_r2(env, user.user_id)
+        except Exception:
+            pass
+
     db = get_db(request)
     await db.update_user(user.user_id, {"profile_image": None})
     return {"status": "deleted"}

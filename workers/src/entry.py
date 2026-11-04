@@ -238,6 +238,42 @@ class Default(WorkerEntrypoint):
                 headers=h,
             )
 
+    async def scheduled(self, controller, env, ctx):
+        """Handle Cloudflare Cron Triggers.
+
+        - Scraper crons (e.g. "*/5 * * * *" in dev or "0 */4 * * *" in prod): enqueue active stores
+        - VTON crons (e.g. "*/2 * * * *"): poll pending VTON tasks
+        """
+        cron_expr = getattr(controller, "cron", "")
+        print(json.dumps({"event": "cron_trigger_received", "cron": cron_expr}))
+
+        # VTON polling schedule
+        if "*/2" in cron_expr:
+            try:
+                from cron import process_pending_vton_tasks
+                res = await process_pending_vton_tasks(self.env)
+                print(json.dumps({"event": "cron_vton_done", "result": res}))
+            except Exception as e:
+                print(json.dumps({"event": "cron_vton_error", "error": str(e)}))
+            return
+
+        # Scraper schedule: enqueue active stores (Paris/Ripley excluded per P1-a)
+        active_stores = ["zara", "maui", "falabella", "hm", "fashionpark"]
+        queue = getattr(self.env, "SCRAPER_QUEUE", None)
+        if not queue:
+            print(json.dumps({"event": "cron_scraper_error", "error": "SCRAPER_QUEUE binding missing"}))
+            return
+
+        enqueued = []
+        for store in active_stores:
+            try:
+                await queue.send({"store": store, "max_products": 20})
+                enqueued.append(store)
+            except Exception as e:
+                print(json.dumps({"event": "cron_enqueue_error", "store": store, "error": str(e)}))
+
+        print(json.dumps({"event": "cron_scraper_enqueued", "stores": enqueued}))
+
     async def queue(self, batch, env, ctx):
         """Handle queue messages for scraper jobs."""
         from scrapers.scheduler import ScraperRunner

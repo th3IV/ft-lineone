@@ -1,4 +1,9 @@
-"""Scraper Durable Object — consumes scraper jobs from Cloudflare Queues."""
+"""Scraper Durable Object — consumes scraper jobs from Cloudflare Queues.
+
+DEPRECATED: Messages from Cloudflare Queues are now processed directly via
+Default.queue() in entry.py. This Durable Object is preserved for backward
+compatibility with existing bindings and will be removed in a future release.
+"""
 
 import json
 import asyncio

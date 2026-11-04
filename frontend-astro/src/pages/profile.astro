@@ -34,7 +34,10 @@ import Layout from "../layouts/Layout.astro";
             </div>
 
             <div class="space-y-2">
-              <button id="btn-vton" class="w-full btn-primary text-sm py-2">
+              <button id="btn-edit-profile" class="w-full btn-primary text-sm py-2">
+                Editar perfil
+              </button>
+              <button id="btn-vton" class="w-full btn-secondary text-sm py-2">
                 Probar VTON
               </button>
               <button id="btn-catalog" class="w-full btn-secondary text-sm py-2">
@@ -42,6 +45,9 @@ import Layout from "../layouts/Layout.astro";
               </button>
               <button id="btn-chat" class="w-full btn-outline text-sm py-2">
                 Asesor IA
+              </button>
+              <button id="btn-logout" class="w-full btn-outline text-sm py-2 text-red-500 border-red-200 hover:bg-red-50 hover:border-red-300">
+                Cerrar sesión
               </button>
             </div>
           </div>
@@ -198,6 +204,16 @@ import Layout from "../layouts/Layout.astro";
                       <button type="button" class="occasion-tag px-3 py-1.5 text-sm bg-editorial-cream-dark text-editorial-gray rounded-full hover:bg-editorial-gold hover:text-editorial-black transition-colors">{occ}</button>
                     ))}
                   </div>
+                </div>
+
+                <div class="pt-4 border-t border-editorial-cream-dark">
+                  <p class="text-sm text-editorial-gray mb-3">¿Quieres recomendaciones más precisas?</p>
+                  <a href="/quiz" class="btn-primary inline-flex items-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                    </svg>
+                    Realizar Cuestionario de Estilo
+                  </a>
                 </div>
 
                 <div class="flex justify-end gap-3 pt-4 border-t border-editorial-cream-dark">
@@ -415,29 +431,15 @@ import Layout from "../layouts/Layout.astro";
 
   loadProfile();
 
-  // Tab switching
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.remove('text-editorial-gold', 'border-editorial-gold');
-        b.classList.add('text-editorial-gray', 'border-transparent');
-      });
-      btn.classList.remove('text-editorial-gray', 'border-transparent');
-      btn.classList.add('text-editorial-gold', 'border-editorial-gold');
-
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-      document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden');
-    });
+  // Sidebar navigation buttons
+  document.getElementById('btn-vton')?.addEventListener('click', () => {
+    window.location.href = '/virtual-try-on';
   });
-
-  // Style/color/occasion tag toggles
-  document.querySelectorAll('.style-tag, .color-tag, .occasion-tag').forEach(tag => {
-    tag.addEventListener('click', () => {
-      tag.classList.toggle('bg-editorial-gold');
-      tag.classList.toggle('text-editorial-black');
-      tag.classList.toggle('bg-editorial-cream-dark');
-      tag.classList.toggle('text-editorial-gray');
-    });
+  document.getElementById('btn-catalog')?.addEventListener('click', () => {
+    window.location.href = '/catalog';
+  });
+  document.getElementById('btn-chat')?.addEventListener('click', () => {
+    window.location.href = '/catalog?chat=1';
   });
 
   // Save profile
@@ -459,12 +461,12 @@ import Layout from "../layouts/Layout.astro";
         body: JSON.stringify(data)
       });
       if (response.ok) {
-        alert('Perfil actualizado');
+        window.showToast('Perfil actualizado', 'success');
       } else {
-        alert('Error al guardar');
+        window.showToast('Error al guardar', 'error');
       }
     } catch (error) {
-      alert('Error de conexión');
+      window.showToast('Error de conexión', 'error');
     }
   });
 
@@ -490,12 +492,12 @@ import Layout from "../layouts/Layout.astro";
         body: JSON.stringify(data)
       });
       if (response.ok) {
-        alert('Medidas guardadas');
+        window.showToast('Medidas guardadas', 'success');
       } else {
-        alert('Error al guardar');
+        window.showToast('Error al guardar', 'error');
       }
     } catch (error) {
-      alert('Error de conexión');
+      window.showToast('Error de conexión', 'error');
     }
   });
 
@@ -516,12 +518,12 @@ import Layout from "../layouts/Layout.astro";
         body: JSON.stringify({ preferences: { styles, colors, occasions } })
       });
       if (response.ok) {
-        alert('Preferencias guardadas');
+        window.showToast('Preferencias guardadas', 'success');
       } else {
-        alert('Error al guardar');
+        window.showToast('Error al guardar', 'error');
       }
     } catch (error) {
-      alert('Error de conexión');
+      window.showToast('Error de conexión', 'error');
     }
   });
 
@@ -540,10 +542,54 @@ import Layout from "../layouts/Layout.astro";
       if (response.ok && result.url) {
         window.location.href = result.url;
       } else {
-        alert(result.detail || 'Error al crear pago');
+        window.showToast(result.detail || 'Error al crear pago', 'error');
       }
     } catch (error) {
-      alert('Error de conexión');
+      window.showToast('Error de conexión', 'error');
     }
+  });
+
+  // Edit profile button — scroll to profile tab and focus first input
+  document.getElementById('btn-edit-profile')?.addEventListener('click', () => {
+    // Switch to profile tab
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.remove('text-editorial-gold', 'border-editorial-gold');
+      b.classList.add('text-editorial-gray', 'border-transparent');
+    });
+    const profileTab = document.querySelector('[data-tab="profile"]');
+    profileTab?.classList.remove('text-editorial-gray', 'border-transparent');
+    profileTab?.classList.add('text-editorial-gold', 'border-editorial-gold');
+
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    document.getElementById('tab-profile')?.classList.remove('hidden');
+
+    // Focus the name input
+    document.getElementById('input-name')?.focus();
+    document.getElementById('input-name')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  // Logout button
+  document.getElementById('btn-logout')?.addEventListener('click', async () => {
+    if (!confirm('¿Cerrar sesión?')) return;
+
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (refreshToken) {
+      try {
+        await fetch(`${API_BASE}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+      } catch {
+        // Ignore logout API errors
+      }
+    }
+
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
+    window.location.href = '/login';
   });
 </script>

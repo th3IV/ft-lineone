@@ -38,6 +38,9 @@
       "index_name": "ft-lineone-catalog"
     }
   ],
+  "triggers": {
+    "crons": ["*/5 * * * *", "*/2 * * * *"]
+  },
   "queues": {
     "producers": [
       {
@@ -50,7 +53,8 @@
         "queue": "scraper-jobs",
         "max_retries": 3,
         "max_batch_size": 10,
-        "max_batch_timeout": 60
+        "max_batch_timeout": 60,
+        "dead_letter_queue": "scraper-jobs-dlq"
       }
     ]
   },
@@ -79,6 +83,7 @@
     "TRANSBANK_COMMERCE_CODE": "597055555532",
     "TRANSBANK_BASE_URL": "https://webpay3gint.transbank.cl",
     "TRANSBANK_RETURN_URL": "https://thelineone.com/payment/success",
-    "ADMIN_EMAILS": "godismelife09@gmail.com"
+    "ADMIN_EMAILS": "godismelife09@gmail.com",
+    "R2_PUBLIC_URL": "https://pub-ae92531aa2144de7aad7a3510e7b31ff.r2.dev"
   }
 }

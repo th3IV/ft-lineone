@@ -45,6 +45,7 @@ class UserResponse(UserBase):
     is_premium: bool = False
     plan_type: str = "free"
     daily_usage: Optional[dict] = None
+    quiz_completed: bool = False
 
     class Config:
         orm_mode = True

@@ -52,7 +52,9 @@ class YouCamService:
     """YouCam AI Clothes V3.0 service for virtual try-on."""
 
     def __init__(self, env):
-        self.api_key = env.YOUCAM_API_KEY
+        self.api_key = getattr(env, "YOUCAM_API_KEY", "")
+        if not self.api_key:
+            raise Exception("YOUCAM_API_KEY not configured")
 
     def _auth_headers(self):
         """Build auth headers dict."""
@@ -210,6 +212,8 @@ class YouCamService:
         payload: str,
         signature_header: str,
         webhook_secret: str,
+        webhook_id: str = "",
+        webhook_timestamp: str = "",
     ) -> bool:
         """Verify YouCam webhook signature using HMAC-SHA256.
 
@@ -232,7 +236,9 @@ class YouCamService:
             secret_bytes = secret_bytes[6:]
         secret_bytes = base64.b64decode(secret_bytes)
 
-        computed = hmac.new(secret_bytes, payload.encode("utf-8"), hashlib.sha256)
+        # YouCam/Svix standard: sign "webhook_id.webhook_timestamp.payload"
+        signed_content = f"{webhook_id}.{webhook_timestamp}.{payload}"
+        computed = hmac.new(secret_bytes, signed_content.encode("utf-8"), hashlib.sha256)
         computed_b64 = base64.b64encode(computed.digest()).decode("utf-8")
 
         return hmac.compare_digest(computed_b64, expected_sig)

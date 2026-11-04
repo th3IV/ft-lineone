@@ -187,7 +187,8 @@ async def upload_user_photo(base64_data: str, filename: str = "photo.jpg", api_k
             if filename.endswith(".png"):
                 content_type = "image/png"
             await env.R2.put(key, image_bytes, to_js({"httpMetadata": {"contentType": content_type}}))
-            r2_url = f"https://pub-ae92531aa2144de7aad7a3510e7b31ff.r2.dev/{key}"
+            from services.r2 import get_r2_public_base
+            r2_url = f"{get_r2_public_base(env)}/{key}"
             print(json.dumps({"event": "upload_r2_ok", "key": key}))
             return r2_url
         except Exception as e:
@@ -251,7 +252,8 @@ async def upload_garment_image(image_url: str, api_key: str = "", env=None) -> s
                     import uuid as _uuid
                     key = f"vton/garments/garment_{int(time.time())}_{_uuid.uuid4().hex[:12]}.jpg"
                     await env.R2.put(key, py_bytes, to_js({"httpMetadata": {"contentType": "image/jpeg"}}))
-                    r2_url = f"https://pub-ae92531aa2144de7aad7a3510e7b31ff.r2.dev/{key}"
+                    from services.r2 import get_r2_public_base
+                    r2_url = f"{get_r2_public_base(env)}/{key}"
                     print(json.dumps({"event": "garment_upload_r2_ok", "key": key}))
                     return r2_url
                 except Exception as e:

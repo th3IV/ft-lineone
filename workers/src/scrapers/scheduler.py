@@ -80,6 +80,7 @@ STORE_CATEGORIES = {
         ],
     },
     "paris": {
+        "enabled": False,  # Disabled per P1-a (pending legitimate affiliate datafeed)
         "type": "search",  # Paris uses Constructor.io API
         "queries": [
             "polera mujer",
@@ -91,6 +92,7 @@ STORE_CATEGORIES = {
         ],
     },
     "ripley": {
+        "enabled": False,  # Disabled per P1-a (pending legitimate affiliate datafeed)
         "type": "search",  # Ripley uses HTML parsing
         "queries": [
             "polera mujer",
@@ -142,8 +144,11 @@ class ScraperRunner:
             except Exception as e:
                 return store_name, {"status": "error", "error": str(e)}
 
-        # Run scrapers in parallel batches to avoid CPU timeout
-        items = list(self.scrapers.items())
+        # Run active scrapers in parallel batches to avoid CPU timeout
+        items = [
+            (name, scraper) for name, scraper in self.scrapers.items()
+            if STORE_CATEGORIES.get(name, {}).get("enabled", True)
+        ]
         for i in range(0, len(items), max_concurrent):
             batch = items[i:i + max_concurrent]
             batch_results = await asyncio.gather(*[run_one(name, scraper) for name, scraper in batch])
@@ -188,9 +193,9 @@ class ScraperRunner:
                                     result = await self._ingest_product(store_name, product)
                                     if result["status"] == "upserted":
                                         total_upserted += 1
-                                    elif result["status"] == "error":
+                                    elif result["status"] in ("error", "invalid"):
                                         total_errors += 1
-                                        print(f"[{store_name}] Ingest error: {result.get('error')} for {result.get('product_name')}")
+                                        print(f"[{store_name}] Ingest error ({result['status']}): {result.get('error', 'validation_failed')} for {result.get('product_name')}")
                                 except Exception as e:
                                     total_errors += 1
                                     print(f"[{store_name}] Exception: {e}")
@@ -229,9 +234,9 @@ class ScraperRunner:
                                     result = await self._ingest_product(store_name, product)
                                     if result["status"] == "upserted":
                                         total_upserted += 1
-                                    elif result["status"] == "error":
+                                    elif result["status"] in ("error", "invalid"):
                                         total_errors += 1
-                                        print(f"[{store_name}] Ingest error: {result.get('error')} for {result.get('product_name')}")
+                                        print(f"[{store_name}] Ingest error ({result['status']}): {result.get('error', 'validation_failed')} for {result.get('product_name')}")
                                 except Exception as e:
                                     total_errors += 1
                                     print(f"[{store_name}] Exception: {e}")
@@ -257,15 +262,14 @@ class ScraperRunner:
             duration = (end_time - scrape_start).total_seconds()
 
             # Cleanup: remove stale products only if scrape completed successfully
-            # with adequate coverage. Uses dynamic ratio + absolute minimum.
+            # with adequate coverage (at least MIN_PRODUCTS_SCRAPED_BEFORE_CLEANUP products
+            # and at least 50% query success ratio, preventing the runaway denominator trap).
             deleted = 0
             if total_products > 0 and total_errors < total_products:
-                existing_count = await self.db.count_products_by_store(store_name)
-                coverage_ratio = total_upserted / existing_count if existing_count > 0 else 1.0
-                # Block cleanup if: too few products, low coverage, or too many empty queries
+                query_success_ratio = (total_queries - empty_queries) / total_queries if total_queries > 0 else 1.0
                 if (
                     total_upserted >= MIN_PRODUCTS_SCRAPED_BEFORE_CLEANUP
-                    and coverage_ratio >= MIN_SCRAPE_COVERAGE_RATIO
+                    and query_success_ratio >= MIN_SCRAPE_COVERAGE_RATIO
                     and empty_queries < total_queries
                 ):
                     deleted = await self.cleanup_stale_products(store_name, scrape_start.isoformat())
@@ -274,14 +278,16 @@ class ScraperRunner:
                         "event": "cleanup_skipped_low_coverage",
                         "store": store_name,
                         "upserted": total_upserted,
-                        "existing": existing_count,
-                        "coverage_ratio": round(coverage_ratio, 2),
+                        "query_success_ratio": round(query_success_ratio, 2),
                         "empty_queries": empty_queries,
                         "total_queries": total_queries,
                     }))
 
-            return {
-                "status": "completed",
+            run_result = {
+                "store": store_name,
+                "started_at": scrape_start.isoformat(),
+                "finished_at": end_time.isoformat(),
+                "status": "completed" if total_errors == 0 else ("partial" if total_upserted > 0 else "failed"),
                 "total_products": total_products,
                 "upserted_products": total_upserted,
                 "stale_deleted": deleted,
@@ -289,18 +295,48 @@ class ScraperRunner:
                 "empty_queries": empty_queries,
                 "duration_seconds": round(duration, 1),
             }
+            try:
+                await self.db.save_scrape_run(run_result)
+            except Exception as save_err:
+                print(json.dumps({"event": "save_scrape_run_error", "store": store_name, "error": str(save_err)}))
+
+            return run_result
 
         except Exception as e:
-            return {"status": "failed", "error": str(e)}
+            fail_time = datetime.now(timezone.utc)
+            fail_result = {
+                "store": store_name,
+                "started_at": scrape_start.isoformat(),
+                "finished_at": fail_time.isoformat(),
+                "status": "failed",
+                "error": str(e),
+                "error_message": str(e),
+                "total_products": total_products,
+                "upserted_products": total_upserted,
+                "stale_deleted": 0,
+                "errors": total_errors + 1,
+                "empty_queries": empty_queries,
+                "duration_seconds": round((fail_time - scrape_start).total_seconds(), 1),
+            }
+            try:
+                await self.db.save_scrape_run(fail_result)
+            except Exception as save_err:
+                print(json.dumps({"event": "save_scrape_run_error", "store": store_name, "error": str(save_err)}))
+            return fail_result
 
     def _validate_product(self, product) -> bool:
         """Validate product data before inserting. Returns False if data is corrupted."""
+        # 0. External ID must exist and not be empty
+        ext_id = getattr(product, "external_id", "")
+        if not ext_id or not str(ext_id).strip():
+            return False
+
         # 1. Name must exist and be at least 3 chars
         if not product.name or len(product.name) < 3:
             return False
 
-        # 2. Price must be positive
-        if product.price <= 0:
+        # 2. Price must be positive and within realistic clothing bounds (< 5M CLP)
+        if product.price <= 0 or product.price > 5_000_000:
             return False
 
         # 3. Sizes must not contain product name
@@ -400,6 +436,11 @@ class ScraperRunner:
 
     async def run_single_store(self, store_name: str, max_products: int = 30) -> dict:
         """Run a single store scraper."""
+        store_config = STORE_CATEGORIES.get(store_name, {})
+        if not store_config.get("enabled", True):
+            print(json.dumps({"event": "scraper_store_disabled", "store": store_name}))
+            return {"status": "disabled", "store": store_name, "message": "Store is currently disabled"}
+
         if store_name not in self.scrapers:
             return {"status": "error", "error": f"Unknown store: {store_name}"}
         original = self.max_products

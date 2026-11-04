@@ -4,7 +4,7 @@ import { User, Settings, Clock, Sparkles, Heart, Camera, Image as ImageIcon, Tra
 import toast from "react-hot-toast";
 import { fetchProfile, updateProfile, updateMeasurements, updatePreferences, uploadProfileImage, deleteProfileImage, logoutUser } from "../store/userSlice";
 import { fetchFavorites } from "../store/favoritesSlice";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import ProductGrid from "../components/ProductGrid";
 import VtonHistory from "../components/VtonHistory";
@@ -690,12 +690,21 @@ function Profile() {
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => setEditingSection("preferences")}
-                className="btn-primary w-full sm:w-auto"
-              >
-                Editar
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <Link
+                  to="/onboarding"
+                  className="btn-outline w-full sm:w-auto flex items-center justify-center gap-2"
+                >
+                  <Sparkles size={16} />
+                  Rehacer encuesta
+                </Link>
+                <button
+                  onClick={() => setEditingSection("preferences")}
+                  className="btn-primary w-full sm:w-auto"
+                >
+                  Editar
+                </button>
+              </div>
             )}
           </div>
         </motion.div>

@@ -59,3 +59,10 @@ workers/python_modules/
 # Legacy (removed)
 # scrapers/data/
 # scrapers/__pycache__/
+
+# Playwright
+test-results/
+playwright-report/
+**/test-results/
+**/playwright-report/
+**/.cache/

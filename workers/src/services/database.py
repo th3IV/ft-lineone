@@ -158,6 +158,7 @@ class ProductModel:
         )
         self.availability = bool(row.get("availability", 1))
         self.created_at = row.get("created_at", datetime.now(timezone.utc).isoformat())
+        self.last_seen = row.get("last_seen")
 
 
 class VtonResultModel:
@@ -597,13 +598,125 @@ class DatabaseService:
     
         Uses a multi-run threshold (default 48h) so products aren't deleted just
         because a single scrape run didn't cover them (e.g. max_products caps).
-        Only call this after a successful scrape with adequate coverage.
+        De-indexes from Vectorize to avoid ghost recommendations.
         """
         cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=stale_hours)).isoformat()
+
+        # 1. Fetch IDs of stale products to de-index from Vectorize
+        stale_rows = await self.db.prepare(
+            "SELECT id FROM products WHERE store = ? AND last_seen < ?"
+        ).bind(store, cutoff_iso).all()
+        rows = stale_rows.get("results", []) if isinstance(stale_rows, dict) else (getattr(stale_rows, "results", stale_rows) or [])
+        stale_ids = [r["id"] for r in rows if isinstance(r, dict) and "id" in r]
+
+        if stale_ids and hasattr(self.env, "VECTORIZE"):
+            try:
+                from services.catalog_rag import CatalogRAG
+                rag = CatalogRAG(self.env)
+                for pid in stale_ids:
+                    try:
+                        await rag.delete_product(pid)
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(json.dumps({"event": "vectorize_cleanup_error", "store": store, "error": str(e)}))
+
+        # 2. Delete from D1
         result = await self.db.prepare(
             "DELETE FROM products WHERE store = ? AND last_seen < ?"
         ).bind(store, cutoff_iso).run()
         return result.changes if hasattr(result, 'changes') else 0
+
+    async def save_scrape_run(self, data: dict) -> str:
+        """Persist a scraper run result into scrape_runs table."""
+        run_id = data.get("id") or str(uuid.uuid4())
+        await self.db.prepare(
+            """INSERT INTO scrape_runs (
+                id, store, started_at, finished_at, status,
+                total_products, upserted_products, stale_deleted,
+                errors, empty_queries, duration_seconds, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        ).bind(
+            run_id,
+            data.get("store", ""),
+            data.get("started_at", datetime.now(timezone.utc).isoformat()),
+            data.get("finished_at", datetime.now(timezone.utc).isoformat()),
+            data.get("status", "unknown"),
+            int(data.get("total_products", 0)),
+            int(data.get("upserted_products", 0)),
+            int(data.get("stale_deleted", 0)),
+            int(data.get("errors", 0)),
+            int(data.get("empty_queries", 0)),
+            float(data.get("duration_seconds", 0.0)),
+            data.get("error_message") or data.get("error"),
+        ).run()
+        return run_id
+
+    async def get_scrape_status(self, stale_threshold_hours: int = 5) -> dict:
+        """Get the latest scrape status and freshness for all stores."""
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(hours=stale_threshold_hours)
+        cutoff_iso = cutoff_dt.isoformat()
+
+        # Query latest run per store
+        runs_query = """
+            SELECT r1.*
+            FROM scrape_runs r1
+            INNER JOIN (
+                SELECT store, MAX(started_at) AS max_started
+                FROM scrape_runs
+                GROUP BY store
+            ) r2 ON r1.store = r2.store AND r1.started_at = r2.max_started
+        """
+        runs_res = await self.db.prepare(runs_query).all()
+        run_rows = runs_res.get("results", []) if isinstance(runs_res, dict) else (getattr(runs_res, "results", runs_res) or [])
+        latest_runs = {}
+        for row in run_rows:
+            if isinstance(row, dict) and row.get("store"):
+                latest_runs[row.get("store")] = row
+
+        # Query catalog freshness & count per store
+        freshness_query = """
+            SELECT store, MAX(last_seen) AS last_fresh, COUNT(*) AS product_count
+            FROM products
+            GROUP BY store
+        """
+        freshness_res = await self.db.prepare(freshness_query).all()
+        fresh_rows = freshness_res.get("results", []) if isinstance(freshness_res, dict) else (getattr(freshness_res, "results", freshness_res) or [])
+        store_stats = {}
+        for row in fresh_rows:
+            if isinstance(row, dict) and row.get("store"):
+                store_stats[row.get("store")] = {
+                    "product_count": row.get("product_count", 0),
+                    "last_fresh": row.get("last_fresh"),
+                }
+
+        all_stores = set(store_stats.keys()) | set(latest_runs.keys())
+        combined = {}
+        for s in all_stores:
+            stats = store_stats.get(s, {})
+            last_fresh = stats.get("last_fresh")
+            is_stale = True
+            if last_fresh:
+                is_stale = str(last_fresh) < cutoff_iso
+            combined[s] = {
+                "product_count": stats.get("product_count", 0),
+                "last_fresh": last_fresh,
+                "is_stale": is_stale,
+                "latest_run": latest_runs.get(s),
+            }
+
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "stale_threshold_hours": stale_threshold_hours,
+            "stores": combined,
+        }
+
+    async def get_recent_scrape_runs(self, limit: int = 50) -> list[dict]:
+        """Fetch the most recent scrape runs."""
+        res = await self.db.prepare(
+            "SELECT * FROM scrape_runs ORDER BY started_at DESC LIMIT ?"
+        ).bind(limit).all()
+        return res.get("results", []) if isinstance(res, dict) else (getattr(res, "results", res) or [])
     
     async def update_product_sizes(self, product_id: str, sizes: list[str], colors: list[str] = None) -> bool:
         """Update sizes and optionally colors for an existing product."""

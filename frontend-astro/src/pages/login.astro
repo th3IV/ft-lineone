@@ -102,7 +102,8 @@ import Layout from "../layouts/Layout.astro";
       if (response.ok) {
         localStorage.setItem('token', result.access_token);
         localStorage.setItem('refresh_token', result.refresh_token);
-        window.location.href = '/virtual-try-on';
+        const quizCompleted = result.user?.quiz_completed === true;
+        window.location.href = quizCompleted ? '/virtual-try-on' : '/quiz';
       } else {
         alert(result.detail || 'Credenciales incorrectas');
       }

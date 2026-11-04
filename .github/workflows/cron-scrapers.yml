@@ -1,3 +1,5 @@
+# NOTE: Native Cloudflare Cron Triggers are now configured in wrangler.jsonc.
+# This GitHub Actions workflow is preserved as an external fallback.
 name: Cron - Scrapers
 
 on:

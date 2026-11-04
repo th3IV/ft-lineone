@@ -7,13 +7,6 @@ import json
 import pytest
 from unittest.mock import MagicMock
 
-# Mock the workers module before importing entry
-workers_mock = MagicMock()
-workers_mock.WorkerEntrypoint = MagicMock
-workers_mock.Response = MagicMock
-sys.modules["workers"] = workers_mock
-sys.modules["asgi"] = MagicMock()
-
 os.environ["JWT_SECRET"] = "test-secret"
 
 # Now import entry's helper functions

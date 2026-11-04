@@ -1,5 +1,6 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
+import api from "../lib/api";
 
 const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
 
@@ -40,6 +41,36 @@ const initialState: UserState = {
   profileStatus: "idle",
 };
 
+export const updatePreferences = createAsyncThunk(
+  "user/updatePreferences",
+  async (preferences: Record<string, any>, { getState, rejectWithValue }) => {
+    const state = getState() as { user: UserState };
+    const token = state.user.token;
+    if (!token) return rejectWithValue("No token");
+    try {
+      const response = await api.put("/users/preferences", { preferences });
+      return response.data.preferences;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.detail || "Error updating preferences");
+    }
+  }
+);
+
+export const updateMeasurements = createAsyncThunk(
+  "user/updateMeasurements",
+  async (measurements: Record<string, any>, { getState, rejectWithValue }) => {
+    const state = getState() as { user: UserState };
+    const token = state.user.token;
+    if (!token) return rejectWithValue("No token");
+    try {
+      const response = await api.put("/users/measurements", measurements);
+      return response.data.measurements;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.detail || "Error updating measurements");
+    }
+  }
+);
+
 const userSlice = createSlice({
   name: "user",
   initialState,
@@ -77,6 +108,19 @@ const userSlice = createSlice({
         state.user.plan_type = action.payload ? "premium" : "free";
       }
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(updatePreferences.fulfilled, (state, action) => {
+        if (state.user) {
+          state.user.preferences = action.payload;
+        }
+      })
+      .addCase(updateMeasurements.fulfilled, (state, action) => {
+        if (state.user) {
+          state.user.body_measurements = action.payload;
+        }
+      });
   },
 });
 

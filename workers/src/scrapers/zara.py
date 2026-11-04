@@ -115,9 +115,10 @@ class ZaraScraper:
                 data = resp.json()
                 return data.get("productGroups", [])
             print(f"[zara] Category {cat_id} returned status {resp.status_code}")
+            raise Exception(f"Zara category {cat_id} HTTP {resp.status_code}")
         except Exception as e:
             print(f"[zara] Error fetching category {cat_id}: {type(e).__name__}: {e}")
-        return []
+            raise
 
     def _parse_products_from_groups(self, product_groups: list[dict], gender: str) -> list[ZaraProduct]:
         """Extract ZaraProduct objects from productGroups response."""
@@ -260,6 +261,7 @@ class ZaraScraper:
         all_products = []
         seen_ids = set()
 
+        leaf_errors = 0
         for leaf_id in leaf_ids:
             if len(all_products) >= max_items:
                 break
@@ -272,8 +274,13 @@ class ZaraScraper:
                     if p.external_id not in seen_ids and len(all_products) < max_items:
                         seen_ids.add(p.external_id)
                         all_products.append(p)
-            except Exception:
+            except Exception as e:
+                leaf_errors += 1
+                print(f"[zara] Subcategory {leaf_id} error: {e}")
                 continue
+
+        if leaf_errors == len(leaf_ids) and not all_products:
+            raise Exception(f"Zara: all {len(leaf_ids)} leaf categories failed for '{category}'")
 
         return all_products[:max_items]
 

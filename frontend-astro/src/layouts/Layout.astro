@@ -36,3 +36,21 @@ const { title = "FT. THE LINE ONE", description = "Fashion Tech Platform - Virtu
     <div id="modal-root" class="fixed inset-0 z-[200] pointer-events-none"></div>
   </body>
 </html>
+
+<script>
+  // Global toast system — called as window.showToast(message, type)
+  window.showToast = function (message, type = 'info') {
+    const root = document.getElementById('toast-root');
+    if (!root) return;
+    const toast = document.createElement('div');
+    const colors = { success: 'bg-green-600', error: 'bg-red-600', info: 'bg-editorial-black' };
+    toast.className = `${colors[type] || colors.info} text-white px-5 py-3 rounded-lg shadow-lg text-sm pointer-events-auto animate-slide-up`;
+    toast.textContent = message;
+    root.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  };
+</script>

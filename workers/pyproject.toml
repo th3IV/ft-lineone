@@ -4,20 +4,17 @@ version = "2.0.0"
 description = "FT-LineOne API - Cloudflare Workers"
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi==0.125.0",
-    "pydantic==1.10.18",
+    "fastapi==0.138.2",
+    "pydantic==2.10.6",
     "httpx",
     "python-multipart",
     "cryptography>=42.0.0",
-    "argon2-cffi>=23.1.0",
 ]
 
 [dependency-groups]
 dev = [
     "workers-py",
     "workers-runtime-sdk",
-    "vitest",
-    "@cloudflare/vitest-pool-workers",
     "pytest",
     "pytest-asyncio",
     "httpx",

@@ -15,7 +15,19 @@ def to_js(obj):
     return _to_js(obj, dict_converter=Object.fromEntries)
 
 
-R2_PUBLIC_BASE = "https://pub-ae92531aa2144de7aad7a3510e7b31ff.r2.dev"
+DEV_R2_PUBLIC_BASE = "https://pub-ae92531aa2144de7aad7a3510e7b31ff.r2.dev"
+
+# Alias for backward compat — used by generate_presigned_upload_url
+R2_PUBLIC_BASE = DEV_R2_PUBLIC_BASE
+
+
+def get_r2_public_base(env=None) -> str:
+    """Resolve R2 public base URL from env var, falling back to dev subdomain."""
+    if env:
+        url = getattr(env, "R2_PUBLIC_URL", None)
+        if url:
+            return url.rstrip("/")
+    return DEV_R2_PUBLIC_BASE
 
 
 async def upload_vton_result(env, user_id: str, vton_id: str, image_bytes: bytes) -> str:
@@ -31,7 +43,7 @@ async def upload_vton_result(env, user_id: str, vton_id: str, image_bytes: bytes
         to_js({"httpMetadata": {"contentType": "image/jpeg"}}),
     )
 
-    return f"{R2_PUBLIC_BASE}/{key}"
+    return f"{get_r2_public_base(env)}/{key}"
 
 
 async def download_image_as_bytes(url: str) -> bytes:
@@ -67,7 +79,23 @@ async def upload_profile_image(env, user_id: str, image_bytes: bytes, content_ty
         }))
         raise
 
-    return f"{R2_PUBLIC_BASE}/{key}"
+    return f"{get_r2_public_base(env)}/{key}?v={int(time.time())}"
+
+
+async def delete_profile_image(env, user_id: str) -> bool:
+    """Delete user profile image from R2."""
+    key = f"profiles/{user_id}/avatar.jpg"
+    try:
+        await env.R2.delete(key)
+        return True
+    except Exception as e:
+        print(json.dumps({
+            "event": "r2_delete_profile_image_error",
+            "user_id": user_id,
+            "key": key,
+            "error": str(e),
+        }))
+        return False
 
 
 async def save_vton_output_to_r2(env, user_id: str, vton_id: str, output_url: str) -> str:

@@ -220,11 +220,11 @@ function OnboardingQuiz() {
             {currentStep.type === "colors" && (
               <div className="flex flex-wrap gap-3">
                 {currentStep.options.map((opt) => {
-                  const selected = selections.colors?.includes(opt.value);
+                  const selected = selections[currentStep.id]?.includes(opt.value);
                   return (
                     <button
                       key={opt.value}
-                      onClick={() => toggleMulti("colors", opt.value)}
+                      onClick={() => toggleMulti(currentStep.id, opt.value)}
                       className={`w-12 h-12 rounded-full border-2 transition-all duration-200 ${
                         selected
                           ? "border-editorial-black scale-110 ring-2 ring-editorial-black/20"

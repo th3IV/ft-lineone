@@ -124,7 +124,14 @@ def get_jwt_secret(env=None) -> str:
     Raises HTTPException 500 when no secret is configured — config errors must
     fail loudly, never silently sign/verify with an empty secret.
     """
-    secret = env.JWT_SECRET if env and hasattr(env, "JWT_SECRET") else os.getenv("JWT_SECRET")
+    secret = None
+    if env:
+        try:
+            secret = getattr(env, "JWT_SECRET", None)
+        except Exception:
+            pass
+    if not secret:
+        secret = os.getenv("JWT_SECRET")
     if not secret:
         raise HTTPException(
             status_code=500,
@@ -144,6 +151,25 @@ def _verify_hs256(payload: bytes, signature_b64: str, secret: str) -> bool:
     return hmac.compare_digest(signature_b64, expected_sig)
 
 
+def _jwt_use_eddsa(env=None) -> bool:
+    """Check if JWT should use EdDSA based on key presence.
+
+    If env has JWT_PRIVATE_KEY and JWT_PUBLIC_KEY → EdDSA.
+    Otherwise falls back to HS256 (JWT_SECRET required).
+    """
+    if not CRYPTOGRAPHY_AVAILABLE:
+        return False
+    has_pair = False
+    if env:
+        try:
+            pk = getattr(env, "JWT_PRIVATE_KEY", None)
+            pub = getattr(env, "JWT_PUBLIC_KEY", None)
+            has_pair = bool(pk) and bool(pub)
+        except Exception:
+            pass
+    return has_pair
+
+
 def create_access_token(
     user_id: str, email: str, expires_delta: Optional[timedelta] = None, env=None
 ) -> str:
@@ -151,7 +177,8 @@ def create_access_token(
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=24))
     jti = secrets.token_hex(16)
 
-    header = {"alg": "EdDSA" if CRYPTOGRAPHY_AVAILABLE else "HS256", "typ": "JWT"}
+    use_eddsa = _jwt_use_eddsa(env)
+    header = {"alg": "EdDSA" if use_eddsa else "HS256", "typ": "JWT"}
     payload = {
         "sub": user_id,
         "email": email,
@@ -164,7 +191,7 @@ def create_access_token(
     header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
     payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
     
-    if CRYPTOGRAPHY_AVAILABLE:
+    if use_eddsa:
         private_key, _ = get_ed25519_keys(env)
         signature = _sign_eddsa(
             f"{header_b64}.{payload_b64}".encode(), private_key
@@ -184,7 +211,8 @@ def create_refresh_token(user_id: str, email: str, env=None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=30)
     jti = secrets.token_hex(16)
 
-    header = {"alg": "EdDSA" if CRYPTOGRAPHY_AVAILABLE else "HS256", "typ": "JWT"}
+    use_eddsa = _jwt_use_eddsa(env)
+    header = {"alg": "EdDSA" if use_eddsa else "HS256", "typ": "JWT"}
     payload = {
         "sub": user_id,
         "email": email,
@@ -197,7 +225,7 @@ def create_refresh_token(user_id: str, email: str, env=None) -> str:
     header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
     payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
     
-    if CRYPTOGRAPHY_AVAILABLE:
+    if use_eddsa:
         private_key, _ = get_ed25519_keys(env)
         signature = _sign_eddsa(
             f"{header_b64}.{payload_b64}".encode(), private_key
@@ -218,7 +246,8 @@ def verify_token(token: str, expected_type: str = None, env=None) -> Optional[To
     Config errors (missing JWT_SECRET) propagate as HTTPException 500.
     """
     # Get secret/keys OUTSIDE try/except — propagate config errors immediately
-    if CRYPTOGRAPHY_AVAILABLE:
+    use_eddsa = _jwt_use_eddsa(env)
+    if use_eddsa:
         _, public_key = get_ed25519_keys(env)
     else:
         secret = get_jwt_secret(env)
@@ -232,7 +261,7 @@ def verify_token(token: str, expected_type: str = None, env=None) -> Optional[To
 
         # Validate JWT header — reject non-EdDSA/HS256 algorithms
         header = json.loads(_b64url_decode(header_b64))
-        expected_alg = "EdDSA" if CRYPTOGRAPHY_AVAILABLE else "HS256"
+        expected_alg = "EdDSA" if _jwt_use_eddsa(env) else "HS256"
         if header.get("alg") != expected_alg:
             return None
 
@@ -248,7 +277,7 @@ def verify_token(token: str, expected_type: str = None, env=None) -> Optional[To
         # Verify signature
         signing_input = f"{header_b64}.{payload_b64}".encode()
         
-        if CRYPTOGRAPHY_AVAILABLE:
+        if _jwt_use_eddsa(env):
             if not _verify_eddsa(signing_input, signature, public_key):
                 return None
         else:

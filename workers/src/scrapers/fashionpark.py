@@ -206,7 +206,7 @@ class FashionParkScraper:
             resp = await client.get(url)
             if resp.status_code != 200:
                 print(json.dumps({"event": "fashionpark_search_error", "query": query, "status": resp.status_code}))
-                return []
+                raise Exception(f"Fashion Park search HTTP {resp.status_code}")
             data = resp.json()
             results = data.get("resources", {}).get("results", {}).get("products", [])
 
@@ -228,6 +228,7 @@ class FashionParkScraper:
             print(json.dumps({"event": "fashionpark_search_success", "query": query, "products_found": len(products)}))
         except Exception as e:
             print(json.dumps({"event": "fashionpark_search_error", "query": query, "error": str(e)}))
+            raise
 
         return products[:max_items]
 

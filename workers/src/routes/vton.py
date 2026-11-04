@@ -312,38 +312,24 @@ async def start_vton(
             raw_b64 = raw_b64.split(",", 1)[1]
         _validate_user_image(raw_b64)
 
-        # Upload user photo to R2
-        import time as _time
-        from services.image_upload import upload_user_photo, upload_garment_image
-        
-        t0 = _time.time()
-        user_photo_url = await upload_user_photo(raw_b64, env=env)
-        print(json.dumps({"event": "vton_start_user_upload", "latency_ms": int((_time.time() - t0) * 1000)}))
+        # Create D1 record FIRST so we can track failures at every stage
+        vton_result = await db.create_vton_result({
+            "user_id": user_id,
+            "product_id": product_id,
+            "status": "pending",
+            "input_image_url": "",
+            "garment_image_url": garment_url[:500] if garment_url else None,
+        })
+        vton_id = vton_result.id
+        print(json.dumps({"event": "vton_start_record_created", "vton_id": vton_id}))
 
-        # Upload garment image to R2
-        t0 = _time.time()
-        garment_public_url = await upload_garment_image(garment_url, env=env)
-        print(json.dumps({"event": "vton_start_garment_upload", "latency_ms": int((_time.time() - t0) * 1000)}))
-
-        # Moondream pre-validation: quick check for human body
-        moondream = MoondreamService(env=env)
-        validation = await moondream.detect_human_body(user_photo_url)
-        if not validation.get("has_body", True):  # Fail-open
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "invalid_image",
-                    "message": "No se detectó un cuerpo humano en la foto. Asegúrate de que se vea tu torso completo.",
-                    "details": validation.get("details", ""),
-                },
-            )
-
-        # Check usage limit BEFORE creating the YouCam task (avoid charging for rejected jobs)
+        # Check usage limit AFTER record creation — so refund path always has a vton_id
         effective_limit = -1 if is_premium else VTON_DAILY_LIMIT_FREE
         usage_result = await db.try_increment_usage(user_id, "vton", today, effective_limit)
         new_vton = usage_result["new_count"]
 
         if not usage_result["allowed"]:
+            await db.refund_vton_usage(vton_id, "Usage limit exceeded")
             raise HTTPException(
                 status_code=402,
                 detail={
@@ -355,17 +341,45 @@ async def start_vton(
                 },
             )
 
-        # Create VTON job record
-        vton_result = await db.create_vton_result({
-            "user_id": user_id,
-            "product_id": product_id,
-            "status": "pending",
-            "input_image_url": user_photo_url,
-            "garment_image_url": garment_url[:500] if garment_url else None,
-        })
-        vton_id = vton_result.id
+        # Upload user photo to R2
+        import time as _time
+        from services.image_upload import upload_user_photo, upload_garment_image
 
-        # Start the actual YouCam task — without this the job stays 'pending' forever
+        t0 = _time.time()
+        try:
+            user_photo_url = await upload_user_photo(raw_b64, env=env)
+            print(json.dumps({"event": "vton_start_user_upload", "latency_ms": int((_time.time() - t0) * 1000)}))
+        except Exception as e:
+            await db.refund_vton_usage(vton_id, f"User photo upload failed: {str(e)[:200]}")
+            raise HTTPException(status_code=500, detail=f"Error subiendo tu foto: {safe_error_message(e, request)}")
+
+        # Update input_image_url now that upload succeeded
+        await db.update_vton_result(vton_id, {"input_image_url": user_photo_url})
+
+        # Upload garment image to R2
+        t0 = _time.time()
+        try:
+            garment_public_url = await upload_garment_image(garment_url, env=env)
+            print(json.dumps({"event": "vton_start_garment_upload", "latency_ms": int((_time.time() - t0) * 1000)}))
+        except Exception as e:
+            await db.refund_vton_usage(vton_id, f"Garment upload failed: {str(e)[:200]}")
+            raise HTTPException(status_code=500, detail=f"Error procesando la prenda: {safe_error_message(e, request)}")
+
+        # Moondream pre-validation (fail-open — errors don't block VTON)
+        moondream = MoondreamService(env=env)
+        validation = await moondream.detect_human_body(user_photo_url)
+        if not validation.get("has_body", True):
+            await db.refund_vton_usage(vton_id, "No human body detected in photo")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_image",
+                    "message": "No se detectó un cuerpo humano en la foto. Asegúrate de que se vea tu torso completo.",
+                    "details": validation.get("details", ""),
+                },
+            )
+
+        # Start YouCam task
         try:
             youcam = YouCamService(env=env)
             task_id = await youcam.create_task(
@@ -379,7 +393,6 @@ async def start_vton(
             })
             print(json.dumps({"event": "vton_start_task_created", "vton_id": vton_id, "task_id": task_id[:20]}))
         except Exception as task_error:
-            # Refund usage + mark failed so user isn't charged for a broken start
             await db.refund_vton_usage(vton_id, f"Task creation failed: {str(task_error)[:200]}")
             raise
 
@@ -926,7 +939,7 @@ async def youcam_webhook(request: Request):
         if YOUCAM_WEBHOOK_FAIL_CLOSED:
             print(json.dumps({"event": "webhook_rejected", "reason": "no_secret_configured"}))
             return {"status": "error", "detail": "Webhook secret not configured"}
-    elif not YouCamService.verify_webhook_signature(payload, signature, webhook_secret):
+    elif not YouCamService.verify_webhook_signature(payload, signature, webhook_secret, webhook_id, webhook_ts):
         print(json.dumps({"event": "webhook_rejected", "reason": "invalid_signature"}))
         return {"status": "error", "detail": "Invalid signature"}
 
@@ -1068,9 +1081,9 @@ async def persist_vton_result(
     if not output_url:
         raise HTTPException(status_code=400, detail="No output image to persist")
 
-    from services.r2 import R2_PUBLIC_BASE, save_vton_output_to_r2
+    from services.r2 import get_r2_public_base, save_vton_output_to_r2
 
-    if R2_PUBLIC_BASE in output_url:
+    if get_r2_public_base(env) in output_url:
         return {"status": "already_persisted", "r2_url": output_url}
 
     try:
