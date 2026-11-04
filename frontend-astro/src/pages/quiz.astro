@@ -1,0 +1,29 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Cuestionario de Estilo - FT. THE LINE ONE">
+  <div id="quiz-root"></div>
+</Layout>
+
+<script>
+  // Auth guard
+  const token = localStorage.getItem('token');
+  if (!token) {
+    window.location.href = '/login';
+  }
+
+  import { createRoot } from "react-dom/client";
+  import { createElement } from "react";
+  import OnboardingQuiz from "../components/OnboardingQuiz";
+  import { store } from "../store";
+  import { Provider } from "react-redux";
+
+  const container = document.getElementById("quiz-root");
+  if (container) {
+    const root = createRoot(container);
+    root.render(
+      createElement(Provider, { store }, createElement(OnboardingQuiz))
+    );
+  }
+</script>

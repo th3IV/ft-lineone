@@ -1,0 +1,89 @@
+{
+  "name": "ft-lineone-api",
+  "main": "src/entry.py",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["python_workers", "disable_python_no_global_handlers", "disable_python_external_sdk"],
+  "account_id": "b17c769bfd01fc782de6bf33b946ee82",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ft-lineone-db",
+      "database_id": "95835a2d-02ce-48bb-a53d-a89636f1508c"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "r2-thelineone01"
+    },
+    {
+      "binding": "R2_CATALOG",
+      "bucket_name": "catalogo"
+    },
+    {
+      "binding": "R2_VTON_TEMP",
+      "bucket_name": "vton-temp"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "ft-lineone-catalog"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *", "*/2 * * * *"]
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "SCRAPER_QUEUE",
+        "queue": "scraper-jobs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "scraper-jobs",
+        "max_retries": 3,
+        "max_batch_size": 10,
+        "max_batch_timeout": 60,
+        "dead_letter_queue": "scraper-jobs-dlq"
+      }
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SCRAPER_WORKER",
+        "class_name": "ScraperWorkerEntrypoint"
+      }
+    ]
+  },
+  "exports": {
+    "ScraperWorkerEntrypoint": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "PREMIUM_KV",
+      "id": "03679d1b73e54ccd848781246c6b7b2d"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "JWT_ALGORITHM": "HS256",
+    "CORS_ORIGINS": "https://thelineone.com,https://www.thelineone.com,http://localhost:3000,https://feat-cloudflare-migration.ft-lineone.pages.dev",
+    "CLOUDFLARE_AI_GATEWAY_ID": "ft-lineone-vton",
+    "TRANSBANK_COMMERCE_CODE": "597055555532",
+    "TRANSBANK_BASE_URL": "https://webpay3gint.transbank.cl",
+    "TRANSBANK_RETURN_URL": "https://thelineone.com/payment/success",
+    "ADMIN_EMAILS": "godismelife09@gmail.com",
+    "R2_PUBLIC_URL": "https://pub-ae92531aa2144de7aad7a3510e7b31ff.r2.dev"
+  }
+}

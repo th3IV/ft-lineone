@@ -1,0 +1,246 @@
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import * as authService from "../services/auth";
+import api from "../services/api";
+
+export const logoutUser = createAsyncThunk("user/logout", async () => {
+  await authService.logout();
+});
+
+export const loginUser = createAsyncThunk("user/login", async ({ email, password }, { rejectWithValue }) => {
+  try {
+    const data = await authService.login(email, password);
+    if (data.refresh_token) {
+      localStorage.setItem("refresh_token", data.refresh_token);
+    }
+    return data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Login failed");
+  }
+});
+
+export const registerUser = createAsyncThunk("user/register", async (data, { rejectWithValue }) => {
+  try {
+    const result = await authService.register(data);
+    if (result.refresh_token) {
+      localStorage.setItem("refresh_token", result.refresh_token);
+    }
+    return result;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Registration failed");
+  }
+});
+
+export const fetchProfile = createAsyncThunk("user/fetchProfile", async (_, { rejectWithValue }) => {
+  try {
+    return await authService.getCurrentUser();
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to fetch profile");
+  }
+});
+
+export const updateProfile = createAsyncThunk("user/updateProfile", async (data, { rejectWithValue }) => {
+  try {
+    const response = await api.put("/users/profile", {
+      name: data.name,
+      gender: data.gender,
+      age: data.age,
+    });
+    return { ...response.data, name: data.name, gender: data.gender, age: data.age };
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to update profile");
+  }
+});
+
+export const updateMeasurements = createAsyncThunk("user/updateMeasurements", async (measurements, { rejectWithValue }) => {
+  try {
+    const response = await api.put("/users/measurements", measurements);
+    return response.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to update measurements");
+  }
+});
+
+export const updatePreferences = createAsyncThunk("user/updatePreferences", async (preferences, { rejectWithValue }) => {
+  try {
+    const response = await api.put("/users/preferences", { preferences });
+    return response.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to update preferences");
+  }
+});
+
+export const uploadProfileImage = createAsyncThunk("user/uploadProfileImage", async (base64Image, { rejectWithValue }) => {
+  try {
+    const response = await api.post("/users/profile-image", { image_base64: base64Image });
+    return response.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to upload profile image");
+  }
+});
+
+export const deleteProfileImage = createAsyncThunk("user/deleteProfileImage", async (_, { rejectWithValue }) => {
+  try {
+    await api.delete("/users/profile-image");
+    return true;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.detail || "Failed to delete profile image");
+  }
+});
+
+const hasToken = !!localStorage.getItem("token");
+
+const userSlice = createSlice({
+  name: "user",
+  initialState: {
+    user: null,
+    token: localStorage.getItem("token"),
+    isAuthenticated: hasToken,
+    profileStatus: hasToken ? "idle" : "unauthenticated",
+    measurements: null,
+    preferences: null,
+    dailyUsage: { vton: 0, llm: 0, limit: 5, plan_type: "free" },
+    loading: false,
+    error: null,
+  },
+  reducers: {
+    clearError(state) {
+      state.error = null;
+    },
+    setDailyUsage(state, action) {
+      state.dailyUsage = action.payload;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(logoutUser.fulfilled, (state) => {
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
+        state.profileStatus = "unauthenticated";
+        state.measurements = null;
+        state.preferences = null;
+        state.dailyUsage = { vton: 0, llm: 0, limit: 5, plan_type: "free" };
+      })
+      .addCase(loginUser.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(loginUser.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = {
+          ...action.payload.user,
+          body_measurements: action.payload.user?.body_measurements || {},
+          preferences: action.payload.user?.preferences || {},
+        };
+        state.token = action.payload.access_token;
+        state.isAuthenticated = true;
+        state.profileStatus = "succeeded";
+        state.measurements = action.payload.user?.body_measurements || null;
+        state.preferences = action.payload.user?.preferences || null;
+        if (action.payload.user?.daily_usage) {
+          state.dailyUsage = action.payload.user.daily_usage;
+        }
+      })
+      .addCase(loginUser.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.profileStatus = "failed";
+      })
+      .addCase(registerUser.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(registerUser.fulfilled, (state, action) => {
+        state.loading = false;
+        if (action.payload.access_token) {
+          state.user = action.payload.user;
+          state.token = action.payload.access_token;
+          state.isAuthenticated = true;
+          state.profileStatus = "succeeded";
+          if (action.payload.user?.daily_usage) {
+            state.dailyUsage = action.payload.user.daily_usage;
+          }
+        }
+      })
+      .addCase(registerUser.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateMeasurements.fulfilled, (state, action) => {
+        state.measurements = action.payload.measurements || {};
+      })
+      .addCase(updatePreferences.fulfilled, (state, action) => {
+        state.preferences = action.payload.preferences || {};
+      })
+      .addCase(fetchProfile.pending, (state) => {
+        state.profileStatus = "loading";
+      })
+      .addCase(fetchProfile.fulfilled, (state, action) => {
+        const data = action.payload;
+        if (!data || !data.id) {
+          state.profileStatus = "unauthenticated";
+          state.isAuthenticated = false;
+          state.user = null;
+          state.token = null;
+          localStorage.removeItem("token");
+          localStorage.removeItem("refresh_token");
+          return;
+        }
+        state.user = {
+          id: data.id,
+          email: data.email,
+          name: data.name,
+          gender: data.gender || "",
+          created_at: data.created_at,
+          profile_image: data.profile_image || null,
+          age: data.age || null,
+          plan_type: data.plan_type || "free",
+          is_premium: data.is_premium || false,
+          body_measurements: data.body_measurements || {},
+          preferences: data.preferences || {},
+        };
+        state.measurements = data.body_measurements || {};
+        state.preferences = data.preferences || {};
+        state.dailyUsage = data.daily_usage || { vton: 0, llm: 0, limit: 5, plan_type: "free" };
+        state.profileStatus = "succeeded";
+      })
+      .addCase(fetchProfile.rejected, (state) => {
+        state.profileStatus = "failed";
+        state.isAuthenticated = false;
+        state.user = null;
+        state.token = null;
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        if (state.user) {
+          if (action.payload.name) state.user.name = action.payload.name;
+          if (action.payload.gender !== undefined) state.user.gender = action.payload.gender;
+          if (action.payload.age !== undefined) state.user.age = action.payload.age;
+        }
+      })
+      .addCase(uploadProfileImage.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(uploadProfileImage.fulfilled, (state, action) => {
+        state.loading = false;
+        if (state.user) {
+          state.user.profile_image = action.payload.profile_image;
+        }
+      })
+      .addCase(uploadProfileImage.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(deleteProfileImage.fulfilled, (state) => {
+        if (state.user) state.user.profile_image = null;
+      })
+      .addCase(deleteProfileImage.rejected, (state, action) => {
+        state.error = action.payload;
+      });
+  },
+});
+
+export const { clearError, setDailyUsage } = userSlice.actions;
+export default userSlice.reducer;

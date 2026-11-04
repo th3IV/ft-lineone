@@ -1,0 +1,128 @@
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import type { PayloadAction } from "@reduxjs/toolkit";
+import api from "../lib/api";
+
+const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
+
+function lsGet(key: string): string | null {
+  return isBrowser ? localStorage.getItem(key) : null;
+}
+
+interface UserState {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    is_premium: boolean;
+    plan_type: "free" | "premium";
+    body_measurements?: Record<string, any>;
+    preferences?: Record<string, any>;
+    profile_image?: string;
+    age?: number;
+    created_at: string;
+    daily_usage?: {
+      vton: number;
+      llm: number;
+      limit: number;
+      plan_type: string;
+    };
+  } | null;
+  token: string | null;
+  refresh_token: string | null;
+  isAuthenticated: boolean;
+  profileStatus: "idle" | "loading" | "succeeded" | "failed";
+}
+
+const initialState: UserState = {
+  user: null,
+  token: lsGet("token"),
+  refresh_token: lsGet("refresh_token"),
+  isAuthenticated: !!lsGet("token"),
+  profileStatus: "idle",
+};
+
+export const updatePreferences = createAsyncThunk(
+  "user/updatePreferences",
+  async (preferences: Record<string, any>, { getState, rejectWithValue }) => {
+    const state = getState() as { user: UserState };
+    const token = state.user.token;
+    if (!token) return rejectWithValue("No token");
+    try {
+      const response = await api.put("/users/preferences", { preferences });
+      return response.data.preferences;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.detail || "Error updating preferences");
+    }
+  }
+);
+
+export const updateMeasurements = createAsyncThunk(
+  "user/updateMeasurements",
+  async (measurements: Record<string, any>, { getState, rejectWithValue }) => {
+    const state = getState() as { user: UserState };
+    const token = state.user.token;
+    if (!token) return rejectWithValue("No token");
+    try {
+      const response = await api.put("/users/measurements", measurements);
+      return response.data.measurements;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.detail || "Error updating measurements");
+    }
+  }
+);
+
+const userSlice = createSlice({
+  name: "user",
+  initialState,
+  reducers: {
+    setCredentials: (state, action: PayloadAction<{ token: string; refresh_token: string; user: UserState["user"] }>) => {
+      state.token = action.payload.token;
+      state.refresh_token = action.payload.refresh_token;
+      state.user = action.payload.user;
+      state.isAuthenticated = true;
+      localStorage.setItem("token", action.payload.token);
+      localStorage.setItem("refresh_token", action.payload.refresh_token);
+    },
+    setUser: (state, action: PayloadAction<UserState["user"]>) => {
+      state.user = action.payload;
+    },
+    setProfileStatus: (state, action: PayloadAction<UserState["profileStatus"]>) => {
+      state.profileStatus = action.payload;
+    },
+    logout: (state) => {
+      state.user = null;
+      state.token = null;
+      state.refresh_token = null;
+      state.isAuthenticated = false;
+      localStorage.removeItem("token");
+      localStorage.removeItem("refresh_token");
+    },
+    updateProfile: (state, action: PayloadAction<Partial<UserState["user"]>>) => {
+      if (state.user) {
+        state.user = { ...state.user, ...action.payload };
+      }
+    },
+    setPremium: (state, action: PayloadAction<boolean>) => {
+      if (state.user) {
+        state.user.is_premium = action.payload;
+        state.user.plan_type = action.payload ? "premium" : "free";
+      }
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(updatePreferences.fulfilled, (state, action) => {
+        if (state.user) {
+          state.user.preferences = action.payload;
+        }
+      })
+      .addCase(updateMeasurements.fulfilled, (state, action) => {
+        if (state.user) {
+          state.user.body_measurements = action.payload;
+        }
+      });
+  },
+});
+
+export const { setCredentials, setUser, setProfileStatus, logout, updateProfile, setPremium } = userSlice.actions;
+export default userSlice.reducer;

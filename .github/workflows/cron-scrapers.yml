@@ -1,0 +1,28 @@
+# NOTE: Native Cloudflare Cron Triggers are now configured in wrangler.jsonc.
+# This GitHub Actions workflow is preserved as an external fallback.
+name: Cron - Scrapers
+
+on:
+  schedule:
+    # Every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      stores:
+        description: "Comma-separated stores to scrape (empty = all)"
+        required: false
+        default: ""
+
+jobs:
+  run-scrapers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scrapers via API
+        run: |
+          # API_KEY must be a long-lived JWT for an admin user.
+          # --fail-with-body makes the job fail loudly on 4xx/5xx (e.g. expired token).
+          curl -sS --fail-with-body -X POST \
+            "${{ secrets.API_URL }}/api/v1/scrapers/run" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.API_KEY }}" \
+            -d '{}'

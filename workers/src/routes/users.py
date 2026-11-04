@@ -1,0 +1,289 @@
+"""User profile routes."""
+
+import base64
+import re
+from fastapi import APIRouter, HTTPException, Request, Depends
+from pydantic import BaseModel
+from typing import Optional
+
+from middleware.security import require_auth, require_admin, safe_error_message
+from services.r2 import upload_profile_image, delete_profile_image as delete_profile_image_r2
+from services.config import MAX_USER_IMAGE_BYTES, ALLOWED_IMAGE_MAGIC
+
+router = APIRouter()
+
+
+def get_db(request: Request):
+    """Get database service from request state."""
+    return request.app.state.db
+
+
+def get_env(request: Request):
+    """Get Workers env binding from request state."""
+    return getattr(request.app.state, "env", None)
+
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    gender: Optional[str] = None
+    age: Optional[int] = None
+
+
+class MeasurementsUpdate(BaseModel):
+    height: Optional[float] = None
+    weight: Optional[float] = None
+    chest: Optional[float] = None
+    waist: Optional[float] = None
+    hips: Optional[float] = None
+    bodyShape: Optional[str] = None
+
+
+class PreferencesUpdate(BaseModel):
+    preferences: dict = {}
+
+
+class ProfileImageUpdate(BaseModel):
+    image_base64: str
+
+
+@router.get("/me")
+async def get_current_user(request: Request, user: dict = Depends(require_auth)):
+    """Get current user profile with measurements and preferences."""
+    db = get_db(request)
+    user_obj = await db.get_user_by_id(user.user_id)
+    if not user_obj:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    measurements = user_obj.body_measurements or {}
+    gender = measurements.get("gender", "")
+
+    # Get daily usage
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    usage = await db.get_user_usage(user.user_id, today)
+
+    return {
+        "id": user_obj.id,
+        "email": user_obj.email,
+        "name": user_obj.name,
+        "gender": gender,
+        "created_at": user_obj.created_at,
+        "body_measurements": measurements,
+        "preferences": user_obj.preferences or {},
+        "profile_image": user_obj.profile_image,
+        "is_premium": user_obj.is_premium,
+        "plan_type": getattr(user_obj, 'plan_type', 'free'),
+        "age": user_obj.age,
+        "daily_usage": {
+            "vton": usage.get("vton_count", 0),
+            "llm": usage.get("llm_count", 0),
+            "limit": -1 if (user_obj.is_premium or getattr(user_obj, 'plan_type', 'free') == 'premium') else 5,
+            "plan_type": getattr(user_obj, 'plan_type', 'free'),
+        },
+    }
+
+
+@router.get("/me/usage")
+async def get_my_usage(request: Request, user: dict = Depends(require_auth)):
+    """Lightweight usage endpoint — returns just counts, limit, and plan_type."""
+    db = get_db(request)
+    user_obj = await db.get_user_by_id(user.user_id)
+    if not user_obj:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    is_premium = user_obj.is_premium or getattr(user_obj, 'plan_type', 'free') == 'premium'
+    plan_type = getattr(user_obj, 'plan_type', 'free')
+
+    if is_premium:
+        return {"vton": 0, "llm": 0, "limit": -1, "plan_type": plan_type}
+
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    usage = await db.get_user_usage_readonly(user.user_id, today)
+
+    return {
+        "vton": usage["vton_count"],
+        "llm": usage["llm_count"],
+        "limit": 5,
+        "plan_type": plan_type,
+    }
+
+
+@router.put("/profile")
+async def update_profile(
+    body: ProfileUpdate,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    """Update user profile (name, email, gender, age)."""
+    db = get_db(request)
+    updates = {}
+    if body.name is not None:
+        updates["name"] = body.name
+    if body.email is not None:
+        updates["email"] = body.email
+    if body.age is not None:
+        updates["age"] = body.age
+    if body.gender is not None:
+        user_obj = await db.get_user_by_id(user.user_id)
+        measurements = user_obj.body_measurements or {}
+        measurements["gender"] = body.gender
+        updates["body_measurements"] = measurements
+
+    if updates:
+        await db.update_user(user.user_id, updates)
+
+    return {"status": "updated", "fields": list(updates.keys())}
+
+
+@router.put("/measurements")
+async def update_measurements(
+    body: MeasurementsUpdate,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    """Update user body measurements."""
+    db = get_db(request)
+    user_obj = await db.get_user_by_id(user.user_id)
+    existing = user_obj.body_measurements if user_obj else {}
+    updates = body.dict(exclude_unset=True, exclude_none=True)
+    merged = {**(existing or {}), **updates}
+    await db.update_user(user.user_id, {"body_measurements": merged})
+    return {"status": "updated", "measurements": merged}
+
+
+@router.put("/preferences")
+async def update_preferences(
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    """Update user style preferences. Accepts {"preferences": {...}} or flat dict."""
+    db = get_db(request)
+    prefs = {}
+    try:
+        raw = await request.json()
+        if isinstance(raw, dict):
+            if "preferences" in raw and isinstance(raw["preferences"], dict):
+                prefs = raw["preferences"]
+            else:
+                prefs = raw
+    except Exception:
+        pass
+
+    existing_user = await db.get_user_by_id(user.user_id)
+    existing_prefs = (existing_user.preferences if existing_user else {}) or {}
+    merged_prefs = {**existing_prefs, **prefs}
+
+    await db.update_user(user.user_id, {"preferences": merged_prefs})
+    return {"status": "updated", "preferences": merged_prefs}
+
+
+@router.post("/profile-image")
+async def upload_profile_image_route(
+    body: ProfileImageUpdate,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    """Upload a user profile image (base64) to R2 and update the user record."""
+    env = get_env(request)
+    if not env or not getattr(env, "R2", None):
+        raise HTTPException(status_code=500, detail="R2 bucket not configured")
+
+    # Extract data URI prefix and bytes
+    data = body.image_base64
+    if "," in data:
+        _, b64data = data.split(",", 1)
+    else:
+        b64data = data
+
+    try:
+        image_bytes = base64.b64decode(b64data)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+
+    if len(image_bytes) > MAX_USER_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Image too large: maximum {MAX_USER_IMAGE_BYTES // (1024*1024)}MB",
+        )
+
+    # Validate magic bytes against allowed image formats
+    header = image_bytes[:8]
+    if not any(header.startswith(magic) for magic in ALLOWED_IMAGE_MAGIC):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid image format: only JPEG, PNG, and WebP are allowed",
+        )
+
+    # Detect content-type from magic bytes
+    if header.startswith(b'\xff\xd8\xff'):
+        content_type = "image/jpeg"
+    elif header.startswith(b'\x89PNG'):
+        content_type = "image/png"
+    elif header.startswith(b'RIFF'):
+        content_type = "image/webp"
+    else:
+        content_type = "image/jpeg"
+
+    try:
+        public_url = await upload_profile_image(env, user.user_id, image_bytes, content_type)
+    except Exception as e:
+        import json
+        print(json.dumps({
+            "event": "profile_image_upload_error",
+            "user_id": user.user_id,
+            "image_size": len(image_bytes),
+            "content_type": content_type,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }))
+        raise HTTPException(status_code=500, detail=f"Failed to upload image: {safe_error_message(e, request)}")
+
+    db = get_db(request)
+    await db.update_user(user.user_id, {"profile_image": public_url})
+
+    return {"status": "updated", "profile_image": public_url}
+
+
+@router.delete("/profile-image")
+async def delete_profile_image(
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    """Delete user profile image from R2 and clear from DB."""
+    env = get_env(request)
+    if env and getattr(env, "R2", None):
+        try:
+            await delete_profile_image_r2(env, user.user_id)
+        except Exception:
+            pass
+
+    db = get_db(request)
+    await db.update_user(user.user_id, {"profile_image": None})
+    return {"status": "deleted"}
+
+
+class PremiumUpdate(BaseModel):
+    is_premium: bool
+
+
+@router.patch("/{user_id}/premium")
+async def set_premium(
+    user_id: str,
+    body: PremiumUpdate,
+    request: Request,
+    user: dict = Depends(require_admin),
+):
+    """Toggle premium status for a user. Requires admin JWT."""
+    db = get_db(request)
+    success = await db.set_premium_status(user_id, body.is_premium)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found or no changes")
+
+    # Update KV cache for premium status
+    kv_service = getattr(request.app.state, "kv_premium", None)
+    if kv_service:
+        await kv_service.set_premium(user_id, body.is_premium)
+
+    return {"status": "updated", "is_premium": body.is_premium}

@@ -1,68 +1,176 @@
 # FT. THE LINE ONE
 
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3-06B6D4?logo=tailwindcss&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?logo=mongodb&logoColor=white)
-![LangChain](https://img.shields.io/badge/LangChain-GPT4-1C3C3C?logo=langchain&logoColor=white)
-![Render](https://img.shields.io/badge/Render-Deploy-46E3B7?logo=render&logoColor=white)
+![Astro](https://img.shields.io/badge/Astro-7-FF5D01?logo=astro&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?logo=tailwindcss&logoColor=white)
+![Cloudflare](https://img.shields.io/badge/Cloudflare-Workers+D1+R2+Queues+Vectorize+KV-F38020?logo=cloudflare&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-## Descripción
+## Descripcion
 
-**FT. THE LINE ONE** es una plataforma **B2C de Fashion Tech** que integra **Web Scraping**, **Inteligencia Artificial (LLMs)** y **Virtual Try-On (VTON)** para ofrecer una experiencia de compra de moda inteligente y personalizada.
+**FT. THE LINE ONE** ([thelineone.com](https://thelineone.com)) es una plataforma **B2C de Fashion Tech** que integra **Web Scraping**, **Inteligencia Artificial (LLMs + RAG)** y **Virtual Try-On (VTON)** para ofrecer una experiencia de compra de moda inteligente y personalizada.
 
-La plataforma extrae productos en tiempo real desde los principales retailers de Chile, los procesa con IA, y permite a los usuarios probarse virtualmente la ropa antes de comprar.
+La plataforma extrae productos desde los principales retailers de Chile, los indexa semánticamente con Vectorize, y permite a los usuarios probarse virtualmente la ropa antes de comprar.
+
+---
+
+## Stack
+
+| Capa | Tecnologia | Detalle |
+|---|---|---|
+| Frontend | Astro 7 + React 19 + TailwindCSS 4 + Redux Toolkit | SSR / Islands architecture desplegado en Cloudflare Pages |
+| API | Cloudflare Workers Python + FastAPI (ASGI) | Pyodide runtime en el edge global — API v2.0.0 con docs OpenAPI |
+| Database | Cloudflare D1 (SQLite) | `ft-lineone-db` con migraciones versionadas |
+| Storage | Cloudflare R2 (S3-compatible, $0 egress) | `r2-thelineone01` (avatares/VTON), `catalogo`, `vton-temp` |
+| Cache | Cloudflare KV | `PREMIUM_KV` — cache de estado premium (TTL 24h) con fallback a D1 |
+| Queues | Cloudflare Queues | `scraper-jobs` + DLQ `scraper-jobs-dlq` (consumo directo en `entry.py`) |
+| Vector Search | Cloudflare Vectorize + BGE-M3 | `ft-lineone-catalog` para recomendaciones RAG |
+| LLM & Vision | Cloudflare Workers AI + Moondream | Llama 4 Scout, DeepSeek R1, Moondream visión |
+| VTON | YouCam AI Clothes V3.0 | Virtual try-on external API con polling automatizado |
+| Payments | Transbank WebPay Plus REST API | CLP 4,990/mes premium |
+| Auth | JWT (access + refresh) + PBKDF2-SHA256 | Rate-limited login/register + revocación en D1 |
+| Cron | Cloudflare Native Cron Triggers | Scrapers `*/5 * * * *` + VTON polling `*/2 * * * *` (ver `wrangler.jsonc`) |
+| Observabilidad | Structured JSON logging | Request IDs (`X-Request-ID`) + logging de eventos por request/cron/queue |
+| CI/CD | GitHub Actions | pytest gate + build + type-check frontend + deploy |
 
 ---
 
 ## Arquitectura
 
-Monorepo estructurado en **4 microservicios** que se comunican vía HTTP/JSON:
-
+```text
+Frontend Astro 7 / React 19 (TailwindCSS 4 + Redux)
+    └── HTTP/JSON ──► API (Cloudflare Workers Python / FastAPI + ASGI, v2.0.0)
+                          ├── Cloudflare D1 (base de datos SQL)
+                          ├── Cloudflare KV (cache estado premium)
+                          ├── Cloudflare Queues (scraper-jobs + DLQ)
+                          ├── Cloudflare Vectorize (RAG semántico BGE-M3)
+                          ├── Workers AI (Llama 4 Scout + Moondream)
+                          ├── Cloudflare R2 (imágenes perfil, VTON, catálogo)
+                          ├── YouCam API (Virtual Try-On)
+                          ├── Transbank WebPay (pagos CLP)
+                          └── Scrapers consumidos vía Default.queue() en entry.py
+                                ├── Zara (Internal JSON API)
+                                ├── Maui & Sons (GraphQL Magento)
+                                ├── Falabella (SSR JSON)
+                                ├── H&M (VTEX catalog system)
+                                └── Fashion Park (Shopify JSON)
+                                (Paris y Ripley pausados en espera de afiliados)
 ```
-Frontend React (TailwindCSS + Redux)
-    ├── HTTP/JSON ──► Backend API (FastAPI)
-    │                     ├── PostgreSQL (datos estructurados)
-    │                     ├── MongoDB (datos no estructurados / scraping)
-    │                     ├── Cloudflare R2 (imágenes)
-    │                     └── Scrapers (BeautifulSoup)
-    │                           ├── Falabella
-    │                           ├── Ripley
-    │                           ├── Paris
-    │                           ├── Maui
-    │                           ├── Zara
-    │                           └── etc.
-    └── HTTP/JSON ──► VTON Service (FastAPI + Replicate)
-                          └── Cloudflare R2 (output)
-```
 
-**Flujo principal:**
-1. **Scrapers** extraen productos desde los retailers → los envían al backend
-2. **Backend** los procesa, normaliza, valida con LLM y almacena (PostgreSQL + MongoDB)
-3. **Usuario** navega en el Frontend → solicita productos desde la API
-4. **Usuario** sube su foto + selecciona producto → Backend envía al servicio **VTON**
-5. **VTON** procesa con IDM-VTON (Replicate API) → resultado se guarda en R2 → se muestra en Frontend
-6. **LLM (GPT-4)** genera recomendaciones personalizadas basadas en preferencias e historial
+**Notas de arquitectura:**
+
+- Los mensajes de `scraper-jobs` se procesan **directamente** en `entry.py` (`Default.queue()`): ack en éxito, `retry()` con backoff exponencial (30s × 2^n, tope 12h) en fallo, DLQ tras 3 reintentos.
+- El Durable Object `ScraperWorkerEntrypoint` (`durable_objects/scraper_worker.py`) está **DEPRECATED** — se conserva solo por compatibilidad con el binding existente.
+- El chat de estilo soporta **streaming SSE** (`/api/v1/recommendations/chat/stream`); el entry point hace passthrough del stream sin buffering.
+- CORS estricto: orígenes no permitidos reciben **403** (no solo falta de headers). Patrón `*.ft-lineone.pages.dev` admitido; localhost solo en dev.
+
+**Flujo VTON (YouCam):**
+
+1. Usuario sube foto + selecciona producto
+2. API valida imagen (magic bytes + 8MB max)
+3. Foto de usuario se sube a freeimage.host (URL publica)
+4. Foto de prenda se obtiene del catalogo
+5. YouCam recibe ambas URL y procesa el try-on
+6. Webhook notifica cuando termina (fallback: polling cada 2m vía cron)
+7. Resultado se persiste en R2 (evita URLs expiradas de freeimage.host) y se retorna al Frontend
 
 ---
 
-## Tech Stack
+## Freemium
 
-| Capa | Tecnología | Versión |
-|---|---|---|
-| **Backend** | FastAPI + Python | 3.12+ / 0.115 |
-| **Frontend** | React + JavaScript + TailwindCSS | 18 / 3 |
-| **Scrapers** | Python + BeautifulSoup + requests | 4.x |
-| **VTON** | FastAPI + Replicate API (IDM-VTON) | — |
-| **Base de Datos** | PostgreSQL + MongoDB | 16 / 7 |
-| **Almacenamiento** | Cloudflare R2 (S3-compatible) | — |
-| **IA** | LangChain + GPT-4 + Replicate | — |
-| **Autenticación** | JWT (access + refresh tokens) + bcrypt | — |
-| **Cache / Queue** | Redis + Celery | 7 / 5.4 |
-| **Despliegue** | Render + GitHub Actions | — |
+| Plan | VTON/dia | LLM/dia | Precio |
+|------|----------|---------|--------|
+| Free | 5 | 5 | Gratis |
+| Premium | Ilimitado | Ilimitado | CLP 4,990/mes |
+
+- Limites unificados en `services/config.py` — cambiar una vez, todas las rutas se actualizan
+- Estado premium cacheado en KV (`kv_premium.py`, TTL 24h) con invalidación al cambiar de plan y fallback a D1
+- Checkout via Transbank WebPay (tarjeta de prueba: 4051885600446623)
+
+---
+
+## Seguridad
+
+| Feature | Implementacion |
+|---------|---------------|
+| Rate limiting | Login (20/IP, 10/email), Register (5/IP/hora) |
+| Token revocation | Logout via D1 `revoked_tokens` table |
+| RBAC | `require_admin` en rutas admin/debug/scrapers (`ADMIN_EMAILS` en vars) |
+| CORS | Orígenes no permitidos → 403; localhost solo en dev |
+| Webhook fail-closed | `YOUCAM_WEBHOOK_FAIL_CLOSED = True` |
+| Error sanitization | `safe_error_message()` oculta detalles internos en prod |
+| Image validation | Magic bytes + 8MB en uploads VTON y profile-image |
+| IDOR protection | Ownership check en `/image/{vton_id}` |
+| Atomic usage | `try_increment_usage()` previene TOCTOU races |
+| Atomic refund | `refund_vton_usage()` previene double-refund |
+| Observabilidad | JSON logs estructurados + `X-Request-ID` en cada response |
+
+---
+
+## Endpoints API
+
+Documentación interactiva disponible en `/docs` (Swagger) y `/redoc` una vez desplegado el worker.
+
+| Endpoint | Metodo | Descripcion | Auth |
+|----------|--------|-------------|------|
+| `/health` | GET | Health check (versión, runtime) | No |
+| `/api/v1/auth/register` | POST | Registro | No |
+| `/api/v1/auth/login` | POST | Login | No |
+| `/api/v1/auth/refresh` | POST | Renovar token | No |
+| `/api/v1/auth/logout` | POST | Logout (revoca token) | Si |
+| `/api/v1/users/me` | GET | Perfil | Si |
+| `/api/v1/users/me/usage` | GET | Uso diario (VTON/LLM) | Si |
+| `/api/v1/users/profile` | PUT | Actualizar perfil | Si |
+| `/api/v1/users/measurements` | PUT | Medidas corporales | Si |
+| `/api/v1/users/preferences` | PUT | Preferencias de estilo | Si |
+| `/api/v1/users/profile-image` | POST/DEL | Imagen de perfil | Si |
+| `/api/v1/users/{id}/premium` | PATCH | Activar/desactivar premium | Admin |
+| `/api/v1/products` | GET | Listar productos (paginado + filtros) | No |
+| `/api/v1/products/search` | GET | Buscar productos | No |
+| `/api/v1/products/store/{store}` | GET | Productos por tienda | No |
+| `/api/v1/products/{id}` | GET | Detalle producto | No |
+| `/api/v1/recommendations` | GET | Recomendaciones IA | Si |
+| `/api/v1/recommendations/chat` | POST | Chat de estilo IA | Si |
+| `/api/v1/recommendations/chat/stream` | POST | Chat de estilo IA con **streaming SSE** | Si |
+| `/api/v1/vton/generate` | POST | **VTON consolidado** (recomendado) | Si |
+| `/api/v1/vton/start` | POST | Crear tarea VTON (por URL de imagen) | Si |
+| `/api/v1/vton/status/{job_id}` | GET | Estado de tarea VTON | Si |
+| `/api/v1/vton/result/{id}` | GET | Resultado VTON | Si |
+| `/api/v1/vton/history` | GET | Historial VTON | Si |
+| `/api/v1/vton/image/{vton_id}` | GET | Imagen resultado (ownership check) | Si |
+| `/api/v1/vton/{vton_id}/persist` | POST | Persistir resultado en R2 | Si |
+| `/api/v1/vton/{vton_id}` | DELETE | Eliminar resultado VTON | Si |
+| `/api/v1/vton/webhook` | POST | Webhook de YouCam (fail-closed) | No |
+| `/api/v1/payments/create` | POST | Crear pago Transbank | Si |
+| `/api/v1/payments/confirm` | POST | Confirmar pago | Si |
+| `/api/v1/payments/webhook` | POST | Webhook de pagos | No |
+| `/api/v1/payments/status` | GET | Estado de pago | Si |
+| `/api/v1/favorites` | GET/POST/DEL | Favoritos del usuario | Si |
+| `/api/v1/favorites/check/{product_id}` | GET | Verificar si un producto es favorito | Si |
+| `/api/v1/scrapers/run` | POST | Encolar scrapers activos | Admin |
+| `/api/v1/scrapers/run/{store}` | POST | Encolar scraper de una tienda | Admin |
+| `/api/v1/scrapers/status` | GET | Estado de última corrida y frescura por tienda | No |
+| `/api/v1/scrapers/runs` | GET | Historial de corridas de scraping | No |
+| `/api/v1/scrapers/reset/{store}` | POST | Resetear estado de tienda | Admin |
+| `/api/v1/scrapers/ingest` (+`/batch`) | POST | Ingesta manual de productos | Admin |
+
+> Los endpoints marcados como deprecated (`/vton/prefetch`, `/vton/try-on`, y variantes) se mantienen por compatibilidad; usa `/vton/generate`. Los endpoints `/vton/debug-*` y `/scrapers/debug/*` son de diagnóstico admin.
+
+### Flujo VTON (frontend)
+
+```javascript
+// 1. Llamada consolidada (recomendado)
+const { id } = await api.post('/vton/generate', {
+  product_id: 'abc123',
+  image: 'data:image/jpeg;base64,...'  // foto del usuario
+});
+
+// 2. Polling hasta completar
+const result = await api.get(`/vton/result/${id}`);
+// result.status: "processing" | "completed" | "failed"
+// result.output_image_url: URL de la imagen resultado
+```
 
 ---
 
@@ -70,246 +178,163 @@ Frontend React (TailwindCSS + Redux)
 
 ```
 ft-lineone/
-├── backend/
-│   ├── app/
-│   │   ├── api/v1/routes/        # FastAPI endpoints
-│   │   │   ├── auth.py
-│   │   │   ├── users.py
-│   │   │   ├── products.py
-│   │   │   ├── recommendations.py
-│   │   │   └── vton.py
-│   │   ├── core/                  # Config, seguridad
-│   │   ├── domain/models/         # User, Product, VTONResult, Account, Session
-│   │   ├── application/
-│   │   │   ├── services/          # Lógica de negocio
-│   │   │   └── orchestrator/      # Pipelines multi-paso
-│   │   ├── infrastructure/
-│   │   │   ├── persistence/       # PostgreSQL (SQLAlchemy) + MongoDB (Motor)
-│   │   │   └── external_services/ # LLMClient, VTONClient, ScraperClient
-│   │   └── main.py
-│   ├── tests/
-│   ├── requirements.txt
-│   └── Dockerfile
-├── frontend/
+├── workers/                         # Backend (Cloudflare Workers Python)
 │   ├── src/
-│   │   ├── components/            # Navbar, ProductCard, ProductGrid, VirtualMirror, StyleQuiz
-│   │   ├── pages/                 # Home, Catalog, ProductDetail, VirtualTryOn, Profile
-│   │   ├── services/              # api.js, auth.js, vton.js
-│   │   ├── store/                 # Redux Toolkit (user, products, recommendations)
-│   │   ├── hooks/                 # useAuth
-│   │   ├── App.jsx
-│   │   └── index.js
-│   ├── package.json
-│   └── Dockerfile
-├── scrapers/
-│   ├── scrapers/                  # BaseScraper + Falabella, Ripley, Paris, Maui, Zara
-│   ├── models/                    # ProductDTO
-│   ├── pipeline/                  # DataNormalizer, ImageProcessor, Publisher
-│   ├── requirements.txt
-│   └── Dockerfile
-├── vton/
-│   ├── app/
-│   │   ├── api/routes.py          # Endpoints de Virtual Try-On
-│   │   ├── services/              # TryOnService, ReplicateClient, S3Connector, ImageProcessor
-│   │   └── main.py
-│   ├── requirements.txt
-│   └── Dockerfile
-├── infra/                         # (reservado para Terraform AWS)
-├── docs/
-│   ├── architecture.md
-│   └── api.md
-├── .github/workflows/deploy.yml   # CI/CD a Render
-├── render.yaml                    # Configuración de despliegue
-├── .env.example
-└── .gitignore
+│   │   ├── entry.py                 # FastAPI app + CORS + queue consumer + scheduled handler + SSE bridge
+│   │   ├── cron.py                  # Polling VTON (YouCam) + persistencia de resultados en R2
+│   │   ├── routes/
+│   │   │   ├── auth.py              # Register, login, refresh, logout
+│   │   │   ├── users.py             # Perfil, medidas, preferencias, imagen de perfil, premium
+│   │   │   ├── products.py          # CRUD productos, búsqueda, listado por tienda
+│   │   │   ├── vton.py              # VTON (generate, start, status, result, history, webhook)
+│   │   │   ├── recommendations.py   # LLM recomendaciones + chat (+ streaming SSE)
+│   │   │   ├── favorites.py         # Favoritos de productos
+│   │   │   ├── payments.py          # Transbank WebPay (create, confirm, webhook, status)
+│   │   │   └── scrapers.py          # Status, runs, trigger, ingest, debug
+│   │   ├── services/
+│   │   │   ├── config.py            # Constantes compartidas (limits, thresholds)
+│   │   │   ├── database.py          # D1 CRUD + atomic usage + scrape tracking
+│   │   │   ├── auth.py              # JWT + PBKDF2
+│   │   │   ├── kv_premium.py        # Cache KV de estado premium (TTL 24h, fallback D1)
+│   │   │   ├── llm.py               # Llama 4 Scout + pre-filtrado
+│   │   │   ├── catalog_rag.py       # RAG sobre catálogo con Vectorize
+│   │   │   ├── vectorize.py         # Cliente Vectorize + BGE-M3
+│   │   │   ├── model_router.py      # Router multi-modelo Workers AI
+│   │   │   ├── moondream.py         # Análisis de prendas con Moondream visión
+│   │   │   ├── youcam.py            # YouCam API client
+│   │   │   ├── image_upload.py      # freeimage.host upload + circuit breaker
+│   │   │   └── r2.py                # R2 storage (perfil, VTON, catálogo)
+│   │   ├── scrapers/
+│   │   │   ├── scheduler.py         # Orquestador cron y validaciones
+│   │   │   ├── zara.py              # Zara scraper
+│   │   │   ├── maui.py              # Maui & Sons scraper (GraphQL)
+│   │   │   ├── falabella.py         # Falabella scraper (Next.js SSR)
+│   │   │   ├── hm.py                # H&M scraper (VTEX)
+│   │   │   ├── fashionpark.py       # Fashion Park scraper (Shopify)
+│   │   │   ├── paris.py             # [PAUSADO] Paris scraper
+│   │   │   └── ripley.py            # [PAUSADO] Ripley scraper
+│   │   ├── models/                  # Modelos de dominio (product, user, vton_result)
+│   │   ├── middleware/
+│   │   │   ├── security.py          # Auth + CORS + rate limit + safe_error_message
+│   │   │   └── usage_limit.py       # Daily VTON/LLM limits
+│   │   └── durable_objects/
+│   │       └── scraper_worker.py    # [DEPRECATED] Consumo de colas movido a entry.py
+│   ├── tests/                       # 71 tests (pytest)
+│   ├── migrations/                  # D1 migrations (versionadas)
+│   ├── python_modules/              # Dependencias empaquetadas para el runtime del worker
+│   ├── schema.sql                   # D1 schema consolidado
+│   └── wrangler.jsonc               # Worker config (crons, queues, bindings D1/R2/KV/AI/Vectorize/DO)
+├── frontend-astro/                  # Frontend de Producción (Astro 7 + React 19)
+│   ├── src/
+│   │   ├── pages/                   # index, catalog, chat, login, register, profile, quiz, virtual-try-on, payment/success
+│   │   ├── components/              # VirtualTryOn, VirtualMirror, OnboardingQuiz, UpgradeModal + ui/
+│   │   ├── store/                   # Redux Toolkit (user, product, favorites, ui)
+│   │   └── styles/                  # Tailwind CSS 4
+│   ├── tests/e2e/                   # E2E tests (Playwright, critical-flows.spec.ts)
+│   ├── playwright.config.ts
+│   ├── astro.config.mjs
+│   └── package.json
+├── legacy/                          # Código histórico archivado
+│   └── frontend-cra/                # Frontend original React 18 SPA (CRA)
+├── .github/workflows/
+│   ├── ci-cd.yml                    # Pipeline principal (backend tests + frontend build + deploy)
+│   ├── deploy.yml                   # Deploy backend + frontend (push a main)
+│   ├── ci.yml                       # PR checks (pytest + build)
+│   └── cron-scrapers.yml            # Fallback externo para scrapers
+├── docs/                            # Documentación técnica (api, architecture, security, performance)
+├── TEST_PLAN.md                     # Plan de testing (unit, integration, E2E)
+└── opencode.md / opencode.json      # Config del agente de desarrollo
 ```
 
 ---
 
-## Servicios
+## Testing
 
-### Backend API (`:8000`)
+```bash
+# Backend tests (71 tests pasando)
+cd workers
+python -m pytest tests/ -v
 
-API REST con FastAPI, arquitectura hexagonal (puertos y adaptadores).
+# Frontend E2E (Playwright — flujos críticos)
+cd frontend-astro
+npx playwright test
 
-| Endpoint | Método | Descripción | Auth |
-|---|---|---|---|
-| `/health` | GET | Health check | No |
-| `/auth/register` | POST | Registro de usuario | No |
-| `/auth/login` | POST | Inicio de sesión | No |
-| `/auth/refresh` | POST | Renovar token | No |
-| `/users/me` | GET | Perfil del usuario | Sí |
-| `/users/me/measurements` | PUT | Actualizar medidas corporales | Sí |
-| `/users/me/history` | GET | Historial de interacciones | Sí |
-| `/products` | GET | Listar productos (paginado) | No |
-| `/products/{id}` | GET | Detalle del producto | No |
-| `/products/search` | GET | Buscar productos | No |
-| `/products/store/{store}` | GET | Productos por tienda | No |
-| `/recommendations` | GET | Recomendaciones IA | Sí |
-| `/vton/try-on` | POST | Virtual Try-On | Sí |
-| `/vton/result/{id}` | GET | Resultado VTON | Sí |
+# Frontend build check
+cd frontend-astro
+npm install
+npm run build
+```
 
-### Frontend (`:3000`)
-
-Aplicación React 18 con:
-- **Redux Toolkit** — 3 slices (user, products, recommendations)
-- **React Router v6** — 5 páginas (Home, Catalog, ProductDetail, VirtualTryOn, Profile)
-- **TailwindCSS v3** — Diseño responsivo
-- **Axios** — Cliente HTTP con interceptores JWT
-- **react-dropzone** — Subida de fotos para VTON
-- **react-hot-toast** — Notificaciones
-
-### Scrapers
-
-Módulos de scraping para零售商 chilenos con BeautifulSoup + requests. Cada scraper hereda de `BaseScraper` e incluye fallback con datos mock para desarrollo.
-
-| Scraper | Tienda | URL Base |
-|---|---|---|
-| `FalabellaScraper` | Falabella | falabella.com |
-| `RipleyScraper` | Ripley | ripley.com |
-| `ParisScraper` | Paris | paris.cl |
-| `MauiScraper` | Maui | maui.cl |
-| `ZaraScraper` | Zara | zara.com |
-| — | *y más en el futuro* | — |
-
-Pipeline de procesamiento: `DataNormalizer` (estandariza categorías, tallas, colores, moneda) → `ImageProcessor` (redimensiona, watermarks, thumbnails) → `Publisher` (envía al backend).
-
-### VTON Service (`:8001`)
-
-Microservicio de Virtual Try-On que:
-1. Recibe la foto del usuario + ID del producto
-2. Sube la foto a Cloudflare R2
-3. Llama a Replicate API con el modelo **IDM-VTON** (`cuuupid/idm-vton`)
-4. Retorna la URL del resultado generado
-
-Endpoints:
-- `POST /try-on` — Solicitar try-on (multipart: user_image + product_id + user_id)
-- `GET /try-on/{job_id}/status` — Estado del proceso
-- `GET /try-on/{job_id}/result` — Resultado final
-- `POST /try-on/{job_id}/retry` — Reintentar si falló
+CI: GitHub Actions ejecuta `pytest` + build (y type-check no bloqueante del frontend) antes de cada deploy.
 
 ---
 
 ## Getting Started
 
-### Prerrequisitos
+### Prerequisitos
 
-- Python 3.12+
-- Node.js 18+
-- PostgreSQL 16 (o Docker)
-- MongoDB 7 (o Docker)
+- Python 3.12+ (CI usa 3.13)
+- Node.js 22.12+
+- Wrangler CLI (`npm install -g wrangler`)
 
 ### Backend
 
 ```bash
-cd backend
-python -m venv venv
-.\venv\Scripts\activate    # Windows
+cd workers
+python -m venv .venv
+.venv\Scripts\activate  # Windows
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+wrangler dev --test-scheduled
 ```
 
 ### Frontend
 
 ```bash
-cd frontend
+cd frontend-astro
 npm install
-npm start
+npm run dev
 ```
 
-Abrir en `http://localhost:3000`.
-
-### Scrapers
+### Deployment
 
 ```bash
-cd scrapers
-python -m venv venv
-pip install -r requirements.txt
-python -m scrapers
+# Backend
+cd workers && wrangler deploy
+
+# Frontend
+cd frontend-astro && npm run build && npx wrangler pages deploy dist --project-name ft-lineone
+
+# Migrations D1
+npx wrangler d1 migrations apply ft-lineone-db --local   # local
+npx wrangler d1 migrations apply ft-lineone-db           # remoto
 ```
 
-### VTON
-
-```bash
-cd vton
-python -m venv venv
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8001
-```
-
----
-
-## Variables de Entorno
-
-Copiar `.env.example` a `.env` y configurar:
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Descripción |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `MONGODB_URL` | MongoDB connection string |
-| `JWT_SECRET` | Clave secreta para JWT |
-| `R2_ACCOUNT_ID` | Cloudflare R2 account ID |
-| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key |
-| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret key |
-| `R2_BUCKET` | Bucket name (ft-lineone-media) |
-| `R2_PUBLIC_URL` | URL pública de R2 |
-| `REPLICATE_API_TOKEN` | Token de Replicate API |
-| `REPLICATE_MODEL` | Modelo VTON (cuuupid/idm-vton) |
-| `OPENAI_API_KEY` | OpenAI API key para LLM |
-| `REACT_APP_API_URL` | URL base de la API (frontend) |
-
----
-
-## Deployment
-
-### Render (actual)
-
-Configuración declarativa en `render.yaml` con 4 servicios:
-- **ft-lineone-backend** — Web service Python (Free)
-- **ft-lineone-scrapers** — Web service Python (Free)
-- **ft-lineone-vton** — Web service Python (Free)
-- **ft-lineone-frontend** — Static site
-
-Base de datos: PostgreSQL + Redis (Free).
-
-### CI/CD
-
-GitHub Actions en `.github/workflows/deploy.yml` — despliegue automático a Render al hacer push a `main`.
-
----
-
-## Estrategia de Infraestructura
-
-| demo / desarrollo (gratuito) | producción (AWS) |
-|---|---|
-| **Render** (web services, PostgreSQL, Redis) | **EKS** (Kubernetes) + **RDS** (PostgreSQL) + **ElastiCache** (Redis) |
-| **Cloudflare R2** (almacenamiento S3-compatible) | **S3** |
-| **Replicate API** (IDM-VTON free credits) | **SageMaker** / **EC2 GPU** (modelo propio) |
-| **GitHub Actions** | **CodePipeline** + **CodeBuild** |
-| — | **API Gateway** (rate limiting, WAF) |
-| — | **Lambda** (cron jobs serverless) |
-
-> Iniciamos con servicios gratuitos para validar el producto sin costo. Al escalar, migramos a AWS para disponibilidad, escalabilidad horizontal y control total de infraestructura.
+Producción: frontend en [thelineone.com](https://thelineone.com) (Cloudflare Pages, proyecto `ft-lineone`), API en `api.thelineone.com`. El pipeline `ci-cd.yml` despliega automáticamente en push a `main` tras pasar los gates de testing.
 
 ---
 
 ## Roadmap
 
-- [x] Scrapers para retailers chilenos
-- [x] Backend con autenticación JWT y arquitectura hexagonal
-- [x] Virtual Try-On con Replicate API
-- [x] Frontend con catálogo, búsqueda y perfil de usuario
-- [x] Despliegue automatizado en Render
-- [ ] Pasarela de pago (Webpay / Mercado Pago)
-- [ ] Perfil de estilo con IA (cuestionario + recomendaciones)
-- [ ] Prueba virtual mejorada (múltiples prendas, outfits completos)
-- [ ] App móvil (React Native)
-- [ ] Migración a AWS para escalabilidad horizontal
-- [ ] Modelo VTON propio en SageMaker / EC2 GPU
+- [x] Scrapers para retailers chilenos (Zara, Maui, Falabella, H&M, Fashion Park)
+- [x] API con autenticacion JWT (PBKDF2-SHA256)
+- [x] Virtual Try-On con YouCam AI V3.0
+- [x] Frontend con catalogo, busqueda, filtros, quiz de estilo y perfil
+- [x] Recomendaciones IA con Llama 4 Scout (+ streaming SSE)
+- [x] Sistema freemium/premium con Transbank WebPay
+- [x] Rate limiting + RBAC + token revocation
+- [x] Image validation + error sanitization
+- [x] Atomic usage tracking (TOCTOU-safe)
+- [x] Consolidated VTON endpoint (`/generate`)
+- [x] Cache KV de estado premium
+- [x] Persistencia de resultados VTON en R2
+- [x] E2E tests de flujos críticos (Playwright)
+- [x] CI con pytest gate
+- [ ] Tests de streaming, EdDSA JWT y Turnstile (ver `TEST_PLAN.md`)
+- [ ] E2E tests en CI
+- [ ] ErrorBoundary (React)
+- [ ] Dark mode + semantic tokens
+- [ ] Remover Durable Object deprecado de scrapers
+- [ ] Migracion a Workers Paid (mayor CPU)
 
 ---
 

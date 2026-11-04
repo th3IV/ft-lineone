@@ -1,196 +1,85 @@
-# Arquitectura del Sistema
+# Arquitectura del Sistema — FT. THE LINE ONE
 
 ## Visión General
 
-FT. THE LINE ONE está compuesto por **4 microservicios** que trabajan de forma orquestada para ofrecer una experiencia de moda inteligente:
+FT. THE LINE ONE opera sobre una arquitectura **Serverless Edge en Cloudflare**, combinando computación distribuida global, bases de datos serverless (D1 y Vectorize), almacenamiento de objetos ($0 egress con R2) e inteligencia artificial generativa con Virtual Try-On (VTON).
 
-| Microservicio | Tecnología | Rol |
+| Capa | Tecnología | Rol |
 |---|---|---|
-| **Backend API** | FastAPI (Python) | Orquestación, usuarios, productos, recomendaciones, pipeline de scraping y VTON |
-| **Frontend Web** | React + TailwindCSS | Interfaz de usuario B2C |
-| **Scrapers** | Python + BeautifulSoup | Extracción de productos desde retailers |
-| **VTON Service** | Diffusion Models + PyTorch | Virtual Try-On con IA generativa |
+| **Frontend Web** | Astro 7 + React 19 + Tailwind 4 | Interfaz B2C optimizada (Islands Architecture) en Cloudflare Pages |
+| **Backend API** | Cloudflare Workers Python + FastAPI | API edge global, auth JWT, RAG, endpoints de scrapers y VTON |
+| **Database** | Cloudflare D1 (SQLite serverless) | Catálogo de productos, usuarios, historial VTON, tracking de scrapers |
+| **Vector DB / RAG** | Cloudflare Vectorize + BGE-M3 | Búsqueda semántica y recomendaciones de estilo contextuales |
+| **Colas de Tareas** | Cloudflare Queues + DLQ | Procesamiento desacoplado y resiliente de scrapers de retailers |
+| **Storage** | Cloudflare R2 | Almacenamiento persistente de imágenes de perfil, VTON y catálogo |
+| **AI / LLM** | Cloudflare Workers AI + Moondream | Llama 4 Scout, DeepSeek R1 y Moondream visión |
+| **VTON** | YouCam AI Clothes V3.0 | API externa especializada en Virtual Try-On de alta fidelidad |
+| **Pagos** | Transbank WebPay Plus REST | Procesamiento de suscripciones y pagos en CLP |
+| **Scheduler** | Cloudflare Native Cron Triggers | Disparo automático de colas de scraping y polling de tareas VTON |
+
+---
 
 ## Diagrama de Flujo de Datos
 
 ```
                          ┌──────────────────────────────────────────┐
-                         │              Frontend React              │
-                         │         (TailwindCSS + JavaScript)        │
+                         │      Frontend Web (Astro 7 / React 19)   │
+                         │             Cloudflare Pages             │
                          └──┬───────────────────────────────┬───────┘
-                            │ HTTP/JSON                    │ HTTP/JSON
-                            ▼                              ▼
-                   ┌────────────────┐           ┌──────────────────┐
-                   │   Backend API  │◄──────────│  VTON Service    │
-                   │   (FastAPI)    │           │  (PyTorch + SD)  │
-                   └───┬─────┬──────┘           └────────┬─────────┘
-                       │     │                           │
-                       ▼     ▼                           ▼
-              ┌──────────┐ ┌────┐              ┌────────────────┐
-              │PostgreSQL│ │ S3 │              │       S3       │
-              └──────────┘ └─┬──┘              │(output images) │
-                             │                 └────────────────┘
-                             ▼
-              ┌──────────────────┐
-              │    Scrapers      │
-              │  (BeautifulSoup) │
-              │ Falabella, Ripley│
-              │ Paris, Maui, Zara│
-              └──────────────────┘
+                            │ HTTP / JSON                  │
+                            ▼                              │
+                 ┌───────────────────────┐                 │
+                 │   Backend API (Edge)  │                 │
+                 │ Workers Python+FastAPI│                 │
+                 └───┬───┬──────┬────┬───┘                 │
+                     │   │      │    │                     │
+         ┌───────────┘   │      │    └────────────┐        │
+         ▼               ▼      ▼                 ▼        ▼
+   ┌───────────┐   ┌─────────┐ ┌──────────┐ ┌─────────┐ ┌──────┐
+   │Cloudflare │   │Cloudfl. │ │Cloudflare│ │WorkersAI│ │YouCam│
+   │    D1     │   │ Queues  │ │    R2    │ │ Llama 4 │ │ VTON │
+   │ (SQLite)  │   │(Scraper)│ │ ($0 eg.) │ │Moondream│ │ API  │
+   └───────────┘   └────┬────┘ └──────────┘ └─────────┘ └──────┘
+                        │
+                        ▼ (Queue Consumer)
+               ┌──────────────────┐
+               │ Scraper Runner   │
+               │ (httpx async):   │
+               │ - Zara           │
+               │ - Maui & Sons    │
+               │ - Falabella      │
+               │ - H&M            │
+               │ - Fashion Park   │
+               └────────┬─────────┘
+                        │
+                        ▼ (Upsert + Index)
+               ┌──────────────────┐
+               │    Vectorize     │
+               │ (BGE-M3 RAG Cat) │
+               └──────────────────┘
 ```
 
-**Flujo principal:**
-1. **Scrapers** extraen productos → **Backend** los procesa y almacena en **PostgreSQL** + **S3** (imágenes)
-2. **Usuario** navega en **Frontend** → solicita productos desde **Backend API**
-3. **Usuario** sube foto + selecciona producto → **Backend** envía a **VTON Service** → resultado se guarda en **S3** → se muestra en **Frontend**
-4. **LLM (GPT-4)** genera recomendaciones personalizadas basadas en preferencias del usuario
+---
 
-## Jerarquía de Clases (POO)
+## Componentes Clave
 
-### Scrapers
+### 1. Scraper Pipeline & Resiliencia
+- **Disparo:** Cloudflare Native Cron Triggers (`triggers.crons` en `wrangler.jsonc`) o manual vía `/api/v1/scrapers/run`.
+- **Desacoplamiento:** El trigger encola jobs por tienda en `SCRAPER_QUEUE` con backoff exponencial.
+- **Dead-Letter Queue:** Mensajes que fallan 3 reintentos se desvían a `scraper-jobs-dlq`.
+- **Zero-Downtime:** Ingesta vía UPSERT `ON CONFLICT(external_id, store)` en D1 actualizando `last_seen`.
+- **Sincronización RAG:** Eliminación de productos obsoletos (`>48h`) desindexa automáticamente de Cloudflare Vectorize.
 
-```
-BaseScraper (abstract)
-├── FalabellaScraper
-├── RipleyScraper
-├── ParisScraper
-├── MauiScraper
-└── ZaraScraper
-```
+### 2. Flujo Virtual Try-On (VTON)
+1. Usuario sube foto en el frontend (validación de magic bytes y tamaño <8MB).
+2. Backend valida la imagen, la sube a `freeimage.host` (URL pública accesible para YouCam) y obtiene la imagen de la prenda desde el catálogo.
+3. Se crea tarea en YouCam API y se registra en D1 como `status: "processing"`.
+4. El Cron Trigger (`*/2 * * * *`) ejecuta `process_pending_vton_tasks` para pollear tareas pendientes.
+5. Al completarse, el resultado se descarga y almacena permanentemente en Cloudflare R2 (`save_vton_output_to_r2`).
+6. Se actualiza el resultado en D1 con la URL pública de R2.
 
-Cada scraper hereda de `BaseScraper` e implementa los métodos abstractos `fetch_products()`, `parse_product()` y `normalize_data()`.
-
-### Orquestador (backend)
-
-```
-PipelineOrchestrator
-├── ScrapingCoordinator   — coordina la ejecución de todos los scrapers
-├── VTONCoordinator       — gestiona el pipeline de Virtual Try-On
-└── PublicationManager    — controla la publicación de productos (draft → published)
-```
-
-### Servicios (backend)
-
-```
-UserService              — registro, autenticación, perfil, medidas
-ProductService           — CRUD de productos, búsqueda, filtros
-RecommendationService    — recomendaciones vía LLM + embeddings
-VTONService              — integración con el modelo de diffusion
-```
-
-### Clientes de infraestructura
-
-```
-LLMClient    — wrapper sobre LangChain + GPT-4
-VTONClient   — comunicación HTTP con el servicio VTON
-ScraperClient— comunicación HTTP con el servicio de scrapers
-```
-
-### Modelos de dominio
-
-```
-User         — usuario con email, password hash, medidas corporales, preferencias
-Product      — producto con metadata de tienda, precio, categoría, tallas, colores
-VTONResult   — resultado de try-on virtual con estado (pending/processing/completed/failed)
-```
-
-## Clean Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    API Layer (api/v1/routes/)            │
-│              FastAPI Routers + Middleware                │
-│              auth, users, products,                      │
-│              recommendations, vton                       │
-├─────────────────────────────────────────────────────────┤
-│                Application Layer (application/)          │
-│    ┌───────────────────┐  ┌──────────────────────────┐  │
-│    │     Services      │  │      Orchestrator        │  │
-│    │ UserService, etc. │  │ PipelineOrchestrator,    │  │
-│    │                   │  │ ScrapingCoordinator,     │  │
-│    │                   │  │ VTONCoordinator,         │  │
-│    │                   │  │ PublicationManager       │  │
-│    └───────────────────┘  └──────────────────────────┘  │
-├─────────────────────────────────────────────────────────┤
-│                   Domain Layer (domain/)                 │
-│              Models: User, Product, VTONResult           │
-├─────────────────────────────────────────────────────────┤
-│             Infrastructure Layer (infrastructure/)       │
-│    ┌─────────────────────┐  ┌────────────────────────┐  │
-│    │  Persistence        │  │  External Services     │  │
-│    │  postgres/models.py │  │  LLMClient, VTONClient,│  │
-│    │  repositories/      │  │  ScraperClient         │  │
-│    └─────────────────────┘  └────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-```
-
-## Integración de IA (LLM)
-
-```
-User Query
-    │
-    ▼
-RecommendationService
-    │
-    ▼
-LLMClient (LangChain + GPT-4)
-    │
-    ├── Genera recomendaciones textuales
-    ├── Valida descripciones de productos
-    └── Enriquece metadata de catálogo
-```
-
-El `LLMClient` es un wrapper sobre LangChain que se conecta a GPT-4 para:
-- Recomendaciones personalizadas por preferencias
-- Validación y limpieza de datos scrapeados
-- Generación de descripciones y tags
-
-## Comunicación entre servicios
-
-```
-┌──────────────┐      HTTP/JSON       ┌──────────────┐
-│   Backend    │◄─────────────────────►│   VTON App   │
-│   (FastAPI)  │                       │  (PyTorch)   │
-│   :8000      │                       │  :8002       │
-└──────┬───────┘                       └──────────────┘
-       │
-       │  HTTP/JSON
-       ▼
-┌──────────────┐
-│   Scrapers   │
-│  (FastAPI)   │
-│  :8001       │
-└──────────────┘
-```
-
-## Infraestructura AWS
-
-```
-                    ┌─────────────────────┐
-                    │      VPC            │
-                    │  10.0.0.0/16        │
-                    └────────┬────────────┘
-                             │
-          ┌──────────────────┼──────────────────┐
-          ▼                  ▼                  ▼
-   ┌──────────┐      ┌──────────────┐   ┌──────────┐
-   │   EKS    │      │     RDS      │   │ElastiCache│
-   │(K8s pods)│      │ (PostgreSQL) │   │  (Redis)  │
-   └──────────┘      └──────────────┘   └──────────┘
-          │
-    ┌─────┴─────┐
-    ▼           ▼
- ┌──────┐   ┌────────┐
- │  S3  │   │ Lambda │
- │Media │   │(cron)  │
- └──────┘   └────────┘
-```
-
-## Seguridad
-
-- **Autenticación**: JWT (access + refresh tokens)
-- **Hash de contraseñas**: bcrypt con salt
-- **Transporte**: HTTPS / TLS en producción
-- **Autorización**: Middleware JWT en cada endpoint protegido
-- **Rate limiting**: implementado a nivel API Gateway
-- **Variables sensibles**: almacenadas en AWS Secrets Manager
+### 3. Seguridad
+- **Autenticación:** JWT con firma HMAC-SHA256, expiración corta para access tokens y rotación de refresh tokens.
+- **Revocación:** Tabla `revoked_tokens` en D1 para invalidación inmediata de tokens en logout.
+- **Rate Limiting:** Control de intentos por IP y credenciales con `login_attempts` en D1.
+- **Validación de Archivos:** Magic bytes en imágenes de avatar y VTON para prevenir archivos maliciosos.
